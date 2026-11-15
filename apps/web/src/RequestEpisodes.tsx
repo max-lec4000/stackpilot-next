@@ -31,7 +31,7 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
     }
   }
 
-  async function search(episodeId: number) {
+  async function search(episodeId?: number) {
     setBusy(true);
     setError("");
     setMessage("");
@@ -77,6 +77,9 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
       {error && <p className="error" role="alert">{error}</p>}
       {message && <p className="notice" role="status">{message}</p>}
       {rows?.length === 0 && <p>Sonarr meldet keine Folgen für diese Staffel.</p>}
+      {rows?.some((episode) => episode.canSearch) && (
+        <button disabled={busy} onClick={() => void search()}>Nur Staffel {season} suchen</button>
+      )}
       {rows && rows.length > 0 && (
         <ul>
           {rows.map((episode) => (

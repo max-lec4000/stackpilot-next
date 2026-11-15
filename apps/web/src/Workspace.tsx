@@ -2,7 +2,6 @@ import { appVersion } from "./version";
 import { ActivityOverview } from "./ActivityOverview";
 import { ConnectionChecks } from "./ConnectionChecks";
 import { ManagedServices } from "./ManagedServices";
-import { CouchdeckPanel } from "./CouchdeckPanel";
 import { IdentityBackups } from "./IdentityBackups";
 import { Disclosure } from "./ui";
 import { ServiceUpdates } from "./ServiceUpdates";
@@ -43,7 +42,6 @@ export function Workspace({
           <button onClick={onWizard}>Weitere Apps hinzufügen</button>
         </div>
         <ManagedServices />
-        <CouchdeckPanel />
       </>
     );
   if (view === "Verbindungen")

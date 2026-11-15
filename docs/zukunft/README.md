@@ -15,11 +15,14 @@ Freigabe für Änderungen an einem laufenden Server.
    zugeordnete, unvollständige Film-Downloads mit einem neuen Profil ersetzen
    und die bisher geladenen Dateien behalten. In der VM mit Radarr,
    qBittorrent und lokalem Indexer geprüft. Serienpakete und Couchdeck bleiben offen.
-4. **Staffeln und Folgen einzeln steuern.** StackPilot kann Staffeln aufklappen,
-   einzelne Folgen suchen und eindeutig zugeordnete Bibliotheksdateien löschen.
-   Einzelne Staffeln lassen sich aus noch offenen Seerr-Anfragen entfernen.
-   Bei genehmigten Staffeln kann StackPilot die Sonarr-Überwachung einzeln stoppen.
-   Der bereits laufende Transfer und die Couchdeck-Bedienung bleiben offene Punkte.
+4. **Staffeln und Folgen einzeln steuern.** StackPilot und das verwaltete
+   Couchdeck können eine angefragte Staffel oder eine einzelne Folge suchen
+   und eindeutig zugeordnete Folgendateien löschen. In Couchdeck gilt dies nur
+   für eigene genehmigte Anfragen des verbundenen Wohnzimmer-Kontos.
+   Einzelne Staffeln lassen sich aus eigenen noch offenen Seerr-Anfragen
+   entfernen. Für genehmigte Staffeln kann StackPilot die Sonarr-Überwachung
+   einzeln stoppen. Offen bleiben Staffelpakete im laufenden Transfer,
+   Serien-Größenlimits sowie Größenprofil und Qualitätswechsel in Couchdeck.
 5. **Streamyfin mit Seerr verbinden.** An den bestandenen Quick-Connect-Test mit Seerr
    3.5.2 anknüpfen. Die benötigten Seerr-Schnittstellen unter der Jellyfin-HTTPS-Adresse
    zugänglich machen, die Aktualisierung bestehender Installationen prüfen und in der

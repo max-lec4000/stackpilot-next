@@ -6,7 +6,7 @@
 // die begrenzte Root-Hilfe (deploy/root-helper.sh).
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile, writeFile, rename, unlink, chmod, access, constants } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -209,6 +209,17 @@ export class Couchdeck {
     if (!(await this.exists(this.linkDir, constants.W_OK)))
       throw userFacing("Couchdeck ist nicht installiert oder der Übergabeordner fehlt.");
     return this.hub.mutate(["Jellyfin"], (context) => this.linkWith(context));
+  }
+  async mediaOwner(token) {
+    if (typeof token !== "string" || !/^[a-f0-9]{32}$/i.test(token)) return null;
+    const { plan, s } = await this.hub.context(["Jellyfin", "Seerr"]);
+    const link = s.vault.get(`deployment:${plan.rootId || plan.id}:couchdeck`);
+    if (!link?.userId || typeof link.token !== "string" || link.token.length !== token.length ||
+        !timingSafeEqual(Buffer.from(link.token), Buffer.from(token))) return null;
+    const user = await s.request("Jellyfin", "/Users/Me", {
+      headers: { Authorization: `MediaBrowser Client="StackPilot", Device="Couchdeck", DeviceId="${link.deviceId}", Version="0.2.1", Token="${token}"` },
+    });
+    return user?.Id === link.userId && user.Policy?.IsAdministrator === false ? user.Id : null;
   }
   /** Wie link(), aber innerhalb eines Auftrags, der die Sperre schon hält. */
   async linkWith({ plan, s }) {

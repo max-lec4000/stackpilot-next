@@ -209,6 +209,41 @@ export function inventoryMiddleware(options = {}) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     const url = new URL(req.url, `http://${host}`);
+    if (url.pathname === "/api/couchdeck/media") {
+      if (!["127.0.0.1", "::ffff:127.0.0.1"].includes(remoteAddress) ||
+          !isPlainLoopback(host) || req.headers.origin || req.method !== "POST" ||
+          !req.headers["content-type"]?.startsWith("application/json")) {
+        res.writeHead(403);
+        return res.end(JSON.stringify({ error: "Nur für das lokale Couchdeck verfügbar." }));
+      }
+      const owner = await Promise.resolve().then(() => couchdeck.mediaOwner(req.headers["x-couchdeck-token"])).catch(() => null);
+      if (!owner) {
+        res.writeHead(401);
+        return res.end(JSON.stringify({ error: "Wohnzimmer-Konto konnte nicht bestätigt werden." }));
+      }
+      try {
+        let text = "";
+        for await (const chunk of req) {
+          text += chunk;
+          if (Buffer.byteLength(text) > 8192) throw Error("Anfrage zu groß.");
+        }
+        const body = JSON.parse(text);
+        const { requestId, season, episodeId, fileId } = body;
+        let result;
+        if (body.action === "episodes") result = await requestDiagnostics.episodes(requestId, season, owner);
+        else if (body.action === "search" && episodeId !== undefined)
+          result = await requestDiagnostics.search({ requestId, season, episodeId }, owner);
+        else if (body.action === "search-season" && season !== undefined)
+          result = await requestDiagnostics.search({ requestId, season }, owner);
+        else if (body.action === "delete")
+          result = await requestDiagnostics.deleteEpisodeFile({ requestId, season, episodeId, fileId, confirmation: body.confirmation }, owner);
+        else throw Error("Unbekannte Couchdeck-Aktion.");
+        return res.end(JSON.stringify(result));
+      } catch (error) {
+        res.writeHead(400);
+        return res.end(JSON.stringify({ error: error.message }));
+      }
+    }
     let manager, session;
     try {
       manager = authenticator();

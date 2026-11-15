@@ -328,6 +328,22 @@ export class RequestDiagnostics {
       releases,
     };
   }
+  async requireOwner(s, target, owner) {
+    if (!owner) return;
+    const id = positiveId(target.request.requestedBy?.id);
+    const user = await s.additional.seerr(`/user/${id}`);
+    const normalize = (value) => String(value || "").toLowerCase().replaceAll("-", "");
+    if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(owner))
+      throw Error("Nur eigene Anfragen können bearbeitet werden.");
+  }
+  async requireExclusiveSeason(s, target, season) {
+    const detail = await s.additional.seerr(`/tv/${target.mediaId}?language=de`);
+    const requests = detail?.mediaInfo?.requests;
+    if (!Array.isArray(requests) || requests.some((request) =>
+      request.id !== target.request.id && ![3, 4].includes(request.status) &&
+      (!Array.isArray(request.seasons) || request.seasons.some((entry) => entry.seasonNumber === season))))
+      throw Error("Die Staffel ist einer weiteren Anfrage zugeordnet. Änderung in StackPilot prüfen.");
+  }
   async seriesEpisodes(s, target, season, onlySeason = true) {
     if (target.kind !== "tv" || !target.item ||
         !target.request.seasons?.some((entry) => entry.seasonNumber === season))
@@ -342,9 +358,10 @@ export class RequestDiagnostics {
       entry.seasonNumber === season && entry.monitored === false,
     );
   }
-  async episodes(requestId, season) {
+  async episodes(requestId, season, owner) {
     const { s } = await this.hub.context(["Seerr", "Sonarr"]);
     const target = await this.target(s, positiveId(requestId));
+    await this.requireOwner(s, target, owner);
     const seasonNumber = positiveId(season);
     const rows = await this.seriesEpisodes(s, target, seasonNumber, false);
     const fileCounts = new Map();
@@ -355,17 +372,22 @@ export class RequestDiagnostics {
       number: episode.episodeNumber,
       title: text(episode.title),
       hasFile: episode.hasFile === true,
-      removableFileId: episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,
+      removableFileId: (!owner || target.request.status === 2) && episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,
       canSearch: target.request.status === 2 && target.item.monitored &&
         this.seasonMonitored(target, seasonNumber) && episode.monitored && !episode.hasFile && Date.parse(episode.airDateUtc) <= Date.now(),
     })) };
   }
-  async deleteEpisodeFile(body) {
+  async deleteEpisodeFile(body, owner) {
     if (body.confirmation !== "OK") throw Error("Dateilöschung mit OK bestätigen.");
     const season = positiveId(body.season), episodeId = positiveId(body.episodeId),
       fileId = positiveId(body.fileId);
     return this.hub.mutate(["Seerr", "Sonarr"], async ({ s }) => {
       const target = await this.target(s, positiveId(body.requestId));
+      await this.requireOwner(s, target, owner);
+      if (owner) {
+        if (target.request.status !== 2) throw Error("Diese Anfrage ist noch nicht genehmigt.");
+        await this.requireExclusiveSeason(s, target, season);
+      }
       const rows = await this.seriesEpisodes(s, target, season, false);
       const owners = rows.filter((episode) => episode.episodeFileId === fileId);
       if (owners.length !== 1 || owners[0].id !== episodeId ||
@@ -476,13 +498,14 @@ export class RequestDiagnostics {
       throw Error("Austausch nicht vollständig bestätigt. Der alte Transfer kann gestoppt sein. Warteschlange prüfen und bei Bedarf die normale Suche verwenden. StackPilot hat keine Dateilöschung angefordert.");
     }
   }
-  async search(body) {
+  async search(body, owner) {
     const id = positiveId(body.requestId);
     await this.hub.requireVpn();
     return this.hub.mutate(["Seerr", "qBittorrent"], async ({ plan, s }) => {
       if (!plan.spec.vpn || plan.id !== this.hub.guard.checkedPlanId)
         throw Error("VPN-Zustand hat sich geändert. Erneut prüfen.");
       const target = await this.target(s, id);
+      await this.requireOwner(s, target, owner);
       const { request, kind, service, item } = target;
       if (
         request.status !== 2 ||
@@ -542,8 +565,16 @@ export class RequestDiagnostics {
         candidate = await this.replacement(s, target, queue);
         if (candidate.review !== body.replaceReview)
           throw Error("Download oder Qualitätsprofil wurde geändert. Austausch erneut prüfen.");
-      } else if (queue.records.some((row) => matchesImportTarget(row, target))) {
-        throw Error("Für dieses Medium läuft bereits ein Download oder Import. Prüfe zuerst die Warteschlange in Radarr oder Sonarr.");
+      } else {
+        const requestedSeason = body.season === undefined ? null : positiveId(body.season);
+        const matching = queue.records.filter((row) => matchesImportTarget(row, target));
+        const busy = matching.some((row) => {
+          const season = row.seasonNumber ?? row.episode?.seasonNumber;
+          return kind !== "tv" || requestedSeason === null ||
+            !Number.isSafeInteger(season) || season === requestedSeason;
+        });
+        if (busy)
+          throw Error("Für dieses Medium läuft bereits ein Download oder Import. Prüfe zuerst die Warteschlange in Radarr oder Sonarr.");
       }
       let transfer;
       try {
@@ -562,6 +593,11 @@ export class RequestDiagnostics {
         throw Error(
           "Eine Suche wurde gerade beauftragt. Bitte kurz warten und den Zustand erneut prüfen.",
         );
+      const season = body.season === undefined ? null : positiveId(body.season);
+      if (season !== null && (kind !== "tv" ||
+          !request.seasons?.some((entry) => entry.seasonNumber === season) ||
+          !this.seasonMonitored(target, season)))
+        throw Error("Diese Staffel ist der Anfrage nicht zugeordnet oder wird nicht überwacht.");
       let episodeSearch;
       if (body.episodeId !== undefined) {
         const rows = await this.seriesEpisodes(s, target, positiveId(body.season));
@@ -579,7 +615,8 @@ export class RequestDiagnostics {
               .filter(
                 (v) =>
                   Number.isSafeInteger(v.seasonNumber) && v.seasonNumber > 0 &&
-                  this.seasonMonitored(target, v.seasonNumber),
+                  this.seasonMonitored(target, v.seasonNumber) &&
+                  (season === null || season === v.seasonNumber),
               )
               .map((v) => ({
                 name: "SeasonSearch",

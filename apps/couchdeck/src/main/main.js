@@ -446,6 +446,14 @@ const handlers = {
   'seerr:request': (req) => seerr.createRequest(req),
   'seerr:mine': () => seerr.myRequests(),
   'seerr:cancel': (id) => seerr.cancelRequest(id),
+  'seerr:season-episodes': (selection) => seerr.seasonEpisodes(selection),
+  'seerr:episode-search': ({ requestId, season, episodeId }) =>
+    seerr.managedMedia({ action: 'search', requestId, season, episodeId }),
+  'seerr:season-search': ({ requestId, season }) =>
+    seerr.managedMedia({ action: 'search-season', requestId, season }),
+  'seerr:episode-delete': ({ requestId, season, episodeId, fileId }) =>
+    seerr.managedMedia({ action: 'delete', requestId, season, episodeId, fileId, confirmation: 'OK' }),
+  'seerr:cancel-season': (selection) => seerr.cancelSeason(selection),
   'seerr:activity': () => lastActivity || refreshActivity(),
   // Nachtmodus + Regler Sprache ↔ Rest
   'sound:state': () => ({ night: sound.isNight(), balance: sound.balance() }),

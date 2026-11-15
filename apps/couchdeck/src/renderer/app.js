@@ -1261,7 +1261,89 @@ function seerrDetailScreen(stub) {
               h('p', {}, [`${sn.episodes} Folgen`, SEERR_STATUS[sn.status]].filter(Boolean).join(' · '))));
         };
         mark();
+        const pendingRequest = (d.requests || []).find((r) =>
+          r.mine && r.status === 1 && r.seasons.length > 1 && r.seasons.includes(sn.number));
+        const approvedRequest = (d.requests || []).find((r) =>
+          r.mine && r.status === 2 && r.seasons.includes(sn.number));
         list.append(row);
+        const episodeList = h('div', {});
+        episodeList.hidden = true;
+        let loaded = false;
+        const showEpisodes = h('button', { class: 'action focusable', 'aria-expanded': 'false',
+          oncdselect: async () => {
+            const show = episodeList.hidden;
+            episodeList.hidden = !show;
+            showEpisodes.setAttribute('aria-expanded', String(show));
+            showEpisodes.textContent = show ? `Folgen von Staffel ${sn.number} ausblenden` : `Folgen von Staffel ${sn.number} anzeigen`;
+            if (!show || loaded) return;
+            episodeList.textContent = 'Folgen werden geladen …';
+            try {
+              const episodes = await cd.call('seerr:season-episodes', {
+                seriesId: d.id, season: sn.number, requestId: approvedRequest?.id,
+              });
+              episodeList.textContent = '';
+              if (episodes.some((episode) => episode.canSearch)) episodeList.append(h('button', {
+                class: 'action focusable',
+                oncdselect: async () => {
+                  if (busy) return;
+                  busy = true;
+                  try {
+                    const result = await cd.call('seerr:season-search', { requestId: approvedRequest.id, season: sn.number });
+                    if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
+                    toast(result.alreadyRunning ? 'Suche läuft bereits' : `Suche für Staffel ${sn.number} gestartet`);
+                  } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
+                },
+              }, `Nur Staffel ${sn.number} suchen`));
+              for (const episode of episodes) {
+                const selection = { requestId: approvedRequest?.id, season: sn.number, episodeId: episode.id };
+                const info = h('div', {}, h('p', {},
+                  `Folge ${episode.number}${episode.title ? ' · ' + episode.title : ''}`));
+                if (episode.canSearch) info.append(h('button', { class: 'action focusable',
+                  oncdselect: async () => {
+                    if (busy) return;
+                    busy = true;
+                    try {
+                      const result = await cd.call('seerr:episode-search', selection);
+                      if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
+                      toast(result.alreadyRunning ? 'Suche läuft bereits' : 'Folgensuche gestartet');
+                    } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
+                  },
+                }, `Folge ${episode.number} suchen`));
+                if (episode.removableFileId) info.append(h('button', { class: 'action danger focusable',
+                  oncdselect: () => confirmDialog(`Datei von Folge ${episode.number} löschen?`,
+                    'Die Datei wird aus der Mediathek entfernt. Sonarr kann eine überwachte Folge erneut laden.',
+                    'Datei löschen', async () => {
+                      if (busy) return;
+                      busy = true;
+                      try {
+                        const result = await cd.call('seerr:episode-delete', { ...selection, fileId: episode.removableFileId });
+                        if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
+                        toast('Folgendatei entfernt');
+                        await load();
+                      } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
+                    }),
+                }, `Datei von Folge ${episode.number} löschen`));
+                episodeList.append(info);
+              }
+              if (!episodes.length) episodeList.textContent = 'Keine Folgen gemeldet.';
+              loaded = true;
+            } catch (e) { episodeList.textContent = e.message; }
+          },
+        }, `Folgen von Staffel ${sn.number} anzeigen`);
+        list.append(showEpisodes, episodeList);
+        if (pendingRequest) list.append(h('button', {
+          class: 'action danger focusable',
+          oncdselect: () => confirmDialog(`Staffel ${sn.number} entfernen?`,
+            'Die übrigen Staffeln bleiben in der Anfrage.', 'Staffel entfernen', async () => {
+              if (busy) return;
+              busy = true;
+              try {
+                await cd.call('seerr:cancel-season', { requestId: pendingRequest.id, season: sn.number });
+                toast(`Staffel ${sn.number} aus der Anfrage entfernt`);
+                await load();
+              } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
+            }),
+        }, `Staffel ${sn.number} aus Anfrage entfernen`));
       }
       scroll.append(h('h2', { class: 'screen-title', style: { fontSize: '1.5rem', marginTop: '1.6rem' } }, 'Staffeln'), list);
     }

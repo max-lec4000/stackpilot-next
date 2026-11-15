@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
-import { SectionHeading, StatusBadge, type StatusTone } from "./ui";
+import { StatusBadge, type StatusTone } from "./ui";
 
 type Status = {
   installed: boolean;
@@ -27,7 +27,7 @@ const jobText: Record<string, string> = {
 };
 
 /** Couchdeck: die Oberfläche am Fernseher – starten, schließen, installieren, verbinden. */
-export function CouchdeckPanel() {
+export function useCouchdeck() {
   const [status, setStatus] = useState<Status | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(""),
@@ -63,6 +63,21 @@ export function CouchdeckPanel() {
       setConfirmRemove(false);
     }
   }
+  return { status, error, busy, youtube, setYoutube, confirmRemove, setConfirmRemove, load, run };
+}
+
+export function CouchdeckStatus({ status }: { status: Status }) {
+  const job = status.helper.running;
+  const [label, tone] = stateText[status.state];
+  return (
+    <StatusBadge tone={job ? "info" : tone}>
+      {job ? jobText[job] || label : status.state === "running" ? "Läuft" : label}
+    </StatusBadge>
+  );
+}
+
+export function CouchdeckPanel({ controller }: { controller: ReturnType<typeof useCouchdeck> }) {
+  const { status, error, busy, youtube, setYoutube, confirmRemove, setConfirmRemove, run } = controller;
   if (!status)
     return error ? (
       <p className="error" role="alert">
@@ -70,20 +85,13 @@ export function CouchdeckPanel() {
       </p>
     ) : null;
   const job = status.helper.running;
-  const [label, tone] = stateText[status.state];
   const locked = !!busy || !!job;
   return (
-    <section className="managed-services" aria-label="Couchdeck">
-      <SectionHeading
-        title="Couchdeck"
-        description="Die Oberfläche für den Bildschirm am Server: Filme, Serien, YouTube und Anfragen per Controller."
-        actions={
-          <StatusBadge tone={job ? "info" : tone}>
-            {job ? jobText[job] : label}
-            {status.version && !job ? ` · Version ${status.version}` : ""}
-          </StatusBadge>
-        }
-      />
+    <div className="service-detail">
+      <div className="service-detail-state">
+        <CouchdeckStatus status={status} />
+        {status.version && <span>Version {status.version}</span>}
+      </div>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -176,6 +184,6 @@ export function CouchdeckPanel() {
           )}
         </>
       )}
-    </section>
+    </div>
   );
 }

@@ -128,7 +128,7 @@ async function mockAPI(page, f) {
     }
     let json;
     switch (endpoint) {
-      case "/api/couchdeck": json = { installed: false, state: "missing", helper: { available: true, running: null, failed: null } }; break;
+      case "/api/couchdeck": json = { installed: true, state: "running", version: "0.2.0", outdated: true, controllable: true, linked: { user: "wohnzimmer", seerr: true }, helper: { available: true, running: null, failed: null } }; break;
       case "/api/remote-setup": json = { status: "idle", running: false, steps: [], error: null, result: null }; break;
       case "/api/notifications": json = { results: [], unread: 0, checkedAt: now, error: null }; break;
       case "/api/auth/status": json = { configured: true, authenticated: true, username: "fixture" }; break;
@@ -308,6 +308,17 @@ async function run() {
     // Application rows do not reveal private login/image information by default.
     await navigate(page, "Anwendungen");
     await page.locator(".service-list-row").filter({ hasText: "Jellyfin" }).waitFor();
+    const couchdeckRow = page.locator(".services-list > .service-list-row").filter({ hasText: "Couchdeck" });
+    await couchdeckRow.getByText("Läuft", { exact: true }).waitFor();
+    await page.getByLabel("App suchen", { exact: true }).fill("Couchdeck");
+    assert.equal(await page.locator(".service-list-row").count(), 1);
+    await couchdeckRow.getByRole("button", { name: "Details zu Couchdeck" }).click();
+    const couchdeckDetails = page.getByRole("dialog", { name: "Couchdeck" });
+    await couchdeckDetails.getByRole("button", { name: "Couchdeck schließen" }).waitFor();
+    await couchdeckDetails.getByRole("button", { name: "Auf neue Version aktualisieren" }).waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await couchdeckRow.getByRole("button").evaluate((element) => element === document.activeElement), true);
+    await page.getByLabel("App suchen", { exact: true }).fill("");
     assert.equal(await page.getByText("managed-private-user", { exact: true }).count(), 0);
     assert.equal(await page.getByText(services[0].image, { exact: true }).count(), 0);
     // Component-specific selectors below are kept stable by the view's accessible names.

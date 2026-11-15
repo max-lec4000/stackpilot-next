@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { get } from "./ServerCheck";
+import { CouchdeckPanel, CouchdeckStatus, useCouchdeck } from "./CouchdeckPanel";
 import { action } from "./RetirementPanel";
 import {
   DetailPanel,
@@ -99,6 +100,7 @@ function BazarrKeyRotation({ planId }: { planId: string }) {
 }
 
 export function ManagedServices({ compact = false }: { compact?: boolean }) {
+  const couchdeck = useCouchdeck();
   const [loaded, setLoaded] = useState(false),
     [loading, setLoading] = useState(false),
     [services, setServices] = useState<Service[]>([]),
@@ -106,6 +108,7 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     [query, setQuery] = useState(""),
     [filter, setFilter] = usePreference<string>("app-filter", "all", oneOf("all", "running", "other")),
     [page, setPage] = useState(1),
+    [couchdeckOpen, setCouchdeckOpen] = useState(false),
     [selectedKey, setSelectedKey] = useState<string | null>(null),
     [showReveal, setShowReveal] = useState(false),
     [password, setPassword] = useState(""),
@@ -168,15 +171,19 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     const timer = setTimeout(closePanel, 20000);
     return () => clearTimeout(timer);
   }, [credentials]);
+  const rows = useMemo(() => {
+    const entries = services.map((service) => ({
+      key: serviceKey(service), name: service.name, state: service.state, service: service as Service | null,
+    }));
+    if (couchdeck.status || couchdeck.error)
+      entries.push({ key: "couchdeck", name: "Couchdeck", state: couchdeck.status?.state || "unknown", service: null });
+    return entries;
+  }, [services, couchdeck.status, couchdeck.error]);
   const filtered = useMemo(() => {
     const text = query.trim().toLocaleLowerCase("de-AT");
-    return services.filter(
-      (service) =>
-        service.name.toLocaleLowerCase("de-AT").includes(text) &&
-        (filter === "all" ||
-          (filter === "running" ? service.state === "running" : service.state !== "running")),
-    );
-  }, [services, query, filter]);
+    return rows.filter((row) => row.name.toLocaleLowerCase("de-AT").includes(text) &&
+      (filter === "all" || (filter === "running" ? row.state === "running" : row.state !== "running")));
+  }, [rows, query, filter]);
   const pages = Math.max(1, Math.ceil(filtered.length / 12));
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * 12, currentPage * 12);
@@ -196,9 +203,9 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     <section className="managed-services" aria-label="Verwaltete Anwendungen">
       <SectionHeading
         title="Installierte Anwendungen"
-        description="Containerstatus im Überblick. Zugänge und technische Details öffnest du bei Bedarf."
+        description="Status im Überblick. Zugänge und technische Details öffnest du bei Bedarf."
         actions={
-          <button disabled={loading} onClick={() => void load()}>
+          <button disabled={loading} onClick={() => { void load(); void couchdeck.load(); }}>
             {loading ? "Wird aktualisiert …" : "Status aktualisieren"}
           </button>
         }
@@ -232,7 +239,7 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
         </label>
         {loaded && (
           <span className="services-result-count" role="status">
-            {filtered.length} von {services.length} Anwendungen
+            {filtered.length} von {rows.length} Anwendungen
           </span>
         )}
       </div>
@@ -244,57 +251,50 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
       )}
       {!loaded && !error ? (
         <p role="status">Containerstatus wird gelesen …</p>
-      ) : loaded && !services.length ? (
+      ) : loaded && !rows.length ? (
         <EmptyState
           title="Noch keine verwalteten Anwendungen"
           description="Sobald eine Installation abgeschlossen ist, erscheinen deine Apps hier."
         />
-      ) : loaded && !filtered.length ? (
+      ) : rows.length > 0 && !filtered.length ? (
         <EmptyState
           title="Keine passende Anwendung"
           description="Passe den Suchbegriff oder Statusfilter an."
           action={<button onClick={() => { setQuery(""); setFilter("all"); setPage(1); }}>Filter zurücksetzen</button>}
         />
-      ) : loaded ? (
+      ) : rows.length > 0 ? (
         <>
           <ul className="services-list">
-            {visible.map((service) => (
-              <li className="service-list-row" key={serviceKey(service)}>
-                <span className="service-avatar" aria-hidden="true">
-                  {service.name.slice(0, 2)}
-                </span>
+            {visible.map(({ key, name, state, service }) => (
+              <li className="service-list-row" key={key}>
+                <span className="service-avatar" aria-hidden="true">{name.slice(0, 2)}</span>
                 <div className="service-list-name">
-                  <h3>{service.name}</h3>
-                  <StatusBadge tone={stateTone(service.state)}>
-                    {states[service.state] || service.state || "Status unbekannt"}
-                  </StatusBadge>
+                  <h3>{name}</h3>
+                  {!service && couchdeck.status ? <CouchdeckStatus status={couchdeck.status} /> :
+                    <StatusBadge tone={stateTone(state)}>{states[state] || state || "Status unbekannt"}</StatusBadge>}
                 </div>
                 <div className="service-list-actions">
-                  {service.url && (
-                    <a
-                      className="service-open primary"
-                      href={service.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${service.name} öffnen (neuer Tab)`}
-                    >
+                  {service?.url && (
+                    <a className="service-open primary" href={service.url} target="_blank" rel="noopener noreferrer"
+                      aria-label={`${name} öffnen (neuer Tab)`}>
                       Öffnen <span aria-hidden="true">↗</span>
                     </a>
                   )}
-                  <button
-                    aria-label={`Details zu ${service.name}`}
-                    aria-haspopup="dialog"
-                    onClick={(event) => {
-                      opener.current = event.currentTarget;
-                      requestId.current++;
-                      setSelectedKey(serviceKey(service));
-                      setShowReveal(false);
-                      setCredentials(null);
-                      setPassword("");
-                      setRevealError("");
-                      setBusy(false);
-                    }}
-                  >
+                  <button aria-label={`Details zu ${name}`} aria-haspopup="dialog" onClick={(event) => {
+                    opener.current = event.currentTarget;
+                    if (!service) {
+                      couchdeck.setConfirmRemove(false);
+                      setCouchdeckOpen(true);
+                      return;
+                    }
+                    requestId.current++;
+                    setSelectedKey(key);
+                    setShowReveal(false);
+                    setCredentials(null);
+                    setPassword("");
+                    setRevealError("");
+                    setBusy(false);
+                  }}>
                     Details
                   </button>
                 </div>
@@ -311,6 +311,14 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
           )}
         </>
       ) : null}
+      {couchdeckOpen && (
+        <DetailPanel title="Couchdeck" onClose={() => {
+          setCouchdeckOpen(false);
+          opener.current?.focus({ preventScroll: true });
+        }}>
+          <CouchdeckPanel controller={couchdeck} />
+        </DetailPanel>
+      )}
       {selected && (
         <DetailPanel title={selected.name} onClose={closePanel}>
           <div className="service-detail">

@@ -344,7 +344,7 @@ test("Folgensuche bleibt auf genau eine fehlende Folge der angefragten Staffel b
   f.setEpisodes([episode, { ...episode, id: 15, seriesId: 99 }]);
   f.item.seasons = [{ seasonNumber: 1, monitored: false }];
   assert.equal((await f.diagnosis.episodes(7, 1)).episodes[0].canSearch, false);
-  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 }), /nicht als fehlende/);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 }), /wird nicht überwacht/);
   f.item.seasons[0].monitored = true;
   assert.deepEqual((await f.diagnosis.episodes(7, 1)).episodes.map((row) => row.id), [14]);
   await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 15 }), /nicht als fehlende/);
@@ -377,7 +377,19 @@ test("Dateilöschung prüft Zuordnung über alle Staffeln und löscht genau die 
   assert.equal(deleted, false);
   f.setEpisodes([target, { ...other, episodeFileId: 7 }]);
   await assert.rejects(f.diagnosis.deleteEpisodeFile({ ...body, fileId: 7 }), /Datei wurde geändert/);
-  await f.diagnosis.deleteEpisodeFile(body);
+  f.request.requestedBy = { id: 5 };
+  const owner = "0123456789abcdef0123456789abcdef";
+  const seerr = f.s.additional.seerr;
+  let requests = [{ id: 99, status: 2, seasons: [{ seasonNumber: 1 }] }];
+  f.s.additional.seerr = async (route) => route === "/user/5" ? { jellyfinUserId: owner } :
+    route.startsWith("/tv/42?") ? { mediaInfo: { requests } } : seerr(route);
+  await assert.rejects(f.diagnosis.deleteEpisodeFile(body, owner), /weiteren Anfrage/);
+  requests = [];
+  f.request.status = 1;
+  await assert.rejects(f.diagnosis.deleteEpisodeFile(body, owner), /nicht genehmigt/);
+  f.request.status = 2;
+  assert.equal(deleted, false);
+  await f.diagnosis.deleteEpisodeFile(body, owner);
   assert.equal(deleted, true);
 });
 
@@ -424,5 +436,22 @@ test("Filmtransfer-Austausch bestätigt Profil und Hash, erhält Dateien und suc
     ["/queue/12?removeFromClient=false&blocklist=true&skipRedownload=true", "DELETE"],
     ["/torrents/delete", { hashes: hash, deleteFiles: "false" }],
     ["/command", "POST"],
+  ]);
+});
+
+test("Staffelsuche überspringt fremde aktive Transfers und verändert nur die gewählte Staffel", async () => {
+  const f = fixture();
+  f.request.media.mediaType = "tv";
+  f.setQueue({ records: [{ seriesId: 11, seasonNumber: 3 }], totalRecords: 1 });
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 2 }), /nicht zugeordnet/);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 3 }), /bereits ein Download/);
+  const ownerId = "0123456789abcdef0123456789abcdef";
+  f.request.requestedBy = { id: 5 };
+  const seerr = f.s.additional.seerr;
+  f.s.additional.seerr = async (route) => route === "/user/5" ? { jellyfinUserId: ownerId } : seerr(route);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1 }, "other"), /Nur eigene/);
+  await f.diagnosis.search({ requestId: 7, season: 1 }, ownerId);
+  assert.deepEqual(f.commands.map((command) => command.body), [
+    { name: "SeasonSearch", seriesId: 11, seasonNumber: 1 },
   ]);
 });

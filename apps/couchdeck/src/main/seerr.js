@@ -178,6 +178,63 @@ class Seerr {
     return { ok: true, wasApproved: req.status !== REQ_PENDING };
   }
 
+  async managedMedia(body) {
+    const link = config.integration?.();
+    if (!this.jf.token || this.jf.token !== link?.auth?.token) return null;
+    const response = await fetch('http://127.0.0.1:5173/api/couchdeck/media', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Couchdeck-Token': this.jf.token },
+      body: JSON.stringify(body),
+      redirect: 'error',
+      signal: AbortSignal.timeout(25000),
+    });
+    if ([401, 403, 404].includes(response.status) && body.action === 'episodes') return null;
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'StackPilot konnte die Folge nicht bearbeiten');
+    return result;
+  }
+
+  async seasonEpisodes({ seriesId, season, requestId }) {
+    if (!Number.isSafeInteger(seriesId) || seriesId < 1 ||
+        !Number.isSafeInteger(season) || season < 1) throw new Error('Ungültige Serie oder Staffel');
+    if (Number.isSafeInteger(requestId) && requestId > 0) {
+      const managed = await this.managedMedia({ action: 'episodes', requestId, season });
+      if (managed) return managed.episodes;
+    }
+    const data = await this.request('GET', `/tv/${seriesId}/season/${season}`, {
+      query: { language: 'de' },
+    });
+    if (!Array.isArray(data?.episodes)) throw new Error('Seerr meldet keine Folgenliste');
+    return data.episodes.map((episode) => ({ number: episode.episodeNumber, title: episode.name || '' }));
+  }
+
+  async cancelSeason({ requestId, season }) {
+    if (!Number.isSafeInteger(requestId) || requestId < 1 ||
+        !Number.isSafeInteger(season) || season < 1) throw new Error('Ungültige Staffel oder Anfrage');
+    const me = await this.currentUser();
+    const norm = (value) => String(value || '').toLowerCase().replace(/-/g, '');
+    if (!this.jf.userId || norm(me.jellyfinUserId) !== norm(this.jf.userId))
+      throw new Error('Jellyfin-Konto konnte nicht eindeutig zugeordnet werden');
+    const route = `/request/${requestId}`;
+    const request = await this.request('GET', route);
+    if (request?.requestedBy?.id !== me.id || request.media?.mediaType !== 'tv' ||
+        request.status !== REQ_PENDING) throw new Error('Nur eigene, noch offene Serienanfragen sind bearbeitbar');
+    const selected = request.seasons?.map((entry) => entry.seasonNumber);
+    if (!selected || selected.length < 2 || !selected.includes(season))
+      throw new Error('Die Staffel ist nicht in einer offenen Anfrage mit mehreren Staffeln enthalten');
+    const seasons = selected.filter((number) => number !== season);
+    const body = { mediaType: 'tv', seasons };
+    for (const key of ['serverId', 'profileId', 'rootFolder', 'languageProfileId', 'tags']) {
+      if (request[key] != null) body[key] = request[key];
+    }
+    await this.request('PUT', route, { body });
+    const saved = await this.request('GET', route);
+    if (saved?.seasons?.length !== seasons.length ||
+        !seasons.every((number) => saved.seasons.some((entry) => entry.seasonNumber === number)))
+      throw new Error('Seerr hat die verbleibenden Staffeln nicht bestätigt');
+    return { ok: true };
+  }
+
   async createRequest({ mediaType, mediaId, seasons }) {
     const me = await this.currentUser();
     const body = { mediaType, mediaId: Number(mediaId), userId: me.id, is4k: false };

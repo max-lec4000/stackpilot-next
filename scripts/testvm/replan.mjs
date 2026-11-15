@@ -27,7 +27,8 @@ async function call(route, body) {
   return data;
 }
 const stack = await call("/api/stack");
-const plan = await call("/api/deployment/plan", { ...stack.spec, vpnProfileId: stack.vpnProfileId });
+const extra = process.env.EXTRA ? JSON.parse(process.env.EXTRA) : {};
+const plan = await call("/api/deployment/plan", { ...stack.spec, vpnProfileId: stack.vpnProfileId, ...extra });
 console.log(`Plan ${plan.id.slice(0, 8)}: ausführbar=${plan.executable} netzUmstellung=${plan.networkUpgrade}`);
 for (const b of plan.blockers) console.log("  Blocker:", b);
 for (const w of plan.warnings.filter((w) => w.includes("Netze"))) console.log("  Hinweis:", w);

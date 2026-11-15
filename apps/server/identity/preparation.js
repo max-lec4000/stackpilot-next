@@ -189,7 +189,7 @@ export class IdentityPreparation {
     const current = this.hub.engine.current();
     if (
       record.id !== body.id ||
-      current?.plan.id !== record.stackPlanId ||
+      (current?.plan.rootId || current?.plan.id) !== record.rootId ||
       current.job.status !== "completed"
     )
       throw Error(
@@ -393,7 +393,9 @@ export class IdentityPreparation {
     const inspect = async ({ plan }) => {
       const record = await this.verify();
       if (
-        record.stackPlanId !== plan.id ||
+        // Authentik gehört zum Stack, nicht zu einer einzelnen Planfassung: Spätere Pläne
+        // (Erweiterung, Netztrennung) behalten dieselbe rootId.
+        record.rootId !== (plan.rootId || plan.id) ||
         record.status !== "local-ready" ||
         this.pending
       )

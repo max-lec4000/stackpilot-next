@@ -7,15 +7,39 @@ import {
 import { promisify } from "node:util";
 import { readFileSync, openSync, writeFileSync, closeSync } from "node:fs";
 import path from "node:path";
+import { isIP } from "node:net";
 const scrypt = promisify(scryptCallback);
 const passwordParams = { N: 131072, r: 8, p: 1, maxmem: 256 * 1024 * 1024 };
 const legacyParams = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const digest = (value) => createHash("sha256").update(value).digest("hex");
+const attemptLimit = 5;
+const attemptWindow = 15 * 60_000;
+
+function sourceKey(address) {
+  const withoutZone = address?.split("%")[0];
+  const version = isIP(withoutZone || "");
+  if (version === 4) return digest(withoutZone);
+  if (version === 6) {
+    const canonical = new URL(`http://[${withoutZone}]/`).hostname;
+    const mapped = canonical.match(/^\[::ffff:([a-f\d]+):([a-f\d]+)\]$/);
+    if (mapped) {
+      const high = parseInt(mapped[1], 16);
+      const low = parseInt(mapped[2], 16);
+      return digest([high >> 8, high & 255, low >> 8, low & 255].join("."));
+    }
+    return digest(canonical);
+  }
+  return digest("unknown");
+}
+
 export class Auth {
   constructor(store) {
     this.store = store;
     store.db.exec(
-      "CREATE TABLE IF NOT EXISTS administrator(id INTEGER PRIMARY KEY CHECK(id=1),username TEXT NOT NULL,salt BLOB NOT NULL,hash BLOB NOT NULL);CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS auth_rate(id INTEGER PRIMARY KEY CHECK(id=1),failures INTEGER NOT NULL,blocked_until INTEGER NOT NULL);INSERT OR IGNORE INTO auth_rate VALUES(1,0,0);",
+      "CREATE TABLE IF NOT EXISTS administrator(id INTEGER PRIMARY KEY CHECK(id=1),username TEXT NOT NULL,salt BLOB NOT NULL,hash BLOB NOT NULL);CREATE TABLE IF NOT EXISTS sessions(hash TEXT PRIMARY KEY,csrf TEXT NOT NULL,expires INTEGER NOT NULL);",
+    );
+    store.db.exec(
+      "CREATE TABLE IF NOT EXISTS auth_source_rate(source TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL); CREATE INDEX IF NOT EXISTS auth_source_rate_expires ON auth_source_rate(expires);",
     );
     if (
       !store.db
@@ -84,40 +108,44 @@ export class Auth {
     const hash = await scrypt(password, admin.salt, 64, params);
     return timingSafeEqual(hash, admin.hash);
   }
-  async checkCredentials(username, password) {
-    const rate = this.store.db
-      .prepare("SELECT * FROM auth_rate WHERE id=1")
-      .get();
-    if (rate.blocked_until > Date.now())
+  async checkCredentials(username, password, remoteAddress) {
+    const source = sourceKey(remoteAddress);
+    const now = Date.now();
+    // Vor scrypt reservieren, damit gleichzeitige Anfragen das Limit einhalten.
+    const reservation = this.store.transaction(() => {
+      this.store.db.prepare("DELETE FROM auth_source_rate WHERE expires<=?").run(now);
+      return this.store.db.prepare(
+        `INSERT INTO auth_source_rate(source, attempts, expires) VALUES(?, 1, ?)
+         ON CONFLICT(source) DO UPDATE SET attempts=attempts+1, expires=excluded.expires
+         WHERE attempts<?`,
+      ).run(source, now + attemptWindow, attemptLimit).changes;
+    });
+    if (!reservation)
       throw new Error(
-        "Zu viele Anmeldeversuche. Bitte in 15 Minuten erneut versuchen.",
+        "Zu viele Anmeldeversuche von dieser Adresse. Bitte in 15 Minuten erneut versuchen.",
       );
+
     const admin = this.store.db
       .prepare("SELECT username FROM administrator WHERE id=1")
       .get();
     const valid = await this.verify(password);
-    if (!admin || username !== admin.username || !valid) {
-      this.store.db
-        .prepare(
-          "UPDATE auth_rate SET failures=failures+1,blocked_until=CASE WHEN failures+1>=5 THEN ? ELSE blocked_until END WHERE id=1",
-        )
-        .run(Date.now() + 15 * 60000);
+    if (!admin || username !== admin.username || !valid)
       throw new Error("Anmeldung fehlgeschlagen.");
-    }
+
     this.store.db
-      .prepare("UPDATE auth_rate SET failures=0,blocked_until=0 WHERE id=1")
-      .run();
+      .prepare("DELETE FROM auth_source_rate WHERE source=?")
+      .run(source);
     return true;
   }
-  async login(username, password) {
-    await this.checkCredentials(username, password);
+  async login(username, password, remoteAddress) {
+    await this.checkCredentials(username, password, remoteAddress);
     return this.session();
   }
-  async reauthenticate(password) {
+  async reauthenticate(password, remoteAddress) {
     const name = this.store.db
       .prepare("SELECT username FROM administrator WHERE id=1")
       .get()?.username;
-    return this.checkCredentials(name, password);
+    return this.checkCredentials(name, password, remoteAddress);
   }
   session() {
     const token = randomBytes(32).toString("hex");

@@ -44,8 +44,8 @@ export async function managedServices(engine, requestHost = "") {
   }
   return { services };
 }
-export async function revealCredentials(engine, body, auth) {
-  if (!(await auth.reauthenticate(body.password)))
+export async function revealCredentials(engine, body, auth, remoteAddress) {
+  if (!(await auth.reauthenticate(body.password, remoteAddress)))
     throw new Error("Administratorpasswort stimmt nicht.");
   const job = engine.store.operation(body.operationId);
   if (job?.kind !== "deployment")

@@ -107,3 +107,15 @@ auf der Übersichtsseite **Verwaltung** der Hinweis **Anstehende Umstellung**.
 **Plan für Netztrennung öffnen** führt direkt zum Plan mit der gespeicherten
 App-Auswahl. Dort kannst du den Plan prüfen und den Neustart der betroffenen
 Container bestätigen. Anschließend verschwindet der Hinweis.
+
+## Anmeldesperre in StackPilot
+
+Nach fünf Fehlversuchen sperrt StackPilot weitere Versuche von derselben
+Quell-IP für 15 Minuten. Ein erfolgreicher Versuch setzt den Zähler dieser
+Adresse zurück. Das gilt auch für die erneute Passwortabfrage bei Aktionen
+wie dem Anzeigen von Dienstzugängen.
+
+Direkt verbundene Geräte mit unterschiedlichen IP-Adressen haben eigene
+Zähler. Geräte hinter derselben sichtbaren Adresse teilen sich einen Zähler.
+Das gilt auch für SSH-Tunnel, die sich jeweils über dieselbe Loopback-Adresse
+mit StackPilot verbinden. Jellyfin und seine Geräteanmeldung laufen separat.

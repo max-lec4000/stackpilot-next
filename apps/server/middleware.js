@@ -191,6 +191,7 @@ export function inventoryMiddleware(options = {}) {
       );
     }
     const host = req.headers.host;
+    const remoteAddress = req.socket?.remoteAddress;
     // Nur über die eigene Adresse dieses Servers; fremde Hostnamen (DNS-Rebinding) nicht.
     if (!hostAllowed(host, { bind: options.bind })) {
       res.writeHead(403);
@@ -494,7 +495,7 @@ export function inventoryMiddleware(options = {}) {
         ) {
           const created = url.pathname.endsWith("/setup")
             ? await manager.setup(body.username, body.password, body.code)
-            : await manager.login(body.username, body.password);
+            : await manager.login(body.username, body.password, remoteAddress);
           res.setHeader("Set-Cookie", sessionCookie(created.token));
           return res.end(JSON.stringify({ ok: true }));
         }
@@ -525,7 +526,7 @@ export function inventoryMiddleware(options = {}) {
         if (url.pathname === "/api/updates/preview") {
           result = await serviceUpdates.preview();
         } else if (url.pathname === "/api/updates/start") {
-          await authenticator().reauthenticate(body.password);
+          await manager.reauthenticate(body.password, remoteAddress);
           result = await serviceUpdates.start(body);
         } else if (url.pathname === "/api/notifications/read") {
           result = notifications.mark(body.ids);
@@ -542,7 +543,7 @@ export function inventoryMiddleware(options = {}) {
             throw Error("Entwicklungsupload ist deaktiviert.");
           result = await uploadDevelopmentReport();
         } else if (url.pathname === "/api/remote-access/private-serve/apply") {
-          await authenticator().reauthenticate(body.password);
+          await manager.reauthenticate(body.password, remoteAddress);
           try {
             result = await privateServe.apply(body);
           } catch (e) {
@@ -560,10 +561,10 @@ export function inventoryMiddleware(options = {}) {
             }
           }
         } else if (url.pathname === "/api/remote-access/protection/start") {
-          await authenticator().reauthenticate(body.password);
+          await manager.reauthenticate(body.password, remoteAddress);
           result = await jellyfinProtection.start(body);
         } else if (url.pathname === "/api/remote-access/sso/apply") {
-          if (!(await authenticator().reauthenticate(body.password)))
+          if (!(await manager.reauthenticate(body.password, remoteAddress)))
             throw Error("Administratorpasswort stimmt nicht.");
           result = await ssoConnection.apply(body);
         } else if (
@@ -576,7 +577,7 @@ export function inventoryMiddleware(options = {}) {
             "/api/remote-access/devices/revoke",
           ].includes(url.pathname)
         ) {
-          if (!(await authenticator().reauthenticate(body.password)))
+          if (!(await manager.reauthenticate(body.password, remoteAddress)))
             throw Error("Administratorpasswort stimmt nicht.");
           if (url.pathname.endsWith("/create"))
             result = await identityBackups.create(body);
@@ -598,7 +599,7 @@ export function inventoryMiddleware(options = {}) {
             return res.end(bytes);
           }
         } else if (["/api/remote-access/funnel/enable", "/api/remote-access/funnel/disable"].includes(url.pathname)) {
-          await authenticator().reauthenticate(body.password);
+          await manager.reauthenticate(body.password, remoteAddress);
           result = url.pathname.endsWith("/enable")
             ? await publicFunnel.apply(body) : await publicFunnel.disable(body);
         } else if (url.pathname === "/api/remote-access/funnel-plan")
@@ -610,7 +611,7 @@ export function inventoryMiddleware(options = {}) {
         else if (url.pathname === "/api/remote-access/identity/start")
           result = await identity.start(body);
         else if (url.pathname === "/api/remote-access/identity/credentials") {
-          if (!(await authenticator().reauthenticate(body.password)))
+          if (!(await manager.reauthenticate(body.password, remoteAddress)))
             throw Error("Administratorpasswort stimmt nicht.");
           result = identity.credentials();
         } else if (url.pathname === "/api/media/movie-removal/preview")
@@ -658,7 +659,7 @@ export function inventoryMiddleware(options = {}) {
         else if (url.pathname === "/api/deployment/end")
           result = installer().end(body.operationId, body.confirmation);
         else if (url.pathname === "/api/credentials/reveal")
-          result = await revealCredentials(installer(), body, manager);
+          result = await revealCredentials(installer(), body, manager, remoteAddress);
         else if (url.pathname === "/api/viewers/action") {
           if (body.action === "invite") result = await viewers.invite(body.name, body.displayName);
           else if (body.action === "reset") result = await viewers.reset(body.name);

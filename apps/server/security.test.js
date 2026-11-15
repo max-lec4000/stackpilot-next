@@ -54,7 +54,7 @@ test("Tresor verschlüsselt Werte, bindet sie an den Namen und erzeugt bei verlo
     await rm(dir, { recursive: true });
   }
 });
-test("Anmeldung und Passwortanzeige teilen eine dauerhafte Fehlversuchssperre", async () => {
+test("Anmeldung und Passwortanzeige teilen die dauerhafte Sperre je Quelladresse", async () => {
   const dir = await mkdtemp(os.tmpdir() + "/sp-auth-rate-");
   const store = new StateStore(dir);
   try {
@@ -64,13 +64,23 @@ test("Anmeldung und Passwortanzeige teilen eine dauerhafte Fehlversuchssperre", 
       "fixture-password-123",
       await readFile(auth.bootstrapFile, "utf8"),
     );
+    const first = "192.0.2.20";
+    const second = "192.0.2.21";
     for (let n = 0; n < 5; n++)
-      await assert.rejects(auth.login("admin", "wrong"));
-    await assert.rejects(auth.reauthenticate("fixture-password-123"), (e) =>
-      e.message.includes("15 Minuten"),
+      await assert.rejects(auth.login("admin", "wrong", first), /fehlgeschlagen/);
+
+    const reopened = new Auth(store);
+    await assert.rejects(
+      reopened.reauthenticate("fixture-password-123", "::ffff:c000:214"),
+      /15 Minuten/,
     );
-    store.db.prepare("UPDATE auth_rate SET blocked_until=0 WHERE id=1").run();
-    assert.equal(await auth.reauthenticate("fixture-password-123"), true);
+    assert.equal(await reopened.reauthenticate("fixture-password-123", second), true);
+    await assert.rejects(
+      reopened.login("admin", "fixture-password-123", first),
+      /15 Minuten/,
+    );
+    store.db.prepare("UPDATE auth_source_rate SET expires=0").run();
+    assert.equal(await reopened.reauthenticate("fixture-password-123", first), true);
   } finally {
     store.close();
     await rm(dir, { recursive: true });

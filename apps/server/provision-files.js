@@ -10,9 +10,13 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { catalog } from "./catalog.js";
+export function serviceCredentialKey(plan, name) {
+  return `deployment:${plan.rootId || plan.id}:${catalog.services[name].slug}`;
+}
+
 export function serviceCredentials(vault, plan, name) {
   return vault.ensure(
-    `deployment:${plan.rootId || plan.id}:${catalog.services[name].slug}`,
+    serviceCredentialKey(plan, name),
     () => ({
       username: plan.spec.username,
       password: randomBytes(24).toString("base64url"),

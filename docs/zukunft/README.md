@@ -11,7 +11,7 @@ Freigabe für Änderungen an einem laufenden Server.
 | 2 | Couchdeck auf dieselbe Brücke umstellen (kein Seerr-Admin-Schlüssel mehr auf dem Gerät) | Sicherheit | mittel |
 | 3 | Container-Updates: neue Versionen anzeigen, vorher sichern, austauschen, prüfen | Sicherheit | groß |
 | 4 | Tresor-Sicherung als Knopf (verschlüsselt, mit Erinnerung) und geprüfte Wiederherstellung | Betrieb | mittel |
-| 6 | Dienst-Schlüssel erneuern (z. B. Bazarr) direkt aus StackPilot | Sicherheit | klein |
+| 6 | API-Schlüssel weiterer Dienste direkt in StackPilot erneuern (Bazarr ist umgesetzt) | Sicherheit | klein |
 | 8 | Doppelte Code-Abfrage bei der ersten Zuschauer-Anmeldung beseitigen | Bedienung | klein |
 | 9 | Zugang ohne Tailscale (eigene Domain, eigener Reverse-Proxy) | Funktion | groß |
 | 10 | HexOS / TrueNAS SCALE, vorhandenes Jellyfin einbinden, eigenes Ordnerschema | Plattform | sehr groß |

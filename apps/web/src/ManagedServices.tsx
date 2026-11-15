@@ -47,6 +47,57 @@ function stateTone(state: string) {
     return "warning" as const;
   return "neutral" as const;
 }
+function BazarrKeyRotation({ planId }: { planId: string }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [complete, setComplete] = useState(false);
+
+  return (
+    <details className="service-technical">
+      <summary>Bazarr-API-Schlüssel erneuern</summary>
+      <p>Der bisherige Schlüssel wird ungültig. Externe Apps, die ihn verwenden,
+        brauchen danach den neuen Schlüssel aus den Einstellungen von Bazarr.</p>
+      <form onSubmit={async (event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError("");
+        setComplete(false);
+        try {
+          await action("/api/credentials/rotate-bazarr", {
+            planId,
+            password,
+            confirmation: "OK",
+          });
+          setComplete(true);
+        } catch (e) {
+          setError((e as Error).message);
+        } finally {
+          setPassword("");
+          setBusy(false);
+        }
+      }}>
+        <label>
+          StackPilot-Administratorpasswort
+          <input
+            type="password"
+            autoComplete="current-password"
+            required
+            disabled={busy}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <button className="primary" disabled={busy || !password}>
+          {busy ? "Schlüssel wird geprüft …" : "API-Schlüssel erneuern"}
+        </button>
+      </form>
+      {error && <p className="error" role="alert">{error}</p>}
+      {complete && <p role="status">Bazarr akzeptiert den neuen Schlüssel. Der bisherige ist ungültig.</p>}
+    </details>
+  );
+}
+
 export function ManagedServices({ compact = false }: { compact?: boolean }) {
   const [loaded, setLoaded] = useState(false),
     [loading, setLoading] = useState(false),
@@ -287,6 +338,11 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
               <p>Nur lokal am Server veröffentlicht. Bei Zugriff über SSH zusätzlich den Webport weiterleiten:</p>
               <pre><code>ssh -L {selected.hostPort}:127.0.0.1:{selected.hostPort} benutzer@server</code></pre>
             </details>
+            {selected.slug === "bazarr" &&
+              selected.state === "running" &&
+              selected.installationStatus === "completed" && (
+                <BazarrKeyRotation key={serviceKey(selected)} planId={selected.planId} />
+              )}
             <div className="service-credentials">
               {!showReveal ? (
                 <button onClick={() => setShowReveal(true)}>Zugang geschützt anzeigen</button>

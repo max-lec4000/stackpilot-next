@@ -112,12 +112,14 @@ export class Services {
       } catch {}
       for (const service of this.plan.spec.selected || [name]) {
         const c = this.credentials(service);
-        for (const value of [c.password, c.apiKey])
+        for (const value of [c.password, c.apiKey, c.pendingApiKey])
           if (value) detail = detail.replaceAll(value, "[redacted]");
       }
-      throw new Error(
+      const error = new Error(
         `${name}: Dienstanfrage ${route.split("?")[0]} fehlgeschlagen (HTTP ${status}${transportError ? " · " + transportError : ""}). ${detail}`,
       );
+      error.status = status;
+      throw error;
     }
     if (raw)
       return { status, headers: responseHeaders, text: async () => text };

@@ -119,3 +119,15 @@ Direkt verbundene Geräte mit unterschiedlichen IP-Adressen haben eigene
 Zähler. Geräte hinter derselben sichtbaren Adresse teilen sich einen Zähler.
 Das gilt auch für SSH-Tunnel, die sich jeweils über dieselbe Loopback-Adresse
 mit StackPilot verbinden. Jellyfin und seine Geräteanmeldung laufen separat.
+
+## Bazarr-API-Schlüssel erneuern
+
+Öffne unter **Anwendungen → Bazarr → Details** den Bereich
+**Bazarr-API-Schlüssel erneuern**. Gib dein StackPilot-Administratorpasswort ein
+und bestätige den Wechsel. Die Erfolgsmeldung erscheint, sobald Bazarr den
+neuen Schlüssel akzeptiert und den bisherigen ablehnt.
+
+StackPilot speichert den neuen Schlüssel im Tresor. Externe Anwendungen
+bekommen ihn bei Bedarf aus den Einstellungen von Bazarr. Bazarrs eigene
+Anmeldung und seine Verbindungen zu Sonarr und Radarr bleiben erhalten.
+Nach einem unterbrochenen Wechsel kannst du dieselbe Aktion erneut ausführen.

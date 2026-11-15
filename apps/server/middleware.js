@@ -43,6 +43,7 @@ import { importVpn } from "./vpn.js";
 import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
+import { rotateBazarrKey } from "./bazarr-key.js";
 import path from "node:path";
 import { Auth, sessionCookie } from "./auth.js";
 import { Vault } from "./vault.js";
@@ -658,7 +659,16 @@ export function inventoryMiddleware(options = {}) {
           result = await installer().resume(body.operationId);
         else if (url.pathname === "/api/deployment/end")
           result = installer().end(body.operationId, body.confirmation);
-        else if (url.pathname === "/api/credentials/reveal")
+        else if (url.pathname === "/api/credentials/rotate-bazarr") {
+          if (body.confirmation !== "OK")
+            throw Error("Schlüsselwechsel zuerst bestätigen.");
+          await manager.reauthenticate(body.password, remoteAddress);
+          result = await hub.mutate(["Bazarr"], ({ plan, s }) => {
+            if (body.planId !== plan.id)
+              throw Error("Der Stack hat sich geändert. Bitte öffne die Anwendung erneut.");
+            return rotateBazarrKey(s);
+          });
+        } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);
         else if (url.pathname === "/api/viewers/action") {
           if (body.action === "invite") result = await viewers.invite(body.name, body.displayName);

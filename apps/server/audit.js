@@ -1,4 +1,5 @@
 const actions = {
+  "/api/credentials/rotate-bazarr": "Bazarr-API-Schlüssel erneuert",
   "/api/remote-access/funnel/enable": "Öffentliche Jellyfin-Freigabe angefordert",
   "/api/remote-access/funnel/disable": "Öffentliche Jellyfin-Freigabe zurückgenommen",
   "/api/updates/start": "StackPilot-Code-Update angefordert",

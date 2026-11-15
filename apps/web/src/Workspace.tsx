@@ -76,22 +76,15 @@ export function Workspace({
       <>
         <h2>Deine Daten bleiben deine Daten.</h2>
         <p>
-          Authentik kann unter Verwaltung → Externer Zugriff verschlüsselt
-          gesichert und isoliert wiederhergestellt werden. Vollständige
-          Stack-Sicherungen und Mediencontainer-Updates sind noch nicht
-          freigegeben. StackPilot-Code kann separat vorbereitet und aktualisiert werden.
+          StackPilot selbst lässt sich hier von GitHub aktualisieren. Authentik
+          wird verschlüsselt gesichert und isoliert wiederhergestellt.
+          Updates der Mediencontainer und eine Sicherung des StackPilot-Tresors
+          per Knopf sind noch nicht eingebaut (Tresor: siehe docs/ablaeufe.md).
         </p>
         <ServiceUpdates />
         <Disclosure title="Authentik sichern und Wiederherstellung prüfen">
           <IdentityBackups />
         </Disclosure>
-        <details className="workspace-info">
-          <summary>StackPilot-Code kontrolliert aktualisieren</summary>
-          <p>Der neue Stand wird in einem getrennten Verzeichnis installiert, getestet und gebaut. Erst danach wird der Nutzerdienst gestoppt. Eigene Änderungen und unbekannte Datenmigrationen sperren das Update. Ein fehlgeschlagener Start versucht den vorherigen Code und Build wiederherzustellen.</p>
-          <p>Im bestehenden Checkout als normaler Verwaltungsnutzer ausführen:</p>
-          <pre><code>npm run update:check{"\n"}npm run update:apply</code></pre>
-          <p>Das ist keine Sicherung von Medien oder Datenbanken. Nach einem Prozessabbruch den privaten Updateauftrag prüfen. Rückkehr zur vorherigen Version kann einen Checkout auf einem festen Commit hinterlassen; vor weiteren Änderungen dessen Zustand prüfen.</p>
-        </details>
         <div className="workspace-info">
           <details>
             <summary>Geplanter sicherer Ablauf</summary>

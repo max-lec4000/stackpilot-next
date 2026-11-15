@@ -53,7 +53,7 @@ Danach entstehen automatisch:
 | Zuschauer einladen, neu einladen, entfernen | **Verwaltung → Externer Zugriff** |
 | Öffentlich über Funnel | **Verwaltung → Externer Zugriff → Öffentlich über das Internet** |
 | Filme/Serien suchen und anfragen | **Medien entdecken**, **Meine Anfragen** |
-| StackPilot aktualisieren | **Verwaltung → Über** (holt die neue Version von GitHub) |
+| StackPilot aktualisieren | **Verwaltung → Sicherungen & Updates** (holt die neue Version von GitHub) |
 
 ### Zuschauer
 

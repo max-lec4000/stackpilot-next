@@ -55,7 +55,7 @@ StackPilot → **Anwendungen** → Dienst öffnen. Zugangsdaten: **Details → Z
 Heimnetz, nicht über die HTTPS-Adresse.
 
 ### StackPilot aktualisieren
-**Verwaltung → Über → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
+**Verwaltung → Sicherungen & Updates → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
 Medien-Container laufen weiter.
 
 ### Zugriff von unterwegs

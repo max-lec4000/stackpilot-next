@@ -455,3 +455,46 @@ test("Staffelsuche überspringt fremde aktive Transfers und verändert nur die g
     { name: "SeasonSearch", seriesId: 11, seasonNumber: 1 },
   ]);
 });
+
+test("Staffelpaket nur bei vollständiger eindeutiger Zuordnung pausieren", async () => {
+  const f = fixture(), hash = "b".repeat(40);
+  f.request.media.mediaType = "tv";
+  const rows = [
+    { seriesId: 11, seasonNumber: 1, episodeId: 14, downloadId: hash },
+    { seriesId: 11, seasonNumber: 1, episodeId: 15, downloadId: hash },
+  ];
+  const torrent = { hash, category: "stackpilot-tv", progress: 0.5, state: "downloading" };
+  const writes = [];
+  f.s.qbit = async (route, args) => {
+    if (route === "/torrents/info") return [torrent];
+    writes.push({ route, args });
+    torrent.state = "stoppedDL";
+  };
+  f.setQueue({ records: rows, totalRecords: rows.length });
+  const preview = await f.diagnosis.seasonTransferPreview({ requestId: 7, season: 1 });
+  const body = { requestId: 7, season: 1, review: preview.review, confirmation: "OK" };
+  f.setQueue({ records: [...rows, { ...rows[0], seasonNumber: 3 }], totalRecords: 3 });
+  await assert.rejects(f.diagnosis.pauseSeasonTransfer(body), /eindeutig/);
+  f.setQueue({ records: rows, totalRecords: 3 });
+  await assert.rejects(f.diagnosis.pauseSeasonTransfer(body), /vollständig/);
+  assert.deepEqual(writes, []);
+  f.setQueue({ records: rows, totalRecords: 2 });
+  await f.diagnosis.pauseSeasonTransfer(body);
+  assert.deepEqual(writes, [{ route: "/torrents/stop", args: { hashes: hash } }]);
+});
+
+test("Couchdeck-Qualitätsänderungen bleiben auf eigene genehmigte Einzelanfragen begrenzt", async () => {
+  const f = fixture();
+  const owner = "0123456789abcdef0123456789abcdef";
+  f.request.requestedBy = { id: 4 };
+  let otherRequests = [];
+  f.s.additional.seerr = async (route) => route === "/user/4"
+    ? { jellyfinUserId: owner }
+    : { mediaInfo: { requests: [f.request, ...otherRequests] } };
+  const target = { request: f.request, kind: "movie", mediaId: 42 };
+  await assert.rejects(f.diagnosis.requireQualityOwner(f.s, target, "other"), /Nur eigene/);
+  otherRequests = [{ id: 88, status: 2 }];
+  await assert.rejects(f.diagnosis.requireQualityOwner(f.s, target, owner), /weitere Anfragen/);
+  otherRequests = [];
+  await f.diagnosis.requireQualityOwner(f.s, target, owner);
+});

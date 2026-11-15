@@ -1190,7 +1190,8 @@ function seerrDetailScreen(stub) {
       lockSelect(1500); // ein zweites A darf nicht den nächsten Knopf auslösen
       try {
         const r = await cd.call('seerr:request', { mediaType: d.mediaType, mediaId: d.id, seasons });
-        toast(r.status === 2 ? `„${d.title}“ angefragt und freigegeben` : `„${d.title}“ angefragt – wartet auf Freigabe`);
+        if (r.warning) toast(r.warning, 'error');
+        else toast(r.status === 2 ? `„${d.title}“ angefragt und freigegeben` : `„${d.title}“ angefragt – wartet auf Freigabe`);
         chosen.clear();
         lastRequestId = r.id;
         await load();
@@ -1213,6 +1214,11 @@ function seerrDetailScreen(stub) {
       actions.append(h('button', { class: 'action primary focusable', 'data-autofocus': true,
         oncdselect: () => push(detailScreen({ Id: d.jellyfinId })) }, '▶ In der Bibliothek öffnen'));
     }
+    if (d.managed && d.mediaType === 'movie') {
+      const cap = await cd.call('seerr:film-limit');
+      actions.append(h('button', { class: 'action focusable', oncdselect: () => editFilmLimit(cap, load) },
+        cap ? `Filmstandard: höchstens ${cap} GiB` : 'Film-Größenstandard einstellen'));
+    }
     if (d.mediaType === 'movie' && requestable(d.status)) {
       actions.append(h('button', { class: 'action primary focusable', 'data-autofocus': true, oncdselect: () => send() }, '＋ Film anfragen'));
     }
@@ -1229,6 +1235,10 @@ function seerrDetailScreen(stub) {
       const label = d.mediaType === 'tv' && rq.seasons?.length ? `✕ Anfrage zurückziehen (Staffel ${rq.seasons.join(', ')})` : '✕ Anfrage zurückziehen';
       actions.append(h('button', { class: 'action danger focusable', 'data-req': rq.id, oncdselect: () =>
         cancelSeerrRequest({ id: rq.id, title: d.title, requestStatus: rq.status }, load) }, label));
+    }
+    if (d.managed) for (const rq of (d.requests || []).filter((entry) => entry.mine && entry.status === 2)) {
+      actions.append(h('button', { class: 'action focusable', oncdselect: () => editRequestQuality(rq.id, load) },
+        'Qualitätsprofil ändern'));
     }
     const state = SEERR_STATUS[d.status];
     scroll.append(h('div', { class: 'detail' },
@@ -1330,6 +1340,22 @@ function seerrDetailScreen(stub) {
             } catch (e) { episodeList.textContent = e.message; }
           },
         }, `Folgen von Staffel ${sn.number} anzeigen`);
+        if (approvedRequest && d.managed) list.append(h('button', {
+          class: 'action focusable', oncdselect: async () => {
+            try {
+              const requestId = approvedRequest.id, season = sn.number;
+              const transfer = await cd.call('seerr:season-transfer', { requestId, season });
+              if (!transfer) return;
+              confirmDialog('Staffelpaket pausieren?', `„${transfer.name}“ wird pausiert. Bisher geladene Dateien bleiben erhalten.`, 'Pausieren',
+                async () => {
+                  try {
+                    await cd.call('seerr:season-pause', { requestId, season, review: transfer.review });
+                    toast('Staffelpaket pausiert');
+                  } catch (e) { toast(e.message, 'error'); }
+                });
+            } catch (e) { toast(e.message, 'error'); }
+          },
+        }, `Laufendes Paket für Staffel ${sn.number} pausieren …`));
         list.append(showEpisodes, episodeList);
         if (pendingRequest) list.append(h('button', {
           class: 'action danger focusable',
@@ -1354,6 +1380,45 @@ function seerrDetailScreen(stub) {
     if (undo) setFocus(undo, { scroll: false }); else focusFirst(screen);
   }
   return screen;
+}
+
+function editFilmLimit(current, after) {
+  let value = current || 0;
+  const label = h('p', {});
+  const display = () => { label.textContent = value ? `Höchstens ${value} GiB je Film` : 'Kein zusätzliches Limit'; };
+  display();
+  const adjust = (delta) => { value = Math.max(0, Math.min(200, value + delta)); display(); };
+  showOverlay(h('div', { class: 'dialog' }, h('h2', {}, 'Standard für neue Couchdeck-Filmanfragen'), label,
+    h('div', { class: 'actions' },
+      ...[-5, -0.5, 0.5, 5].map((delta) => h('button', {
+        class: 'action focusable', oncdselect: () => adjust(delta),
+      }, `${delta > 0 ? '+' : ''}${delta} GiB`))),
+    h('button', { class: 'action primary focusable', oncdselect: async () => {
+      try { await cd.call('seerr:film-limit', value); closeOverlay(); await after(); }
+      catch (e) { toast(e.message, 'error'); }
+    } }, 'Standard speichern'),
+    h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Abbrechen')));
+}
+
+async function editRequestQuality(requestId, after) {
+  try {
+    const data = await cd.call('seerr:quality', requestId);
+    if (!data) return;
+    const list = h('div', { class: 'actions' });
+    for (const profile of data.profiles) list.append(h('button', { class: 'action focusable',
+      oncdselect: () => confirmDialog('Qualitätsprofil ändern?',
+        `Profil „${profile.name}“ übernehmen? Laufende Transfers und vorhandene Dateien bleiben erhalten.`,
+        'Übernehmen', async () => {
+          try {
+            await cd.call('seerr:quality-save', { requestId, profile: profile.id, previousProfileId: data.currentProfileId });
+            toast('Qualitätsprofil übernommen');
+            await after();
+          } catch (e) { toast(e.message, 'error'); }
+        }),
+    }, profile.id === data.currentProfileId ? `${profile.name} (aktuell)` : profile.name));
+    showOverlay(h('div', { class: 'panel' }, h('h2', {}, 'Qualitätsprofil'), list,
+      h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Schließen')));
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ---------- Kurzinfo (X auf einer Kachel) ----------

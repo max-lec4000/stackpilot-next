@@ -454,6 +454,13 @@ const handlers = {
   'seerr:episode-delete': ({ requestId, season, episodeId, fileId }) =>
     seerr.managedMedia({ action: 'delete', requestId, season, episodeId, fileId, confirmation: 'OK' }),
   'seerr:cancel-season': (selection) => seerr.cancelSeason(selection),
+  'seerr:film-limit': (value) => seerr.filmLimit(value),
+  'seerr:quality': (requestId) => seerr.managedMedia({ action: 'quality', requestId }),
+  'seerr:quality-save': ({ requestId, profile, previousProfileId }) =>
+    seerr.managedMedia({ action: 'quality-save', requestId, profile, previousProfileId, confirmation: 'OK' }),
+  'seerr:season-transfer': ({ requestId, season }) => seerr.managedMedia({ action: 'season-transfer', requestId, season }),
+  'seerr:season-pause': ({ requestId, season, review }) =>
+    seerr.managedMedia({ action: 'season-pause', requestId, season, review, confirmation: 'OK' }),
   'seerr:activity': () => lastActivity || refreshActivity(),
   // Nachtmodus + Regler Sprache ↔ Rest
   'sound:state': () => ({ night: sound.isNight(), balance: sound.balance() }),

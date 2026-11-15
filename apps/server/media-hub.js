@@ -186,7 +186,7 @@ export class MediaHub {
         })),
     };
   }
-  async request(body) {
+  async request(body, couchdeck) {
     const type = mediaType(body.type),
       id = positiveId(body.id);
     await this.requireVpn();
@@ -195,6 +195,12 @@ export class MediaHub {
       async ({ plan, s }) => {
         if (!plan.spec.vpn || plan.id !== this.guard.checkedPlanId)
           throw Error("VPN-Zustand hat sich geändert. Erneut prüfen.");
+        if (couchdeck) {
+          const user = await s.additional.seerr(`/user/${positiveId(couchdeck.userId)}`);
+          const normalize = (value) => String(value || "").toLowerCase().replaceAll("-", "");
+          if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(couchdeck.owner))
+            throw Error("Das Seerr-Konto konnte nicht dem Wohnzimmer-Konto zugeordnet werden.");
+        }
         if (typeof plan.spec.path === "string") {
           const storage = storageHealth(await this.storage(plan.spec.path));
           if (storage.state === "critical")
@@ -275,7 +281,7 @@ export class MediaHub {
         if (type === "movie" && this.sizeLimits) {
           const useDefault = body.sizeGiBPerHour === undefined && !savedQuality;
           const rate = body.sizeGiBPerHour ?? (useDefault ? sizeDefault.rate : 0);
-          const capGiB = useDefault ? sizeDefault.capGiB || 0 : 0;
+          const capGiB = couchdeck?.capGiB ?? (useDefault ? sizeDefault.capGiB || 0 : 0);
           if (rate || capGiB) {
             sizePolicy = await this.sizeLimits.forRequest(
               s,
@@ -305,6 +311,7 @@ export class MediaHub {
               mediaType: type,
               mediaId: id,
               is4k: false,
+              ...(couchdeck ? { userId: couchdeck.userId } : {}),
               ...qualityOptions,
               ...(seasons ? { seasons } : {}),
             },
@@ -341,7 +348,7 @@ export class MediaHub {
               warning =
                 "Die Anfrage wurde angelegt, aber Seerr bestätigt das vorgegebene Profil nicht. Nicht erneut anfragen; unter Meine Anfragen das aktuelle Radarr-Profil prüfen.";
           }
-          return { ok: true, id: r.id, warning };
+          return { ok: true, id: r.id, warning, ...(couchdeck ? { status: r.status } : {}) };
         } catch {
           throw Error(
             "Seerr konnte die Anfrage nicht anlegen. Verbindung, Standardserver und Qualitätsprofil prüfen.",

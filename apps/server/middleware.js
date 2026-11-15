@@ -235,6 +235,24 @@ export function inventoryMiddleware(options = {}) {
           result = await requestDiagnostics.search({ requestId, season, episodeId }, owner);
         else if (body.action === "search-season" && season !== undefined)
           result = await requestDiagnostics.search({ requestId, season }, owner);
+        else if (body.action === "quality")
+          result = await qualitySettings.read(requestId, owner);
+        else if (body.action === "quality-save")
+          result = await qualitySettings.apply({
+            requestId, profile: body.profile, previousProfileId: body.previousProfileId,
+            confirmation: body.confirmation,
+          }, owner);
+        else if (body.action === "film-request") {
+          if (!Number.isFinite(body.capGiB) || body.capGiB < 0.5 ||
+              body.capGiB > 200 || !Number.isInteger(body.capGiB * 2))
+            throw Error("Ungültige Film-Größenobergrenze.");
+          result = await hub.request({ type: "movie", id: body.mediaId }, {
+            owner, userId: Number(body.userId), capGiB: body.capGiB,
+          });
+        } else if (body.action === "season-transfer")
+          result = await requestDiagnostics.seasonTransferPreview({ requestId, season }, owner);
+        else if (body.action === "season-pause")
+          result = await requestDiagnostics.pauseSeasonTransfer({ requestId, season, review: body.review, confirmation: body.confirmation }, owner);
         else if (body.action === "delete")
           result = await requestDiagnostics.deleteEpisodeFile({ requestId, season, episodeId, fileId, confirmation: body.confirmation }, owner);
         else throw Error("Unbekannte Couchdeck-Aktion.");
@@ -349,6 +367,10 @@ export function inventoryMiddleware(options = {}) {
         );
       } else if (url.pathname === "/api/media/replace-download" && req.method === "GET") {
         result = await requestDiagnostics.replacePreview(url.searchParams.get("requestId"));
+      } else if (url.pathname === "/api/media/season-transfer" && req.method === "GET") {
+        result = await requestDiagnostics.seasonTransferPreview({
+          requestId: url.searchParams.get("requestId"), season: url.searchParams.get("season"),
+        });
       } else if (url.pathname === "/api/media/episodes" && req.method === "GET") {
         result = await requestDiagnostics.episodes(
           url.searchParams.get("requestId"), url.searchParams.get("season"),
@@ -674,6 +696,8 @@ export function inventoryMiddleware(options = {}) {
           result = await sizeLimits.save(body);
         else if (url.pathname === "/api/media/quality")
           result = await qualitySettings.apply(body);
+        else if (url.pathname === "/api/media/season-transfer/pause")
+          result = await requestDiagnostics.pauseSeasonTransfer(body);
         else if (url.pathname === "/api/media/episodes/delete-file")
           result = await requestDiagnostics.deleteEpisodeFile(body);
         else if (url.pathname === "/api/media/research")

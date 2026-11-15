@@ -336,6 +336,14 @@ export class RequestDiagnostics {
     if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(owner))
       throw Error("Nur eigene Anfragen können bearbeitet werden.");
   }
+  async requireQualityOwner(s, target, owner) {
+    await this.requireOwner(s, target, owner);
+    const detail = await s.additional.seerr(`/${target.kind}/${target.mediaId}?language=de`);
+    const requests = detail?.mediaInfo?.requests;
+    if (target.request.status !== 2 || !Array.isArray(requests) ||
+        requests.some((request) => request.id !== target.request.id && ![3, 4].includes(request.status)))
+      throw Error("Qualitätsänderung nur für eigene genehmigte Anfragen ohne weitere Anfragen zum selben Medium.");
+  }
   async requireExclusiveSeason(s, target, season) {
     const detail = await s.additional.seerr(`/tv/${target.mediaId}?language=de`);
     const requests = detail?.mediaInfo?.requests;
@@ -427,6 +435,58 @@ export class RequestDiagnostics {
       ])).digest("hex"),
     };
   }
+  async seasonTransfer(s, target, season, owner) {
+    if (target.kind !== "tv" || target.request.status !== 2 || !target.item ||
+        !target.request.seasons?.some((entry) => entry.seasonNumber === season))
+      throw Error("Die Staffel ist keiner genehmigten Sonarr-Anfrage zugeordnet.");
+    if (owner) {
+      await this.requireOwner(s, target, owner);
+      await this.requireExclusiveSeason(s, target, season);
+    }
+    const queue = await this.completeQueue(s, "Sonarr", true);
+    const rows = queue.records.filter((row) => row.seriesId === target.item.id && row.seasonNumber === season);
+    const hashes = new Set(rows.map((row) => row.downloadId?.toLowerCase()));
+    const [hash] = hashes;
+    if (rows.length < 2 || hashes.size !== 1 || !/^[a-f0-9]{40}$/.test(hash || "") ||
+        new Set(rows.map((row) => row.episodeId)).size < 2 ||
+        queue.records.some((row) => row.downloadId?.toLowerCase() === hash &&
+          (row.seriesId !== target.item.id || row.seasonNumber !== season ||
+            !Number.isSafeInteger(row.episodeId) || row.episodeId < 1)))
+      throw Error("Kein einzelnes, eindeutig zugeordnetes Staffelpaket gefunden.");
+    const torrents = await s.qbit("/torrents/info");
+    const torrent = Array.isArray(torrents) && torrents.find((row) => row.hash === hash);
+    if (!torrent || torrent.category !== "stackpilot-tv" ||
+        !Number.isFinite(torrent.progress) || torrent.progress >= 1 ||
+        !/^(downloading|queuedDL|stalledDL|forcedDL)$/.test(torrent.state))
+      throw Error("Kein laufender, unvollständiger Transfer für diese Staffel.");
+    return {
+      hash, name: text(torrent.name),
+      review: createHash("sha256").update(JSON.stringify([
+        target.request.id, target.item.id, season, hash, rows.map((row) => row.episodeId).sort((a, b) => a - b),
+      ])).digest("hex"),
+    };
+  }
+  async seasonTransferPreview(body, owner) {
+    const { s } = await this.hub.context(["Seerr", "Sonarr", "qBittorrent"]);
+    const target = await this.target(s, positiveId(body.requestId));
+    const { name, review } = await this.seasonTransfer(s, target, positiveId(body.season), owner);
+    return { name, review };
+  }
+  async pauseSeasonTransfer(body, owner) {
+    if (body.confirmation !== "OK") throw Error("Pausieren bestätigen.");
+    return this.hub.mutate(["Seerr", "Sonarr", "qBittorrent"], async ({ s, plan }) => {
+      const target = await this.target(s, positiveId(body.requestId));
+      const transfer = await this.seasonTransfer(s, target, positiveId(body.season), owner);
+      if (transfer.review !== body.review) throw Error("Staffelpaket wurde geändert. Neu prüfen.");
+      await s.qbit("/torrents/stop", { hashes: transfer.hash });
+      if (!await this.waitForTorrent(s, transfer.hash, (torrent) => /^(stopped|paused)DL$/.test(torrent?.state)))
+        throw Error("qBittorrent hat das Pausieren noch nicht bestätigt.");
+      const key = `download-policy:${plan.rootId || plan.id}:paused`;
+      const paused = this.hub.engine.vault.get(key) || [];
+      this.hub.engine.vault.set(key, paused.filter((v) => v.toLowerCase() !== transfer.hash));
+      return { ok: true };
+    });
+  }
   async replacePreview(id) {
     const { plan, s } = await this.hub.context(["Seerr", "qBittorrent"]);
     const target = await this.target(s, positiveId(id));
@@ -435,10 +495,10 @@ export class RequestDiagnostics {
     const { name, review } = await this.replacement(s, target, queue);
     return { name, review };
   }
-  async completeQueue(s, service) {
+  async completeQueue(s, service, includeUnknown = false) {
     let queue;
     try {
-      queue = await s.arr(service, importQueueRoute);
+      queue = await s.arr(service, includeUnknown ? importQueueRoute.replace("includeUnknownSeriesItems=false", "includeUnknownSeriesItems=true") : importQueueRoute);
     } catch {
       throw Error("Download- und Importwarteschlange ist nicht erreichbar.");
     }

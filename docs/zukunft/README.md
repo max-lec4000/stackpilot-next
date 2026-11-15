@@ -9,20 +9,23 @@ Freigabe für Änderungen an einem laufenden Server.
    Schlüssel in der Test-VM erprobt und auf reatest durchgeführt. Sonarr-API,
    Verbindung aus Seerr und Importhistorie geprüft.
 2. **Downloadprofile reparieren.** StackPilot kann für neue Filmanfragen eine feste
-   GiB-Grenze oder eine laufzeitabhängige Grenze speichern. Offen sind die
-   Bedienung in Couchdeck und geprüfte Regeln für Folgen oder Staffelpakete.
+   GiB-Grenze oder eine laufzeitabhängige Grenze speichern. Das verwaltete
+   Couchdeck bietet eine eigene feste Filmgrenze. Offen sind geprüfte Regeln
+   für Folgen oder Staffelpakete.
 3. **Qualitätswechsel und Downloadstatus.** StackPilot kann eindeutig
    zugeordnete, unvollständige Film-Downloads mit einem neuen Profil ersetzen
    und die bisher geladenen Dateien behalten. In der VM mit Radarr,
-   qBittorrent und lokalem Indexer geprüft. Serienpakete und Couchdeck bleiben offen.
+   qBittorrent und lokalem Indexer geprüft. Couchdeck kann vorhandene
+   Profile für eigene genehmigte Anfragen wechseln. Serienpakete lassen sich
+   gezielt pausieren. Automatisches Ersetzen bleibt offen.
 4. **Staffeln und Folgen einzeln steuern.** StackPilot und das verwaltete
    Couchdeck können eine angefragte Staffel oder eine einzelne Folge suchen
    und eindeutig zugeordnete Folgendateien löschen. In Couchdeck gilt dies nur
    für eigene genehmigte Anfragen des verbundenen Wohnzimmer-Kontos.
    Einzelne Staffeln lassen sich aus eigenen noch offenen Seerr-Anfragen
    entfernen. Für genehmigte Staffeln kann StackPilot die Sonarr-Überwachung
-   einzeln stoppen. Offen bleiben Staffelpakete im laufenden Transfer,
-   Serien-Größenlimits sowie Größenprofil und Qualitätswechsel in Couchdeck.
+   einzeln stoppen. Laufende Staffelpakete können bei eindeutiger Zuordnung
+   pausiert werden. Abbruch, Austausch und Serien-Größenlimits bleiben offen.
 5. **Streamyfin mit Seerr verbinden.** An den bestandenen Quick-Connect-Test mit Seerr
    3.5.2 anknüpfen. Die benötigten Seerr-Schnittstellen unter der Jellyfin-HTTPS-Adresse
    zugänglich machen, die Aktualisierung bestehender Installationen prüfen und in der

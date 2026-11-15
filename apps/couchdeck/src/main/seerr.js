@@ -76,7 +76,7 @@ class Seerr {
     const me = await this.currentUser();
     let quota = null;
     try { quota = await this.request('GET', `/user/${me.id}/quota`); } catch { /* optional */ }
-    return { configured: true, user: { id: me.id, name: me.displayName || me.username || me.jellyfinUsername }, quota };
+    return { configured: true, managed: this.managed, user: { id: me.id, name: me.displayName || me.username || me.jellyfinUsername }, quota };
   }
 
   static simplify(r) {
@@ -145,6 +145,7 @@ class Seerr {
     }
     return {
       ...base,
+      managed: this.managed,
       genres: (d.genres || []).map((g) => g.name),
       runtime: d.runtime || d.episodeRunTime?.[0] || null,
       seasons: mediaType === 'tv'
@@ -178,9 +179,21 @@ class Seerr {
     return { ok: true, wasApproved: req.status !== REQ_PENDING };
   }
 
+  get managed() {
+    return !!this.jf.token && this.jf.token === config.integration?.()?.auth?.token;
+  }
+
+  filmLimit(value) {
+    if (value !== undefined) {
+      if (!this.managed || !Number.isFinite(value) || value < 0 || value > 200 ||
+          !Number.isInteger(value * 2)) throw new Error('Ungültige Film-Größenobergrenze');
+      config.update({ filmMaxGiB: value });
+    }
+    return this.managed ? config.get().filmMaxGiB || 0 : null;
+  }
+
   async managedMedia(body) {
-    const link = config.integration?.();
-    if (!this.jf.token || this.jf.token !== link?.auth?.token) return null;
+    if (!this.managed) return null;
     const response = await fetch('http://127.0.0.1:5173/api/couchdeck/media', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Couchdeck-Token': this.jf.token },
@@ -237,6 +250,12 @@ class Seerr {
 
   async createRequest({ mediaType, mediaId, seasons }) {
     const me = await this.currentUser();
+    const capGiB = mediaType === 'movie' ? this.filmLimit() : 0;
+    if (capGiB) {
+      const result = await this.managedMedia({ action: 'film-request', mediaId: Number(mediaId), userId: me.id, capGiB });
+      if (!result) throw new Error('StackPilot konnte die Größenobergrenze nicht anwenden');
+      return result;
+    }
     const body = { mediaType, mediaId: Number(mediaId), userId: me.id, is4k: false };
     if (mediaType === 'tv') body.seasons = seasons?.length ? seasons.map(Number) : 'all';
     const r = await this.request('POST', '/request', { body });

@@ -68,6 +68,26 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
     }
   }
 
+  async function pausePackage() {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const transfer = await get<{ name: string; review: string }>(
+        `/api/media/season-transfer?requestId=${requestId}&season=${season}`,
+      );
+      if (!window.confirm(`„${transfer.name}“ pausieren? Bisher geladene Dateien bleiben erhalten.`)) return;
+      await action("/api/media/season-transfer/pause", {
+        requestId, season, review: transfer.review, confirmation: "OK",
+      });
+      setMessage("Staffelpaket pausiert.");
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <details onToggle={(event) => {
       if (event.currentTarget.open && rows === null && !busy) void load();
@@ -98,6 +118,7 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
           ))}
         </ul>
       )}
+      <button disabled={busy} onClick={() => void pausePackage()}>Staffelpaket pausieren …</button>
       <button disabled={busy} onClick={() => void load()}>Folgen aktualisieren</button>
     </details>
   );

@@ -783,3 +783,25 @@ test("Fester Filmstandard wird ohne Laufzeit angewandt und gegen veraltete Auswa
   await f.hub.request({ type: "movie", id: 42, expectedSizeDefaultCap: 7.5 });
   assert.equal(f.calls.find((c) => c[1] === "/request")[2].body.profileId, 6);
 });
+
+test("Couchdeck-Filmgrenze hat Vorrang und bleibt an den bestätigten Seerr-Besitzer gebunden", async () => {
+  const f = fixture();
+  const owner = "0123456789abcdef0123456789abcdef";
+  const seerr = f.services.additional.seerr;
+  f.services.additional.seerr = async (route, options) => route === "/user/9"
+    ? { jellyfinUserId: owner } : seerr(route, options);
+  f.hub.sizeLimits = {
+    config: () => ({ rate: 0, capGiB: 10 }),
+    forRequest: async (_s, _p, _detail, rate, capGiB) => {
+      assert.equal(rate, 0);
+      assert.equal(capGiB, 7.5);
+      return { profileId: 6, serverId: 0, capGiB };
+    },
+  };
+  const body = { type: "movie", id: 42 };
+  await assert.rejects(f.hub.request(body, { owner: "different", userId: 9, capGiB: 7.5 }), /Wohnzimmer/);
+  await f.hub.request(body, { owner, userId: 9, capGiB: 7.5 });
+  const saved = f.calls.find((c) => c[1] === "/request")[2].body;
+  assert.equal(saved.userId, 9);
+  assert.equal(saved.profileId, 6);
+});

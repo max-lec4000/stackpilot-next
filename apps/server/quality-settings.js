@@ -43,9 +43,10 @@ export class QualitySettings {
     this.hub = hub;
     this.diagnostics = diagnostics;
   }
-  async read(id) {
+  async read(id, owner) {
     const { s, plan } = await this.hub.context(["Seerr"]);
     const target = await this.diagnostics.target(s, id);
+    if (owner) await this.diagnostics.requireQualityOwner(s, target, owner);
     if (!target.item)
       throw Object.assign(
         Error("Das Medium ist noch nicht in der ARR-App angekommen."),
@@ -84,13 +85,17 @@ export class QualitySettings {
       canCreateCompact: !profiles.some((p) => p.name === compactProfileName),
     };
   }
-  async apply(body) {
+  async apply(body, owner) {
     if (body.confirmation !== "OK") throw Error("Profiländerung bestätigen.");
     return this.hub.mutate(["Seerr"], async ({ s, plan }) => {
       const target = await this.diagnostics.target(
         s,
         positiveId(body.requestId),
       );
+      if (owner) {
+        await this.diagnostics.requireQualityOwner(s, target, owner);
+        if (body.alsoFuture) throw Error("Das globale Profil wird in StackPilot verwaltet.");
+      }
       const { item, service, kind, server } = target;
       if (!item)
         throw Error("Das Medium ist noch nicht in der ARR-App angekommen.");

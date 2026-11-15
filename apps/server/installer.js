@@ -10,6 +10,8 @@ import {
   prepareFiles,
   testHardlinks,
   inspectAdoption,
+  networkLayout,
+  serviceNetworks,
 } from "./provision-files.js";
 import { Services } from "./service-api.js";
 import { probeVpn } from "./vpn.js";
@@ -122,7 +124,13 @@ export class DeploymentEngine extends RetirementEngine {
         result.spec.couchdeckYoutube = !!base.spec.couchdeckYoutube;
       }
       result.addsCouchdeck = result.spec.couchdeck && !base.spec.couchdeck;
-      if (!result.added.length && !result.vpnTransition && !result.addsCouchdeck)
+      // Ältere Stacks bekommen beim nächsten Plan die getrennten Netze.
+      result.networkUpgrade = base.networkLayout !== networkLayout;
+      if (result.networkUpgrade)
+        result.warnings.push(
+          "Netze werden getrennt: Jellyfin kommt in ein eigenes Netz, ohne Zugang zu ARR-Diensten und Downloadclient. Die betroffenen Container (auch VPN und qBittorrent) werden dafür einmal neu erstellt; Daten und Einstellungen bleiben.",
+        );
+      if (!result.added.length && !result.vpnTransition && !result.addsCouchdeck && !result.networkUpgrade)
         result.blockers.push("Keine zusätzliche App ausgewählt.");
     }
 
@@ -146,6 +154,7 @@ export class DeploymentEngine extends RetirementEngine {
           );
       }
     }
+    result.networkLayout = networkLayout;
     result.uid = process.getuid();
     result.gid = process.getgid();
     // Erweiterungen behalten die Bindung des bestehenden Stacks.
@@ -484,13 +493,21 @@ export class DeploymentEngine extends RetirementEngine {
           : expectedServices[c.service];
       const namespace = expected.network_mode?.startsWith("service:");
       const gluetun = own.find((v) => v.service === "gluetun");
+      // Erlaubte Netzaufteilungen: die des Plans, und während einer Umstellung auch noch
+      // die alte (alles in "default"), bis die Container neu erstellt sind.
+      const layouts = [serviceNetworks(plan, c.service)];
+      if (plan.networkUpgrade) layouts.push(["default"]);
       const networkValid = namespace
         ? !!gluetun &&
           c.network === "container:" + gluetun.id &&
           c.networkNames.length === 0
-        : [plan.project + "_default", network?.id].includes(c.network) &&
-          c.networkNames.length === 1 &&
-          c.networkNames[0] === plan.project + "_default";
+        : layouts.some((names) => {
+            const expectedNames = names.map((n) => plan.project + "_" + n).sort();
+            return (
+              [...expectedNames, network?.id].includes(c.network) &&
+              JSON.stringify([...c.networkNames].sort()) === JSON.stringify(expectedNames)
+            );
+          });
       const mounts = (expected.volumes || []).map((value) => {
         const [source, destination, mode] = value.split(":");
         return { source, destination, writable: mode !== "ro" };

@@ -21,6 +21,29 @@ export function serviceCredentials(vault, plan, name) {
     }),
   );
 }
+// Netzaufteilung (Layout 2): Jellyfin – der einzige von außen erreichbare Dienst – liegt
+// im Netz "default" zusammen mit Schutz-Gateway, Sitzungsprüfung und OIDC-Weg. Die
+// ARR-Dienste und der Downloadclient liegen im Netz "arr". Nur wer beide braucht, hängt
+// in beiden: Seerr (Jellyfin + Sonarr/Radarr) und die interne API-Brücke von StackPilot.
+// Ein kompromittiertes Jellyfin erreicht so keinen ARR-Dienst und keinen Downloadclient.
+export const networkLayout = 2;
+const layout = {
+  jellyfin: ["default"],
+  streamystats: ["default"],
+  seerr: ["default", "arr"],
+  "api-relay": ["default", "arr"],
+  gluetun: ["arr"],
+  qbittorrent: ["arr"],
+  sonarr: ["arr"],
+  radarr: ["arr"],
+  lidarr: ["arr"],
+  prowlarr: ["arr"],
+  bazarr: ["arr"],
+};
+/** Netze eines Dienstes (Compose-Schlüssel) im jeweiligen Layout des Plans. */
+export function serviceNetworks(plan, slug) {
+  return plan.networkLayout === networkLayout ? layout[slug] || ["default"] : ["default"];
+}
 export function composeFor(plan, publish = true) {
   const internal = [
     "localhost",
@@ -197,18 +220,25 @@ export function composeFor(plan, publish = true) {
     };
   }
   Object.assign(services, plan.preservedServices || {});
-  return {
-    name: plan.project,
-    services,
-    networks: {
-      default: {
-        labels: {
-          "io.stackpilot.managed": "true",
-          "io.stackpilot.plan": plan.rootId || plan.id,
-        },
-      },
-    },
+  const labels = {
+    "io.stackpilot.managed": "true",
+    "io.stackpilot.plan": plan.rootId || plan.id,
   };
+  const networks = { default: { labels } };
+  if (plan.networkLayout === networkLayout) {
+    networks.arr = { labels };
+    // Gilt auch für eingefrorene Definitionen älterer Pläne: so stellt eine Erweiterung
+    // einen bestehenden Stack auf die getrennten Netze um.
+    for (const [slug, definition] of Object.entries(services)) {
+      if (definition.network_mode?.startsWith("service:")) continue;
+      const names = serviceNetworks(plan, slug);
+      definition.networks =
+        slug === "gluetun"
+          ? Object.fromEntries(names.map((n) => [n, { aliases: ["qbittorrent"] }]))
+          : names;
+    }
+  }
+  return { name: plan.project, services, networks };
 }
 async function createFile(file, text, mode = 0o600) {
   const temp = file + "." + randomBytes(6).toString("hex") + ".tmp";

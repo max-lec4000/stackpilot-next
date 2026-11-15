@@ -51,13 +51,14 @@ test(
           .prepare("INSERT INTO media (tmdbId,mediaType,status) VALUES(?,?,?)")
           .run(987654321, "movie", 3).lastInsertRowid,
       );
-      const requestId = Number(
+      let requestId = Number(
         db
           .prepare(
             "INSERT INTO media_request (status,type,is4k,mediaId,requestedById) VALUES(?,?,?,?,?)",
           )
           .run(2, "movie", 0, media, actor.id).lastInsertRowid,
       );
+      let kind = "movie";
       let item = {
         id: 11,
         tmdbId: 987654321,
@@ -73,7 +74,7 @@ test(
         },
         additional: {
           seerr: async (path, options) => {
-            if (path.startsWith("/movie/"))
+            if (path.startsWith("/movie/") || path.startsWith("/tv/"))
               return {
                 title: "Fixture request",
                 mediaInfo: {
@@ -99,9 +100,9 @@ test(
             target: async () => ({
               item,
               request: await native.additional.seerr(`/request/${requestId}`),
-              kind: "movie",
+              kind,
               mediaId: 987654321,
-              service: "Radarr",
+              service: kind === "movie" ? "Radarr" : "Sonarr",
             }),
           },
           records,
@@ -123,6 +124,23 @@ test(
         db.prepare("SELECT COUNT(*) AS n FROM media WHERE id=?").get(media).n,
         1,
       );
+      const tvMedia = Number(db.prepare("INSERT INTO media (tmdbId,mediaType,status) VALUES(?,?,?)")
+        .run(987654321, "tv", 2).lastInsertRowid);
+      requestId = Number(db.prepare("INSERT INTO media_request (status,type,is4k,mediaId,requestedById) VALUES(?,?,?,?,?)")
+        .run(1, "tv", 0, tvMedia, actor.id).lastInsertRowid);
+      const insertSeason = db.prepare('INSERT INTO season_request ("seasonNumber", status, "requestId") VALUES(?,?,?)');
+      for (const number of [1, 2, 3]) insertSeason.run(number, 1, requestId);
+      kind = "tv";
+      item = null;
+      const seasonPreview = await lifecycle.preview(requestId);
+      assert.deepEqual(seasonPreview.editableSeasons, [1, 2, 3]);
+      await lifecycle.cancelSeason({ requestId, season: 2, review: seasonPreview.review, confirmation: "OK" });
+      const remaining = await native.additional.seerr(`/request/${requestId}`);
+      assert.deepEqual(remaining.seasons.map((season) => season.seasonNumber), [1, 3]);
+      assert.equal(remaining.status, 1);
+      await assert.rejects(lifecycle.cancelSeason({
+        requestId, season: 3, review: seasonPreview.review, confirmation: "OK",
+      }), /Neu prüfen/);
       console.log(
         "Native Seerr-Entfernung und Nachweis, Daten-erhaltender Adapter und Archiv geprüft.",
       );

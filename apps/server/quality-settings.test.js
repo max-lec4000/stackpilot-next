@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compactProfile, QualitySettings } from "./quality-settings.js";
+import { SizeLimits } from "./size-limits.js";
 const profileSchema = {
   name: "Any",
   id: 0,
@@ -153,6 +154,9 @@ function readbackFixture(movieProfileId = 2) {
         },
       }),
   };
+  hub.sizeLimits = new SizeLimits(hub);
+  hub.sizeLimits.ensure = async () => ({ profileId: 2, capGiB: 6 });
+  hub.sizeLimits.verify = async () => {};
   return {
     values,
     q: new QualitySettings(hub, {
@@ -192,5 +196,18 @@ test("Unveränderter Seerr-Standard meldet Teilfehler statt falscher Erfolgsbest
   assert.equal(result.futureUpdated, false);
   assert.match(result.warning, /nicht bestätigt/);
   assert.equal(f.values.get("quality-policy:r:movie:42").profileId, 2);
+  assert.equal(f.values.has("quality-default:r:Radarr"), false);
+});
+test("Größenregel als Standard speichert die Rate für neue Filme, kein festes Seerr-Profil", async () => {
+  const f = readbackFixture();
+  const result = await f.q.apply({
+    requestId: 7,
+    previousProfileId: 1,
+    sizeGiBPerHour: 3,
+    alsoFuture: true,
+    confirmation: "OK",
+  });
+  assert.equal(result.futureUpdated, true);
+  assert.equal(f.values.get("size-default:r").rate, 3);
   assert.equal(f.values.has("quality-default:r:Radarr"), false);
 });

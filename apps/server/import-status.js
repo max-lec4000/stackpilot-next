@@ -11,6 +11,13 @@ export function importMessage(value, secrets = []) {
       message = message.replaceAll(secret, "[ausgeblendet]");
   return message;
 }
+export const importQueueRoute =
+  "/queue?page=1&pageSize=250&includeMovie=true&includeSeries=true&includeUnknownSeriesItems=false";
+export function matchesImportTarget(row, { item, kind, mediaId }) {
+  return !!item && (kind === "movie"
+    ? row.movieId === item.id || row.movie?.tmdbId === mediaId
+    : row.seriesId === item.id);
+}
 export async function importStatus(
   s,
   plan,
@@ -29,7 +36,7 @@ export async function importStatus(
       try {
         const r = await s.arr(
           service,
-          "/queue?page=1&pageSize=250&includeMovie=true&includeSeries=true&includeUnknownSeriesItems=false",
+          importQueueRoute,
         );
         if (!Array.isArray(r.records)) throw Error("shape");
         queue = r;
@@ -61,13 +68,7 @@ export async function importStatus(
       }
     })(),
   ]);
-  const rows = (queue?.records || []).filter(
-    (q) =>
-      item &&
-      (kind === "movie"
-        ? q.movieId === item.id || q.movie?.tmdbId === mediaId
-        : q.seriesId === item.id),
-  );
+  const rows = (queue?.records || []).filter((row) => matchesImportTarget(row, target));
   const relevant = (history || [])
     .filter(
       (h) =>

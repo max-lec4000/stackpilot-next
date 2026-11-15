@@ -3,22 +3,57 @@
 Stand: StackPilot 0.5.0. Ein Eintrag hier ist ein Vorhaben, keine Zusage und keine
 Freigabe für Änderungen an einem laufenden Server.
 
-## Übersicht (Stand 15.11.2026)
+## Reihenfolge der Arbeiten
 
-| # | Vorhaben | Art | Aufwand |
-| --- | --- | --- | --- |
-| 1 | Seerr-Anfragen in Streamyfin über eine Anfrage-Brücke (ohne Admin-Schlüssel) | Funktion + Sicherheit | groß |
-| 2 | Couchdeck auf dieselbe Brücke umstellen (kein Seerr-Admin-Schlüssel mehr auf dem Gerät) | Sicherheit | mittel |
-| 3 | Container-Updates: neue Versionen anzeigen, vorher sichern, austauschen, prüfen | Sicherheit | groß |
-| 4 | Tresor-Sicherung als Knopf (verschlüsselt, mit Erinnerung) und geprüfte Wiederherstellung | Betrieb | mittel |
-| 6 | API-Schlüssel weiterer Dienste direkt in StackPilot erneuern (Bazarr ist umgesetzt) | Sicherheit | klein |
-| 8 | Doppelte Code-Abfrage bei der ersten Zuschauer-Anmeldung beseitigen | Bedienung | klein |
-| 9 | Zugang ohne Tailscale (eigene Domain, eigener Reverse-Proxy) | Funktion | groß |
-| 10 | HexOS / TrueNAS SCALE, vorhandenes Jellyfin einbinden, eigenes Ordnerschema | Plattform | sehr groß |
-| 11 | Wiederherstellungscodes für Zuschauer bei der ersten Anmeldung; Passkeys; Passwort selbst wählen | Bedienung | mittel |
-| 12 | Profile für Zuschauer (Kinder, Gast mit Ablauf), Bibliotheken je Profil | Funktion | mittel |
-| 13 | Speicherwarnung für Systemplatte und Medienplatte getrennt und früher | Betrieb | klein |
-| 14 | Hardwarebeschleunigung in Jellyfin nach Geräteprüfung | Funktion | mittel |
+1. **Sonarr wieder erreichbar machen.** Wiederherstellung mit vorhandenem
+   Schlüssel in der Test-VM erprobt und auf reatest durchgeführt. Sonarr-API,
+   Verbindung aus Seerr und Importhistorie geprüft.
+2. **Downloadprofile reparieren.** StackPilot kann für neue Filmanfragen eine feste
+   GiB-Grenze oder eine laufzeitabhängige Grenze speichern. Offen sind die
+   Bedienung in Couchdeck und geprüfte Regeln für Folgen oder Staffelpakete.
+3. **Qualitätswechsel und Downloadstatus.** StackPilot kann eindeutig
+   zugeordnete, unvollständige Film-Downloads mit einem neuen Profil ersetzen
+   und die bisher geladenen Dateien behalten. In der VM mit Radarr,
+   qBittorrent und lokalem Indexer geprüft. Serienpakete und Couchdeck bleiben offen.
+4. **Staffeln und Folgen einzeln steuern.** StackPilot kann Staffeln aufklappen,
+   einzelne Folgen suchen und eindeutig zugeordnete Bibliotheksdateien löschen.
+   Einzelne Staffeln lassen sich aus noch offenen Seerr-Anfragen entfernen.
+   Bei genehmigten Staffeln kann StackPilot die Sonarr-Überwachung einzeln stoppen.
+   Der bereits laufende Transfer und die Couchdeck-Bedienung bleiben offene Punkte.
+5. **Streamyfin mit Seerr verbinden.** An den bestandenen Quick-Connect-Test mit Seerr
+   3.5.2 anknüpfen. Die benötigten Seerr-Schnittstellen unter der Jellyfin-HTTPS-Adresse
+   zugänglich machen, die Aktualisierung bestehender Installationen prüfen und in der
+   echten App Anmeldung, Medienanfrage und abgewiesene Admin-Zugriffe testen.
+6. **Couchdeck auf persönliche Seerr-Sitzungen umstellen.** Den Admin-Schlüssel aus
+   verwalteten Couchdeck-Konfigurationen entfernen und vorhandene Installationen
+   migrieren. Die Rechte für die eigenen Anfragen und die Staffel- und Folgenaktionen
+   aus Schritt 4 erneut prüfen. Für Aktionen, die Seerr nur mit erweiterten Rechten
+   zulässt, die Berechtigung gezielt serverseitig prüfen.
+7. **Medienspeicher und Navigation verbessern.** In StackPilot und Couchdeck pro
+   Medienlaufwerk „belegt von gesamt“ anzeigen. Gemeinsam genutzte Laufwerke nur
+   einmal zählen. Getrennte Warnungen für Medien- und Systemlaufwerk ergänzen.
+   „Anwendungen“ und „Stack konfigurieren“ erhalten unterschiedliche Symbole.
+8. **Wartung absichern.** Container-Updates mit Sicherung, Funktionsprüfung und
+   Rückkehr zur vorherigen Version anbieten. Danach verschlüsselte Tresor-Sicherung
+   und geprüfte Wiederherstellung in der Oberfläche ergänzen. Anschließend die
+   Schlüsselerneuerung auf weitere Dienste und deren Verbraucher ausweiten.
+9. **Zuschauerkonten vereinfachen.** Doppelte Code-Abfrage beheben, danach
+   Wiederherstellungscodes, Passkeys und eigene Passwortwahl prüfen. Anschließend
+   Zuschauerprofile und die dazugehörigen Bibliotheksrechte ergänzen.
+10. **Weitere Installationswege.** HTTPS mit eigener Domain und Reverse-Proxy ohne
+    Tailscale umsetzen. Danach HexOS/TrueNAS SCALE mit vorhandenem Jellyfin und
+    passendem Medienordnerschema prüfen. Zuletzt Hardwarebeschleunigung in Jellyfin
+    mit passenden Testgeräten validieren.
+
+### Testumfang
+
+- Erst in der Test-VM. Bei Änderungen an Installations-, Update- oder Migrationspfaden
+  jeweils Neuinstallation und Update mit vorhandener Konfiguration prüfen.
+- Bei YouTube-unabhängigen Änderungen reicht der Test der betroffenen Couchdeck-Funktion.
+  YouTube-Oberfläche und Fehlerbehandlung bei Bedarf mit Testdaten prüfen. Ein echtes
+  Video nur gezielt abspielen, wenn sich die YouTube-Anbindung, Wiedergabe oder das
+  Spulen geändert hat oder ein konkreter YouTube-Fehler nachgestellt werden muss.
+  Bei einer Bot-Schutz-Meldung den Testlauf beenden und den Befund festhalten.
 
 Bewusst **nicht** geplant (Entscheidung): Firewall fürs Tailnet (nur eigene Geräte),
 ablaufende Authentik-Zustimmung.
@@ -27,12 +62,13 @@ ablaufende Authentik-Zustimmung.
 
 ### Seerr-Anfragen in Streamyfin (und Couchdeck) ohne Admin-Schlüssel
 
-Streamyfin meldet Nutzer mit Jellyfin-Benutzername und -Passwort bei Seerr an. Zuschauer
-haben aber absichtlich kein Jellyfin-Passwort (Anmeldung über Authentik), und Seerr ist
-von außen nicht erreichbar. Plan: eine Anfrage-Brücke unter der Jellyfin-Adresse
-(`/seerr`), die nur Nutzer mit gültiger Jellyfin-Sitzung durchlässt und Seerr
-serverseitig im Namen genau dieses Nutzers anspricht. Der Seerr-Schlüssel verlässt den
-Server nie. Erst im Streamyfin-Quellcode prüfen, wie die App sich bei Seerr anmeldet.
+Streamyfin 0.55.2 kann Seerr per Quick Connect mit einer bestehenden Jellyfin-Sitzung
+verbinden. In der Test-VM erhielt ein per Authentik angemeldeter Zuschauer mit
+Seerr 3.5.1 und 3.5.2 eine eigene Seerr-Sitzung ohne Admin-Rechte. Für den Zugriff unterwegs
+sollen ausschließlich die von Streamyfin benötigten Schnittstellen unter der
+Jellyfin-Adresse erreichbar sein. Die Freigabe setzt einen gepatchten Seerr-Stand
+voraus und muss mit der Client-App geprüft werden. Danach soll Couchdeck ebenfalls
+mit Nutzersitzungen arbeiten und seinen Seerr-Admin-Schlüssel abgeben.
 
 ### Sicherheitsprüfung des gesamten Stacks
 

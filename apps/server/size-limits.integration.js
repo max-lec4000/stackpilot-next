@@ -65,6 +65,10 @@ test(
           original,
         );
       }
+      const fixed = await limits.ensureCap(s, plan, 7.5);
+      assert.equal(fixed.capGiB, 7.5);
+      await limits.verify(s, fixed);
+      assert.notEqual(fixed.profileId, bound.profileId);
       const format = await s.arr("Radarr", `/customformat/${bound.formatId}`);
       format.specifications[0].fields.find((f) => f.name === "max").value = 12;
       await s.arr("Radarr", `/customformat/${bound.formatId}`, {

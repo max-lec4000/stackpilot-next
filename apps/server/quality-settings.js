@@ -64,6 +64,7 @@ export class QualitySettings {
         this.hub.engine.vault.get(
           qualityPolicyKey(plan, target.kind, target.mediaId),
         )?.size || null,
+      sizeDefaultRate: target.kind === "movie" ? this.hub.sizeLimits?.config(plan).rate ?? 0 : 0,
       canSetDefault: !!target.server.isDefault,
       defaultProfileId: target.server.activeProfileId,
       requestProfileId: target.request?.profileId ?? null,
@@ -95,7 +96,8 @@ export class QualitySettings {
         throw Error("Das Medium ist noch nicht in der ARR-App angekommen.");
       if (item.qualityProfileId !== positiveId(body.previousProfileId))
         throw Error("Das Profil wurde inzwischen geändert. Neu laden.");
-      if (body.alsoFuture === true && !server.isDefault)
+      const sizeRate = Number(body.sizeGiBPerHour ?? 0);
+      if (body.alsoFuture === true && sizeRate === 0 && !server.isDefault)
         throw Error(
           "Dieser Server ist nicht der Seerr-Standard. Nur das aktuelle Medium ändern oder die Serverauswahl in Seerr prüfen.",
         );
@@ -104,24 +106,10 @@ export class QualitySettings {
         throw Error("Qualitätsprofile nicht erreichbar.");
       let profile,
         sizePolicy = null;
-      if (
-        body.sizeGiBPerHour !== undefined &&
-        Number(body.sizeGiBPerHour) !== 0
-      ) {
+      if (sizeRate !== 0) {
         if (kind !== "movie" || !this.hub.sizeLimits)
-          throw Error(
-            "Individuelle Größenregeln sind nur für Filme verfügbar.",
-          );
-        if (body.alsoFuture === true)
-          throw Error(
-            "Größenstandard separat unter Medienprofile einstellen; diese Grenze gilt nur für diesen Film.",
-          );
-        sizePolicy = await this.hub.sizeLimits.ensure(
-          s,
-          plan,
-          Number(item.runtime),
-          Number(body.sizeGiBPerHour),
-        );
+          throw Error("Individuelle Größenregeln sind nur für Filme verfügbar.");
+        sizePolicy = await this.hub.sizeLimits.ensure(s, plan, Number(item.runtime), sizeRate);
         profile = await s.arr(
           service,
           `/qualityprofile/${sizePolicy.profileId}`,
@@ -151,7 +139,11 @@ export class QualitySettings {
           "Das gewählte 1080p-Profil schließt Remux nicht zuverlässig aus oder erlaubt Upgrades. Native Profilregeln prüfen.",
         );
       sizePolicy ||= this.hub.sizeLimits?.owned(plan, actualProfile);
-      if (sizePolicy) await this.hub.sizeLimits.verify(s, sizePolicy);
+      if (sizePolicy) {
+        if (body.alsoFuture === true && sizeRate === 0)
+          throw Error("Wähle eine Größenregel pro Stunde, um sie als Standard zu speichern.");
+        await this.hub.sizeLimits.verify(s, sizePolicy);
+      }
       const backupId = randomUUID();
       this.hub.engine.vault.set(`quality-change:${backupId}`, {
         planId: plan.id,
@@ -187,7 +179,10 @@ export class QualitySettings {
       );
       let futureUpdated = false,
         warning = null;
-      if (body.alsoFuture === true) {
+      if (body.alsoFuture === true && sizeRate !== 0) {
+        this.hub.sizeLimits.setDefault(plan, sizeRate);
+        futureUpdated = true;
+      } else if (body.alsoFuture === true) {
         try {
           const list = await s.additional.seerr(
             `/settings/${service.toLowerCase()}`,

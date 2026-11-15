@@ -3,6 +3,7 @@
 // Jellyfin → Authentik (Passwort, zweiten Faktor einrichten) → Freigabe → zurück zu Jellyfin –
 // und prüft, dass Jellyfin danach das Zuschauerkonto kennt. Gibt keine Zugangsdaten aus.
 //   node oidc-login.mjs <benutzername>
+// Mit TEST_SEERR_QUICK_CONNECT=1 zusätzlich eine Seerr-Zuschauersitzung prüfen.
 import { readFile } from "node:fs/promises";
 import { createHmac } from "node:crypto";
 import http from "node:http";
@@ -133,4 +134,77 @@ console.log("Jellyfin-Anmeldung: HTTP", auth.status, "| Benutzer:", session?.Use
 if (session?.AccessToken) {
   const views = await request(`https://${host}/UserViews?userId=${session.User.Id}`, { headers: { Authorization: `MediaBrowser Client="Jellyfin Web", Device="Testlauf", DeviceId="stackpilot-testvm", Version="12.4.0", Token="${session.AccessToken}"` } });
   console.log("Bibliotheken über das Schutz-Gateway: HTTP", views.status, JSON.parse(views.data).Items?.map((v) => v.Name).join(", "));
+}
+
+if (process.env.TEST_SEERR_QUICK_CONNECT === "1") {
+  if (!session?.AccessToken || !session.User?.Id)
+    throw Error("Für den Seerr-Test fehlt die Jellyfin-Zuschauersitzung.");
+  const { services } = await api("/api/managed");
+  const seerrPort = services.find((service) =>
+    service.name === "Seerr" && service.state === "running"
+  )?.hostPort;
+  if (!Number.isInteger(seerrPort))
+    throw Error("Für den Quick-Connect-Test muss Seerr laufen.");
+  const seerrBase = `http://127.0.0.1:${seerrPort}/api/v1`;
+
+  async function seerrCall(route, options = {}, expected = [200]) {
+    const response = await fetch(seerrBase + route, {
+      ...options,
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!expected.includes(response.status))
+      throw Error(`Seerr ${route}: HTTP ${response.status}`);
+    return response;
+  }
+
+  const prime = await seerrCall("/status");
+  const primedCookies = new Map();
+  function collectCookies(response) {
+    for (const line of response.headers.getSetCookie()) {
+      const pair = line.split(";")[0];
+      const separator = pair.indexOf("=");
+      if (separator > 0) primedCookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+    }
+  }
+  function seerrHeaders() {
+    return {
+      "Content-Type": "application/json",
+      Cookie: [...primedCookies].map(([key, value]) => `${key}=${value}`).join("; "),
+      ...(primedCookies.has("XSRF-TOKEN")
+        ? { "XSRF-TOKEN": decodeURIComponent(primedCookies.get("XSRF-TOKEN")) }
+        : {}),
+    };
+  }
+  collectCookies(prime);
+  await prime.body?.cancel();
+  const initiate = await seerrCall("/auth/jellyfin/quickconnect/initiate", {
+    method: "POST", headers: seerrHeaders(),
+  });
+  collectCookies(initiate);
+  const { code, secret: seerrSecret } = await initiate.json();
+  if (!/^\d{6}$/.test(code) || typeof seerrSecret !== "string" || !seerrSecret)
+    throw Error("Seerr liefert keinen gültigen Quick-Connect-Code.");
+  const approved = await request(
+    `https://${host}/QuickConnect/Authorize?code=${encodeURIComponent(code)}`,
+    {
+      method: "POST",
+      headers: { Authorization: `MediaBrowser Client="Jellyfin Web", Device="Testlauf", DeviceId="stackpilot-testvm", Version="12.4.0", Token="${session.AccessToken}"` },
+    },
+  );
+  if (approved.status !== 200)
+    throw Error("Jellyfin Quick-Connect-Freigabe: HTTP " + approved.status);
+  const authenticated = await seerrCall("/auth/jellyfin/quickconnect/authenticate", {
+    method: "POST",
+    headers: seerrHeaders(),
+    body: JSON.stringify({ secret: seerrSecret }),
+  });
+  collectCookies(authenticated);
+  await authenticated.body?.cancel();
+  const me = await (await seerrCall("/auth/me", { headers: seerrHeaders() })).json();
+  if (me.jellyfinUserId !== session.User.Id || (me.permissions & 3) !== 0)
+    throw Error("Das Seerr-Konto entspricht nicht dem Jellyfin-Zuschauer.");
+  const admin = await seerrCall("/settings/main", { headers: seerrHeaders() }, [401, 403]);
+  await admin.body?.cancel();
+  console.log("Seerr Quick Connect: Zuschauerkonto bestätigt, Admin-Einstellungen abgewiesen");
 }

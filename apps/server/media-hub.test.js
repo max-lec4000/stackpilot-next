@@ -764,3 +764,22 @@ test("Bestätigtes Filmprofil geht dem Größenstandard vor; explizite neue Grö
     /Filmprofil/,
   );
 });
+
+test("Fester Filmstandard wird ohne Laufzeit angewandt und gegen veraltete Auswahl geprüft", async () => {
+  const f = fixture();
+  f.hub.sizeLimits = {
+    config: () => ({ rate: 0, capGiB: 7.5 }),
+    forRequest: async (_s, _plan, detail, rate, capGiB) => {
+      assert.equal(detail.runtime, undefined);
+      assert.equal(rate, 0);
+      assert.equal(capGiB, 7.5);
+      return { profileId: 6, serverId: 0, capGiB, formatId: 1 };
+    },
+  };
+  await assert.rejects(
+    f.hub.request({ type: "movie", id: 42, expectedSizeDefaultCap: 7 }),
+    /Größenstandard wurde geändert/,
+  );
+  await f.hub.request({ type: "movie", id: 42, expectedSizeDefaultCap: 7.5 });
+  assert.equal(f.calls.find((c) => c[1] === "/request")[2].body.profileId, 6);
+});

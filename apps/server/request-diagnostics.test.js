@@ -55,6 +55,8 @@ function fixture() {
       },
     ],
     health = [],
+    queue = { records: [], totalRecords: 0 },
+    episodes = [],
     commands = [],
     clients = [
       {
@@ -92,6 +94,7 @@ function fixture() {
       calls.push([name, route, options]);
       if (route.startsWith("/movie?") || route.startsWith("/series?"))
         return items;
+      if (route.startsWith("/episode?")) return episodes;
       if (route === "/indexer") return indexers;
       if (route === "/health") return health;
       if (route === "/downloadclient") return clients;
@@ -136,7 +139,7 @@ function fixture() {
             downloadUrl: "https://tracker/?passkey=private-key",
           },
         ];
-      if (route.startsWith("/queue")) return { records: [] };
+      if (route.startsWith("/queue")) return queue;
       return [];
     },
     qbit: async () => ({ dl_info_speed: 0, up_info_speed: 0 }),
@@ -161,6 +164,8 @@ function fixture() {
     setItems: (v) => (items = v),
     setIndexers: (v) => (indexers = v),
     setHealth: (v) => (health = v),
+    setQueue: (v) => (queue = v),
+    setEpisodes: (v) => (episodes = v),
     setClients: (v) => (clients = v),
   };
 }
@@ -315,4 +320,109 @@ test("Seerrs Server-ID null ist von der gültigen Server-ID 0 zu unterscheiden",
         ]
       : original(route);
   await assert.rejects(f.diagnosis.inspect(7), /anderen Server/);
+});
+
+
+test("Neue Suche schützt den vorhandenen Transfer und verlangt eine vollständige Warteschlange", async () => {
+  const f = fixture();
+  f.setQueue({ records: [{ movieId: 11 }], totalRecords: 1 });
+  await assert.rejects(f.diagnosis.search({ requestId: 7 }), /bereits ein Download oder Import/);
+  f.setQueue({ records: [{ movieId: 12 }], totalRecords: 2 });
+  await assert.rejects(f.diagnosis.search({ requestId: 7 }), /nicht vollständig/);
+  assert.equal(f.commands.length, 0);
+  f.setQueue({ records: [{ movieId: 12 }], totalRecords: 1 });
+  await f.diagnosis.search({ requestId: 7 });
+  assert.equal(f.commands.length, 1);
+});
+
+
+test("Folgensuche bleibt auf genau eine fehlende Folge der angefragten Staffel begrenzt", async () => {
+  const f = fixture();
+  f.request.media.mediaType = "tv";
+  const episode = { id: 14, seriesId: 11, seasonNumber: 1, episodeNumber: 2,
+    title: "Testfolge", airDateUtc: "2020-01-01T00:00:00Z", monitored: true, hasFile: false };
+  f.setEpisodes([episode, { ...episode, id: 15, seriesId: 99 }]);
+  f.item.seasons = [{ seasonNumber: 1, monitored: false }];
+  assert.equal((await f.diagnosis.episodes(7, 1)).episodes[0].canSearch, false);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 }), /nicht als fehlende/);
+  f.item.seasons[0].monitored = true;
+  assert.deepEqual((await f.diagnosis.episodes(7, 1)).episodes.map((row) => row.id), [14]);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 15 }), /nicht als fehlende/);
+  await f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 });
+  assert.deepEqual(f.commands[0].body, { name: "EpisodeSearch", episodeIds: [14] });
+  f.values.get("request-search:root:7").startedAt = "2020-01-01T00:00:00Z";
+  assert.equal((await f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 })).alreadyRunning, true);
+  assert.equal(f.commands.length, 1);
+});
+
+test("Dateilöschung prüft Zuordnung über alle Staffeln und löscht genau die bestätigte Datei", async () => {
+  const f = fixture();
+  f.request.media.mediaType = "tv";
+  const target = { id: 14, seriesId: 11, seasonNumber: 1, episodeFileId: 6, hasFile: true };
+  const other = { ...target, id: 16, seasonNumber: 3 };
+  const body = { requestId: 7, season: 1, episodeId: 14, fileId: 6, confirmation: "OK" };
+  let deleted = false;
+  const arr = f.s.arr;
+  f.s.arr = async (service, route, options) => {
+    if (route === "/episode/14") return { ...target, hasFile: !deleted };
+    if (route === "/episodefile/6") {
+      if (options?.method === "DELETE") deleted = true;
+      return { id: 6, seriesId: 11 };
+    }
+    return arr(service, route, options);
+  };
+  f.setEpisodes([target, other]);
+  assert.equal((await f.diagnosis.episodes(7, 1)).episodes[0].removableFileId, null);
+  await assert.rejects(f.diagnosis.deleteEpisodeFile(body), /mehreren Folgen/);
+  assert.equal(deleted, false);
+  f.setEpisodes([target, { ...other, episodeFileId: 7 }]);
+  await assert.rejects(f.diagnosis.deleteEpisodeFile({ ...body, fileId: 7 }), /Datei wurde geändert/);
+  await f.diagnosis.deleteEpisodeFile(body);
+  assert.equal(deleted, true);
+});
+
+test("Filmtransfer-Austausch bestätigt Profil und Hash, erhält Dateien und sucht erst nach Entfernen", async () => {
+  const f = fixture(), hash = "a".repeat(40);
+  const entry = { id: 12, movieId: 11, downloadId: hash.toUpperCase() };
+  f.setQueue({ records: [entry], totalRecords: 1 });
+  f.setClients([{ enable: true, implementation: "QBittorrent", name: "StackPilot qBittorrent", removeFailedDownloads: false }]);
+  let blocklisted = false;
+  let torrent = { hash, name: "Testfilm", category: "stackpilot-movies", progress: 0.5, state: "downloading" };
+  const transferCalls = [];
+  const arr = f.s.arr;
+  f.s.arr = async (name, route, options) => {
+    if (route.startsWith("/history/movie")) return [{ eventType: "grabbed", sourceTitle: "Testfilm", downloadId: hash }];
+    if (route.startsWith("/blocklist/movie")) return blocklisted ? [{ movieId: 11, sourceTitle: "Testfilm", id: 1 }] : [];
+    if (options?.method === "DELETE") {
+      transferCalls.push([route, options.method]);
+      blocklisted = true;
+    }
+    if (route === "/command" && options?.method === "POST") transferCalls.push([route, options.method]);
+    return arr(name, route, options);
+  };
+  f.s.qbit = async (route, body) => {
+    if (route === "/transfer/info") return { dl_info_speed: 0, up_info_speed: 0 };
+    if (route === "/torrents/info") return torrent ? [torrent] : [];
+    transferCalls.push([route, body]);
+    if (route === "/torrents/stop") torrent.state = "stoppedDL";
+    if (route === "/torrents/delete") torrent = null;
+  };
+  const preview = await f.diagnosis.replacePreview(7);
+  const body = { requestId: 7, replaceReview: preview.review, confirmation: "OK" };
+  f.item.qualityProfileId = 4;
+  await assert.rejects(f.diagnosis.search(body), /geändert/);
+  assert.deepEqual(transferCalls, []);
+  f.item.qualityProfileId = undefined;
+  const duplicate = { ...entry, id: 13, movieId: 22 };
+  f.setQueue({ records: [entry, duplicate], totalRecords: 2 });
+  await assert.rejects(f.diagnosis.search(body), /eindeutig/);
+  assert.deepEqual(transferCalls, []);
+  f.setQueue({ records: [entry], totalRecords: 1 });
+  await f.diagnosis.search(body);
+  assert.deepEqual(transferCalls, [
+    ["/torrents/stop", { hashes: hash }],
+    ["/queue/12?removeFromClient=false&blocklist=true&skipRedownload=true", "DELETE"],
+    ["/torrents/delete", { hashes: hash, deleteFiles: "false" }],
+    ["/command", "POST"],
+  ]);
 });

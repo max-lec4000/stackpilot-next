@@ -6,6 +6,8 @@ type Preview = {
   review: string;
   title: string;
   canCancel: boolean;
+  editableSeasons?: number[];
+  monitoredSeasons?: number[];
   blockers: string[];
   message: string;
   resuming?: boolean;
@@ -21,12 +23,14 @@ export function RequestActions({
   pending?: boolean;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null),
+    [season, setSeason] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function inspect() {
     setBusy(true);
     setError("");
     try {
+      setSeason("");
       setPreview(
         await get<Preview>(`/api/media/request-action?requestId=${id}`),
       );
@@ -36,6 +40,8 @@ export function RequestActions({
       setBusy(false);
     }
   }
+  const stopsMonitoring = !!preview?.monitoredSeasons?.length;
+  const seasons = stopsMonitoring ? preview?.monitoredSeasons : preview?.editableSeasons;
   return (
     <div className="request-actions">
       <button
@@ -77,6 +83,36 @@ export function RequestActions({
           {preview.blockers.map((b) => (
             <p key={b}>{b}</p>
           ))}
+          {!!seasons?.length && (
+            <div>
+              <label>
+                {stopsMonitoring ? "Überwachung einer Staffel stoppen" : "Einzelne Staffel entfernen"}
+                <select value={season} disabled={busy} onChange={(e) => setSeason(e.target.value)}>
+                  <option value="">Staffel auswählen</option>
+                  {seasons.map((number) =>
+                    <option key={number} value={number}>Staffel {number}</option>)}
+                </select>
+              </label>
+              {stopsMonitoring && <p>Sonarr stoppt die Überwachung der ausgewählten Staffel. Die Seerr-Anfrage, laufende Downloads und vorhandene Dateien bleiben erhalten.</p>}
+              <button disabled={busy || !season} onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  await action("/api/media/request/cancel-season", {
+                    requestId: id, review: preview.review, season: Number(season), confirmation: "OK",
+                  });
+                  setPreview(null);
+                  await onChange();
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}>
+                {stopsMonitoring ? "Überwachung stoppen" : "Staffel aus Anfrage entfernen"}
+              </button>
+            </div>
+          )}
           <button
             className="danger"
             disabled={busy || !preview.canCancel}

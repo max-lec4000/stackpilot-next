@@ -3,6 +3,7 @@ import { useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
 type Quality = {
+  sizeDefaultRate?: number;
   runtime?: number | null;
   sizePolicy?: { capGiB: number } | null;
   service: string;
@@ -29,6 +30,7 @@ export function QualityEditor({
     [data, setData] = useState<Quality | null>(null),
     [profile, setProfile] = useState(""),
     [future, setFuture] = useState(false),
+    [searchAfterSave, setSearchAfterSave] = useState(false),
     [sizeRate, setSizeRate] = useState(0),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -167,7 +169,7 @@ export function QualityEditor({
                     disabled={busy || !data.runtime}
                     onChange={(e) => {
                       setSizeRate(Number(e.target.value));
-                      setFuture(false);
+                      if (!Number(e.target.value) && !data.canSetDefault) setFuture(false);
                     }}
                   >
                     <option value={0}>Vorhandenes Profil verwenden</option>
@@ -197,14 +199,17 @@ export function QualityEditor({
                 <input
                   type="checkbox"
                   checked={future}
-                  disabled={busy || !data.canSetDefault || sizeRate > 0}
+                  disabled={busy || (!data.canSetDefault && sizeRate === 0)}
                   onChange={(e) => setFuture(e.target.checked)}
                 />
                 Auch als Standard für zukünftige{" "}
-                {data.kind === "movie" ? "Filmanfragen" : "Serienanfragen"}{" "}
+                {sizeRate > 0 ? "StackPilot-Filmanfragen" : data.kind === "movie" ? "Filmanfragen" : "Serienanfragen"}{" "}
                 verwenden
               </label>
-              {!data.canSetDefault && (
+              {!!data.sizeDefaultRate && (
+                <p>Größenstandard in StackPilot: {data.sizeDefaultRate} GiB pro Stunde.</p>
+              )}
+              {!data.canSetDefault && sizeRate === 0 && (
                 <p className="muted">
                   Dieser Server ist nicht der Seerr-Standard; hier wird nur das
                   aktuelle Medium geändert.
@@ -218,19 +223,28 @@ export function QualityEditor({
                       ?.name
                   }{" "}
                   →{" "}
-                  {profile === "1080p-compact"
-                    ? "1080p ohne Remux"
-                    : selected?.name}
+                  {sizeRate > 0 ? `1080p ohne Remux · ${sizeRate} GiB pro Stunde` :
+                    profile === "1080p-compact" ? "1080p ohne Remux" : selected?.name}
                 </p>
                 <p>
                   {future
                     ? "Aktuelles Medium und zukünftige Anfragen."
                     : "Nur dieses Medium."}{" "}
-                  Bestehende Dateien werden nicht gelöscht. Es wird kein neuer
-                  Suchauftrag gestartet. Diese Auswahl gilt für dieses Medium
+                  Bestehende Dateien bleiben erhalten.{" "}
+                  {searchAfterSave && !data.hasFile
+                    ? "StackPilot prüft nach dem Speichern, ob eine neue Suche sofort möglich ist. "
+                    : "Die Suche lässt sich anschließend separat starten. "}
+                  Diese Auswahl gilt für dieses Medium
                   auch bei späteren StackPilot-Anfragen.
                 </p>
               </div>
+              {!data.hasFile && (
+                <label>
+                  <input type="checkbox" checked={searchAfterSave} disabled={busy}
+                    onChange={(e) => setSearchAfterSave(e.target.checked)} />
+                  Nach dem Speichern mit dem neuen Profil suchen
+                </label>
+              )}
               <button
                 className="primary"
                 disabled={
@@ -256,13 +270,24 @@ export function QualityEditor({
                       sizeGiBPerHour: sizeRate,
                       confirmation: "OK",
                     });
-                    setMessage(
-                      result.warning ||
-                        "Profil „" +
-                          result.profileName +
-                          "“ übernommen. Eine neue Suche kannst du bei Bedarf separat starten.",
-                    );
+                    let outcome = "Profil „" + result.profileName + "“ übernommen.";
+                    if (result.warning) outcome += " " + result.warning;
+                    if (searchAfterSave && !data.hasFile) {
+                      try {
+                        const search = await action<{ alreadyRunning?: boolean }>(
+                          "/api/media/research", { requestId },
+                        );
+                        outcome += search.alreadyRunning
+                          ? " Für dieses Medium läuft bereits eine Suche."
+                          : " Neue Suche mit dem geprüften Profil gestartet.";
+                      } catch (e) {
+                        outcome += " Neue Suche nicht gestartet. " + (e as Error).message;
+                      }
+                    }
+                    setMessage(outcome);
+                    setSearchAfterSave(false);
                     await refresh();
+                    await onChange?.();
                   } catch (e) {
                     setError((e as Error).message);
                   } finally {
@@ -299,6 +324,36 @@ export function QualityEditor({
                     }}
                   >
                     Mit diesem Profil neu suchen
+                  </button>
+                )}
+              {data.kind === "movie" && !data.hasFile &&
+                data.savedProfileId === data.currentProfileId && (
+                  <button disabled={busy || sizeRate !== 0 || profile !== String(data.currentProfileId)}
+                    onClick={async () => {
+                      setBusy(true);
+                      setError("");
+                      setMessage("");
+                      try {
+                        const preview = await get<{ name: string; review: string }>(
+                          "/api/media/replace-download?requestId=" + requestId,
+                        );
+                        if (!window.confirm(
+                          `„${preview.name}“ stoppen und mit dem gespeicherten Profil neu suchen? Die bisher geladenen Dateien bleiben erhalten. Radarr schließt den bisherigen Treffer von der neuen Suche aus.`,
+                        )) return;
+                        const result = await action<{ alreadyRunning?: boolean }>("/api/media/research", {
+                          requestId, replaceReview: preview.review, confirmation: "OK",
+                        });
+                        setMessage(result.alreadyRunning
+                          ? "Eine Suche läuft bereits. Der Download wurde beim Austausch nicht verändert."
+                          : "Alter Transfer entfernt, Dateien erhalten. Neue Suche gestartet.");
+                        await onChange?.();
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}>
+                    Laufenden Film-Download ersetzen …
                   </button>
                 )}
               <button

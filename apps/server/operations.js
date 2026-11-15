@@ -75,7 +75,8 @@ export class Operations {
       });
     }
     try {
-      base.storage = storageHealth(await this.storage(current.plan.spec.path));
+      const measured = await this.storage(current.plan.spec.path);
+      base.storage = { ...storageHealth(measured), usedBytes: measured.usedBytes ?? null };
     } catch {}
     if (base.storage.state === "unknown")
       tasks.push({

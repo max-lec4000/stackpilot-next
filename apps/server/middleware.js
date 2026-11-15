@@ -312,6 +312,12 @@ export function inventoryMiddleware(options = {}) {
           url.searchParams.get("q"),
           url.searchParams.get("page") || 1,
         );
+      } else if (url.pathname === "/api/media/replace-download" && req.method === "GET") {
+        result = await requestDiagnostics.replacePreview(url.searchParams.get("requestId"));
+      } else if (url.pathname === "/api/media/episodes" && req.method === "GET") {
+        result = await requestDiagnostics.episodes(
+          url.searchParams.get("requestId"), url.searchParams.get("season"),
+        );
       } else if (
         url.pathname === "/api/media/quality" &&
         req.method === "GET"
@@ -621,6 +627,8 @@ export function inventoryMiddleware(options = {}) {
           result = await movieRemoval.execute(body);
         else if (url.pathname === "/api/media/request/archive")
           result = await requestLifecycle.archive(body);
+        else if (url.pathname === "/api/media/request/cancel-season")
+          result = await requestLifecycle.cancelSeason(body);
         else if (url.pathname === "/api/media/request/cancel")
           result = await requestLifecycle.cancel(body);
         else if (url.pathname === "/api/media/request")
@@ -631,6 +639,8 @@ export function inventoryMiddleware(options = {}) {
           result = await sizeLimits.save(body);
         else if (url.pathname === "/api/media/quality")
           result = await qualitySettings.apply(body);
+        else if (url.pathname === "/api/media/episodes/delete-file")
+          result = await requestDiagnostics.deleteEpisodeFile(body);
         else if (url.pathname === "/api/media/research")
           result = await requestDiagnostics.search(body);
         else if (url.pathname === "/api/media/releases")

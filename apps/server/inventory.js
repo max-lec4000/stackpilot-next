@@ -309,6 +309,7 @@ export async function inspectPath(value) {
     writable,
     freeBytes: fs.bavail * fs.bsize,
     totalBytes: fs.blocks * fs.bsize,
+    usedBytes: (fs.blocks - fs.bfree) * fs.bsize,
     device: info.dev,
     uid: info.uid,
     gid: info.gid,

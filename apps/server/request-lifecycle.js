@@ -88,12 +88,73 @@ export class RequestLifecycle {
       ]),
     };
   }
+  editableSeasons(c) {
+    return c.target.kind === "tv" && c.target.request.status === 1 &&
+      c.selected.length > 1 && !c.overlaps && !c.active
+      ? c.selected : [];
+  }
+  monitoredSeasons(c) {
+    return c.target.kind === "tv" && c.target.request.status === 2 &&
+      !c.overlaps && !c.active && c.target.item?.monitored
+      ? (c.target.item.seasons || []).filter((season) =>
+          season.monitored && c.selected.includes(season.seasonNumber),
+        ).map((season) => season.seasonNumber)
+      : [];
+  }
+  async cancelSeason(body) {
+    if (body.confirmation !== "OK") throw Error("Staffelabbruch mit OK bestätigen.");
+    const id = positiveId(body.requestId), season = positiveId(body.season);
+    return this.hub.mutate(["Seerr"], async () => {
+      const c = await this.context(id);
+      if (body.review !== c.review)
+        throw Error("Anfrage oder Dienstzustand wurde geändert. Neu prüfen.");
+      if (this.hub.engine.vault.get(this.key(c.plan, id))?.status === "running")
+        throw Error("Ein vollständiger Abbruch wurde bereits begonnen.");
+      if (this.monitoredSeasons(c).includes(season)) {
+        const item = c.target.item;
+        const route = `/series/${positiveId(item.id)}`;
+        const next = { ...item, seasons: item.seasons.map((entry) =>
+          entry.seasonNumber === season ? { ...entry, monitored: false } : entry,
+        ) };
+        await c.s.arr("Sonarr", route, { method: "PUT", body: next });
+        if (itemIdentity(await c.s.arr("Sonarr", route)) !== itemIdentity(next))
+          throw Error("Sonarr hat den neuen Überwachungszustand nicht bestätigt. Erneut prüfen.");
+        return { ok: true, monitoringStopped: true };
+      }
+      if (!this.editableSeasons(c).includes(season))
+        throw Error("Diese Staffel kann im aktuellen Zustand nicht geändert werden.");
+      const request = c.target.request;
+      const seasons = c.selected.filter((number) => number !== season);
+      const route = `/request/${id}`;
+      await c.s.additional.seerr(route, {
+        method: "PUT",
+        body: {
+          mediaType: "tv", seasons,
+          serverId: request.serverId ?? undefined,
+          profileId: request.profileId ?? undefined,
+          rootFolder: request.rootFolder ?? undefined,
+          languageProfileId: request.languageProfileId ?? undefined,
+          tags: request.tags ?? undefined,
+        },
+      });
+      const saved = await c.s.additional.seerr(route);
+      this.hub.invalidateRequests?.();
+      const remaining = saved?.seasons?.map((entry) => entry.seasonNumber);
+      if (!Array.isArray(remaining) || remaining.length !== seasons.length ||
+          new Set(remaining).size !== seasons.length ||
+          seasons.some((number) => !remaining.includes(number)))
+        throw Error("Seerr hat die verbleibenden Staffeln nicht bestätigt. Anfrage neu öffnen.");
+      return { ok: true };
+    });
+  }
   public(c) {
     return {
       requestId: c.target.request.id,
       review: c.review,
       title: String(c.detail.title || c.detail.name || "Anfrage").slice(0, 240),
       type: c.target.kind,
+      editableSeasons: this.editableSeasons(c),
+      monitoredSeasons: this.monitoredSeasons(c),
       canCancel:
         !c.overlaps &&
         !c.active &&

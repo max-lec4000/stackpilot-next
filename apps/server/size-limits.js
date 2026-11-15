@@ -2,6 +2,9 @@ import { compactProfile, compactProfileName } from "./quality-settings.js";
 import { compactValid } from "./quality-policy.js";
 import { positiveId } from "./media-hub.js";
 const rates = [1, 2, 3, 4, 6, 8];
+function validFixedCap(cap) {
+  return Number.isFinite(cap) && cap >= 0.5 && cap <= 200 && Number.isInteger(cap * 2);
+}
 export function sizeCap(runtime, rate) {
   if (
     !Number.isFinite(runtime) ||
@@ -44,6 +47,9 @@ export class SizeLimits {
   key(plan) {
     return `size-default:${plan.rootId || plan.id}`;
   }
+  profileKey(plan, capGiB) {
+    return `size-profile:${plan.rootId || plan.id}:${String(capGiB).replace(".", "-")}`;
+  }
   config(plan) {
     return this.hub.engine.vault.get(this.key(plan)) || { rate: 0 };
   }
@@ -56,26 +62,38 @@ export class SizeLimits {
         "Neue Filmanfragen aus StackPilot; Serien und andere Radarr-Profile bleiben unverändert.",
     };
   }
+  setDefault(plan, rate) {
+    if (![0, ...rates].includes(rate)) throw Error("Ungültige Größenregel.");
+    this.hub.engine.vault.set(this.key(plan), {
+      rate,
+      updatedAt: new Date().toISOString(),
+    });
+  }
   async save(body) {
-    const rate = Number(body.rate);
-    if (![0, ...rates].includes(rate) || body.confirmation !== "OK")
+    const rate = Number(body.rate ?? 0), capGiB = Number(body.capGiB ?? 0);
+    if (![0, ...rates].includes(rate) || (capGiB !== 0 && (!validFixedCap(capGiB) || rate !== 0)) || body.confirmation !== "OK")
       throw Error("Größenregel mit OK bestätigen.");
     return this.hub.mutate(["Seerr", "Radarr"], async ({ plan }) => {
-      this.hub.engine.vault.set(this.key(plan), {
-        rate,
-        updatedAt: new Date().toISOString(),
+      if (capGiB) this.hub.engine.vault.set(this.key(plan), {
+        rate: 0, capGiB, updatedAt: new Date().toISOString(),
       });
+      else this.setDefault(plan, rate);
       return {
         ok: true,
-        message: rate
+        message: capGiB
+          ? `Neue StackPilot-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${capGiB} GiB pro Film.`
+          : rate
           ? `Neue StackPilot-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${rate} GiB pro Stunde Laufzeit.`
           : "Kein Größenstandard für neue Anfragen aktiv. Bereits angelegte Filmprofile bleiben unverändert.",
       };
     });
   }
   async ensure(s, plan, runtime, rate) {
-    const cap = sizeCap(runtime, rate),
-      key = `size-profile:${plan.rootId || plan.id}:${cap}`,
+    const profile = await this.ensureCap(s, plan, sizeCap(runtime, rate));
+    return { ...profile, rate };
+  }
+  async ensureCap(s, plan, cap) {
+    const key = this.profileKey(plan, cap),
       vault = this.hub.engine.vault;
     let own = vault.get(key);
     const formatName = `StackPilot Größe ≤ ${cap} GiB`,
@@ -172,19 +190,19 @@ export class SizeLimits {
     own.profileId = profile.id;
     own.status = "ready";
     vault.set(key, own);
-    return { profileId: profile.id, formatId: format.id, capGiB: cap, rate };
+    return { profileId: profile.id, formatId: format.id, capGiB: cap };
   }
   owned(plan, profile) {
     const match = /^StackPilot 1080p ≤ ([0-9.]+) GiB$/.exec(profile.name || "");
     if (!match) return null;
     const record = this.hub.engine.vault.get(
-      `size-profile:${plan.rootId || plan.id}:${Number(match[1])}`,
+      this.profileKey(plan, Number(match[1])),
     );
     return record?.status === "ready" && record.profileId === profile.id
       ? { profileId: profile.id, formatId: record.formatId, capGiB: record.cap }
       : null;
   }
-  async forRequest(s, plan, detail, rate) {
+  async forRequest(s, plan, detail, rate, capGiB = 0) {
     const actor = await s.additional.seerr("/auth/me");
     if (
       !Number.isSafeInteger(actor?.permissions) ||
@@ -193,12 +211,10 @@ export class SizeLimits {
       throw Error(
         "Seerr erlaubt keine verbindliche Profilvorgabe. Dienstberechtigungen zuerst prüfen.",
       );
-    const bound = await this.ensure(
-      s,
-      plan,
-      Number(detail.runtime),
-      Number(rate),
-    );
+    if (capGiB && !validFixedCap(capGiB)) throw Error("Ungültige feste Obergrenze.");
+    const bound = capGiB
+      ? await this.ensureCap(s, plan, capGiB)
+      : await this.ensure(s, plan, Number(detail.runtime), Number(rate));
     const list = await s.additional.seerr("/settings/radarr"),
       server = list.find((v) => v.isDefault && !v.is4k);
     if (

@@ -16,6 +16,7 @@ export type OperationOverview = {
     state: string;
     freeBytes: number | null;
     totalBytes: number | null;
+    usedBytes?: number | null;
   };
   applications: { name: string; state: string }[];
 };

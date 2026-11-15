@@ -3,6 +3,7 @@ import { requestJourney } from "../../../packages/domain/request-journey.js";
 import { MovieRemoval } from "./MovieRemoval";
 import { formatBytes } from "../../../packages/domain/format.js";
 import { QualityEditor } from "./QualityEditor";
+import { RequestEpisodes } from "./RequestEpisodes";
 import { RequestDiagnosis } from "./RequestDiagnosis";
 import { useEffect, useRef, useState } from "react";
 import { get } from "./ServerCheck";
@@ -25,6 +26,7 @@ type MediaItem = {
 type Detail = MediaItem & {
   runtime?: number | null;
   sizeDefaultRate?: number;
+  sizeDefaultCap?: number;
   savedProfileId?: number | null;
   savedProfileName?: string;
   savedSizeCap?: number | null;
@@ -157,6 +159,7 @@ export function Discover({ onNavigate, initialSearch = "" }: { onNavigate?: (vie
               ...(sizeChoice === "default"
                 ? {
                     expectedSizeDefault: detail.sizeDefaultRate || 0,
+                    expectedSizeDefaultCap: detail.sizeDefaultCap || 0,
                     expectedFilmProfile: detail.savedProfileId || 0,
                   }
                 : { sizeGiBPerHour: Number(sizeChoice) }),
@@ -309,7 +312,9 @@ export function Discover({ onNavigate, initialSearch = "" }: { onNavigate?: (vie
                   <option value="default">
                     {detail.savedProfileName
                       ? `Gespeichertes Filmprofil · ${detail.savedProfileName}`
-                      : detail.sizeDefaultRate
+                      : detail.sizeDefaultCap
+                        ? `StackPilot-Standard · 1080p ohne Remux, maximal ${detail.sizeDefaultCap} GiB`
+                        : detail.sizeDefaultRate
                         ? `StackPilot-Standard · 1080p ohne Remux, ${detail.sizeDefaultRate} GiB/h`
                         : "Vorhandenes Qualitätsprofil"}
                   </option>
@@ -690,6 +695,7 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
               <QualityEditor requestId={selected.id} onChange={refresh} />
               <RequestActions id={selected.id} onChange={refresh} />
               <RequestDiagnosis id={selected.id} onChange={refresh} />
+              {selected.type === "tv" && <RequestEpisodes requestId={selected.id} seasons={selected.seasons} />}
               {selected.type === "movie" && <MovieRemoval requestId={selected.id} onChange={refresh} />}
             </div>
           </div>

@@ -157,6 +157,7 @@ export class MediaHub {
       ...mediaSummary({ ...r, mediaType: type }),
       runtime: Number(r.runtime) || null,
       sizeDefaultRate: this.sizeLimits?.config(plan).rate || 0,
+      sizeDefaultCap: this.sizeLimits?.config(plan).capGiB || 0,
       savedProfileId:
         this.engine.vault.get(qualityPolicyKey(plan, type, id))?.profileId ||
         null,
@@ -262,28 +263,26 @@ export class MediaHub {
           throw Error("Ungültige Größenregel.");
         if (type !== "movie" && body.sizeGiBPerHour)
           throw Error("Größenregeln sind derzeit nur für Filme verfügbar.");
+        const sizeDefault = this.sizeLimits?.config(plan);
         if (
-          body.expectedSizeDefault !== undefined &&
-          this.sizeLimits?.config(plan).rate !== body.expectedSizeDefault
+          (body.expectedSizeDefault !== undefined && sizeDefault?.rate !== body.expectedSizeDefault) ||
+          (body.expectedSizeDefaultCap !== undefined && (sizeDefault?.capGiB || 0) !== body.expectedSizeDefaultCap)
         )
           throw Error(
             "Der Größenstandard wurde geändert. Filmdetails neu öffnen.",
           );
         let sizePolicy = null;
         if (type === "movie" && this.sizeLimits) {
-          const saved = savedQuality;
-          const rate =
-            body.sizeGiBPerHour === undefined
-              ? saved
-                ? 0
-                : this.sizeLimits.config(plan).rate
-              : Number(body.sizeGiBPerHour);
-          if (rate) {
+          const useDefault = body.sizeGiBPerHour === undefined && !savedQuality;
+          const rate = body.sizeGiBPerHour ?? (useDefault ? sizeDefault.rate : 0);
+          const capGiB = useDefault ? sizeDefault.capGiB || 0 : 0;
+          if (rate || capGiB) {
             sizePolicy = await this.sizeLimits.forRequest(
               s,
               plan,
               detail,
               rate,
+              capGiB,
             );
             qualityOptions = {
               serverId: sizePolicy.serverId,

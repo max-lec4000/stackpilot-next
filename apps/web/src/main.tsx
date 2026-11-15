@@ -262,7 +262,7 @@ function App() {
               className={"nav-link " + (n === view ? "active" : "")}
             >
               <span className="nav-icon" aria-hidden="true">
-                <Icon name={["home", "discover", "requests", "downloads", "apps", "settings", "apps"][i]} />
+                <Icon name={["home", "discover", "requests", "downloads", "apps", "settings", "stack"][i]} />
               </span>
               {n}
             </a>

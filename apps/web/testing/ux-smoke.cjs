@@ -128,6 +128,8 @@ async function mockAPI(page, f) {
     }
     let json;
     switch (endpoint) {
+      case "/api/couchdeck": json = { installed: false, state: "missing", helper: { available: true, running: null, failed: null } }; break;
+      case "/api/remote-setup": json = { status: "idle", running: false, steps: [], error: null, result: null }; break;
       case "/api/notifications": json = { results: [], unread: 0, checkedAt: now, error: null }; break;
       case "/api/auth/status": json = { configured: true, authenticated: true, username: "fixture" }; break;
       case "/api/session": json = { token: "fixture-csrf" }; break;
@@ -305,7 +307,7 @@ async function run() {
 
     // Application rows do not reveal private login/image information by default.
     await navigate(page, "Anwendungen");
-    await page.getByText("Jellyfin", { exact: true }).last().waitFor();
+    await page.locator(".service-list-row").filter({ hasText: "Jellyfin" }).waitFor();
     assert.equal(await page.getByText("managed-private-user", { exact: true }).count(), 0);
     assert.equal(await page.getByText(services[0].image, { exact: true }).count(), 0);
     // Component-specific selectors below are kept stable by the view's accessible names.
@@ -483,17 +485,9 @@ async function run() {
     before = f.mutations.length;
     await page.getByRole("button", { name: /Externer Zugriff/ }).click();
     assert.match(page.url(), /#\/verwaltung\/remote/);
-    const stepNav = page.getByRole("navigation", { name: "Einrichtungsschritte", exact: true });
-    await stepNav.waitFor();
-    await stepNav.getByRole("button", { name: /Authentik/ }).click();
-    await page.getByRole("button", { name: "Private Konfiguration vorbereiten", exact: true }).waitFor();
-    await stepNav.getByRole("button", { name: /SSO verbinden/ }).click();
-    await page.getByRole("button", { name: "SSO-Verbindung prüfen", exact: true }).click();
-    await page.getByLabel("StackPilot-Passwort für die SSO-Verbindung", { exact: true }).fill("UNSAVED-SECRET");
-    await stepNav.getByRole("button", { name: /Privates HTTPS/ }).click();
-    assert.equal(await page.locator("input").evaluateAll((es) => es.some((e) => e.value === "UNSAVED-SECRET")), false);
+    const remoteSetup = page.getByRole("button", { name: "In einem Schritt einrichten", exact: true });
+    await remoteSetup.waitFor();
     assert.equal(f.mutations.length, before, "Navigation must not set up or publish services");
-    await stepNav.getByRole("button", { name: /Öffentlich freigeben/ }).click();
     await page.getByRole("button", {name: "Freigabe und Voraussetzungen prüfen", exact: true}).click();
     await page.getByText("MFA-Prüfung noch offen.", {exact: true}).waitFor();
     assert.equal(await page.getByRole("button", {name: "Jellyfin und Anmeldung öffentlich freigeben", exact: true}).count(), 0);
@@ -518,11 +512,11 @@ async function run() {
     await page.goBack();
     await page.getByRole("heading", { name: "Was möchtest du erledigen?", exact: true }).waitFor();
     await page.goForward();
-    await stepNav.waitFor();
+    await remoteSetup.waitFor();
 
     // Deep links survive reload and don't remount all configuration areas.
     await page.reload();
-    await stepNav.waitFor();
+    await remoteSetup.waitFor();
     assert.equal(await page.locator(".administration-panel").count(), 1);
     await navigate(page, "Verwaltung");
     assert.equal(await page.locator(".administration-panel").count(), 0);
@@ -651,6 +645,7 @@ async function run() {
   } catch (error) {
     await page.screenshot({ path: path.join(output, "failure.png"), fullPage: true }).catch(() => {});
     console.error("Unexpected test APIs:", f.unexpected);
+    console.error("Browser errors:", errors);
     throw error;
   } finally {
     await context.close();

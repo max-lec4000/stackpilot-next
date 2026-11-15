@@ -237,6 +237,19 @@ test("Serienabbruch ändert nur die angefragten Staffeln und lässt weitere Anfr
         arr(name, path.replace("/series/", "/movie/"), options);
       return ctx;
     };
+    const single = await f.lifecycle.preview(7);
+    assert.deepEqual(single.monitoredSeasons, [1]);
+    await assert.rejects(f.lifecycle.cancelSeason({
+      requestId: 7, review: single.review, season: 2, confirmation: "OK",
+    }), /nicht geändert/);
+    await f.lifecycle.cancelSeason({
+      requestId: 7, review: single.review, season: 1, confirmation: "OK",
+    });
+    assert.equal(f.state.exists, true);
+    assert.equal(f.state.item.seasons[0].monitored, false);
+    assert.equal(f.state.item.seasons[1].monitored, true);
+    assert.deepEqual((await f.lifecycle.preview(7)).monitoredSeasons, []);
+    f.state.item.seasons[0].monitored = true;
     const p = await f.lifecycle.preview(7);
     assert.equal(p.canCancel, true);
     await f.lifecycle.cancel({

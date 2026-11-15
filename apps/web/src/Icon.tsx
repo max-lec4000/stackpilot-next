@@ -4,6 +4,7 @@ const shapes: Record<string, string> = {
   requests: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z",
   downloads: "M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4",
   apps: "M3 3h7v7H3V3Zm11 0h7v7h-7V3ZM3 14h7v7H3v-7Zm11 0h7v7h-7v-7Z",
+  stack: "M3 7 12 3l9 4-9 4-9-4Zm0 5 9 4 9-4M3 17l9 4 9-4",
   settings: "M4 7h16M4 17h16M8 4v6m8 4v6",
   search: "M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6",
   remote: "M14 3h7v7m0-7L10 14M10 5H4v15h15v-6",

@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { verifyCurrentQuality } from "./quality-policy.js";
-import { importStatus } from "./import-status.js";
+import { importQueueRoute, importStatus, matchesImportTarget } from "./import-status.js";
 import {
   activeSearch,
   searchTargets,
@@ -326,6 +328,154 @@ export class RequestDiagnostics {
       releases,
     };
   }
+  async seriesEpisodes(s, target, season, onlySeason = true) {
+    if (target.kind !== "tv" || !target.item ||
+        !target.request.seasons?.some((entry) => entry.seasonNumber === season))
+      throw Error("Diese Staffel ist der Sonarr-Anfrage nicht zugeordnet.");
+    const episodes = await s.arr("Sonarr", `/episode?seriesId=${target.item.id}`);
+    if (!Array.isArray(episodes)) throw Error("Folgen konnten nicht gelesen werden.");
+    return episodes.filter((episode) =>
+      episode.seriesId === target.item.id && (!onlySeason || episode.seasonNumber === season));
+  }
+  seasonMonitored(target, season) {
+    return !target.item.seasons?.some((entry) =>
+      entry.seasonNumber === season && entry.monitored === false,
+    );
+  }
+  async episodes(requestId, season) {
+    const { s } = await this.hub.context(["Seerr", "Sonarr"]);
+    const target = await this.target(s, positiveId(requestId));
+    const seasonNumber = positiveId(season);
+    const rows = await this.seriesEpisodes(s, target, seasonNumber, false);
+    const fileCounts = new Map();
+    for (const row of rows) if (row.episodeFileId > 0)
+      fileCounts.set(row.episodeFileId, (fileCounts.get(row.episodeFileId) || 0) + 1);
+    return { episodes: rows.filter((episode) => episode.seasonNumber === seasonNumber).map((episode) => ({
+      id: episode.id,
+      number: episode.episodeNumber,
+      title: text(episode.title),
+      hasFile: episode.hasFile === true,
+      removableFileId: episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,
+      canSearch: target.request.status === 2 && target.item.monitored &&
+        this.seasonMonitored(target, seasonNumber) && episode.monitored && !episode.hasFile && Date.parse(episode.airDateUtc) <= Date.now(),
+    })) };
+  }
+  async deleteEpisodeFile(body) {
+    if (body.confirmation !== "OK") throw Error("Dateilöschung mit OK bestätigen.");
+    const season = positiveId(body.season), episodeId = positiveId(body.episodeId),
+      fileId = positiveId(body.fileId);
+    return this.hub.mutate(["Seerr", "Sonarr"], async ({ s }) => {
+      const target = await this.target(s, positiveId(body.requestId));
+      const rows = await this.seriesEpisodes(s, target, season, false);
+      const owners = rows.filter((episode) => episode.episodeFileId === fileId);
+      if (owners.length !== 1 || owners[0].id !== episodeId ||
+          owners[0].seasonNumber !== season || !owners[0].hasFile)
+        throw Error("Datei wurde geändert oder gehört zu mehreren Folgen. Folgen neu laden.");
+      const file = await s.arr("Sonarr", `/episodefile/${fileId}`);
+      if (file?.id !== fileId || file.seriesId !== target.item.id)
+        throw Error("Sonarr hat die Dateizuordnung nicht bestätigt.");
+      await s.arr("Sonarr", `/episodefile/${fileId}`, { method: "DELETE" });
+      const updated = await s.arr("Sonarr", `/episode/${episodeId}`);
+      if (updated?.id !== episodeId || updated.hasFile !== false)
+        throw Error("Sonarr hat die Dateilöschung noch nicht bestätigt. Folgen neu laden.");
+      return { ok: true };
+    });
+  }
+  async replacement(s, target, queue) {
+    const { kind, item, request } = target;
+    if (kind !== "movie" || request.status !== 2 || !item?.monitored || item.hasFile)
+      throw Error("Ein Austausch ist nur für einen genehmigten Film ohne importierte Datei verfügbar.");
+    const entries = queue.records.filter((row) => matchesImportTarget(row, target));
+    const entry = entries[0];
+    const hash = entry?.downloadId?.toLowerCase();
+    if (entries.length !== 1 || !/^[a-f0-9]{40}$/.test(hash || "") ||
+        queue.records.filter((row) => row.downloadId?.toLowerCase() === hash).length !== 1)
+      throw Error("Genau ein eindeutig zugeordneter Film-Download ist erforderlich.");
+    const torrents = await s.qbit("/torrents/info");
+    const torrent = Array.isArray(torrents) && torrents.find((row) => row.hash === hash);
+    if (!torrent || torrent.category !== "stackpilot-movies" ||
+        !Number.isFinite(torrent.progress) || torrent.progress >= 1 ||
+        !/^(downloading|queuedDL|stalledDL|forcedDL|stoppedDL|pausedDL)$/.test(torrent.state))
+      throw Error("Der Transfer ist nicht eindeutig als unvollständiger Film-Download bestätigt.");
+    const queueId = positiveId(entry.id);
+    return {
+      hash, queueId, name: text(torrent.name),
+      review: createHash("sha256").update(JSON.stringify([
+        request.id, item.id, item.qualityProfileId, queueId, hash,
+      ])).digest("hex"),
+    };
+  }
+  async replacePreview(id) {
+    const { plan, s } = await this.hub.context(["Seerr", "qBittorrent"]);
+    const target = await this.target(s, positiveId(id));
+    await verifyCurrentQuality(this.hub, s, plan, target);
+    const queue = await this.completeQueue(s, target.service);
+    const { name, review } = await this.replacement(s, target, queue);
+    return { name, review };
+  }
+  async completeQueue(s, service) {
+    let queue;
+    try {
+      queue = await s.arr(service, importQueueRoute);
+    } catch {
+      throw Error("Download- und Importwarteschlange ist nicht erreichbar.");
+    }
+    if (!Array.isArray(queue?.records) ||
+        !Number.isSafeInteger(queue.totalRecords) || queue.totalRecords > queue.records.length)
+      throw Error("Download- und Importwarteschlange konnte nicht vollständig geprüft werden.");
+    return queue;
+  }
+  async waitForTorrent(s, hash, matches) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const torrents = await s.qbit("/torrents/info");
+      if (!Array.isArray(torrents)) break;
+      if (matches(torrents.find((row) => row.hash === hash))) return true;
+      if (attempt < 7) await delay(250);
+    }
+    return false;
+  }
+  async detachFilmDownload(s, target, candidate) {
+    const { hash, queueId } = candidate;
+    const movieId = positiveId(target.item.id);
+    const blocklistRoute = `/blocklist/movie?movieId=${movieId}`;
+    const [history, oldBlocks] = await Promise.all([
+      s.arr("Radarr", `/history/movie?movieId=${movieId}`),
+      s.arr("Radarr", blocklistRoute),
+    ]);
+    const grabbed = Array.isArray(history) && history.find((entry) =>
+      entry.eventType === "grabbed" && entry.downloadId?.toLowerCase() === hash,
+    );
+    if (!grabbed?.sourceTitle || !Array.isArray(oldBlocks))
+      throw Error("Radarrs Abrufhistorie oder Blockliste für den Transfer ist nicht bestätigt.");
+    const previousIds = new Set(oldBlocks.map((entry) => entry.id));
+    try {
+      await s.qbit("/torrents/stop", { hashes: hash });
+      if (!await this.waitForTorrent(s, hash, (torrent) =>
+        Number.isFinite(torrent?.progress) && torrent.progress < 1 &&
+        /^(stopped|paused)DL$/.test(torrent.state)))
+        throw Error("Downloadstopp nicht bestätigt.");
+      const queue = await this.completeQueue(s, "Radarr");
+      if ((await this.replacement(s, target, queue)).review !== candidate.review)
+        throw Error("Warteschlange wurde geändert.");
+      await s.arr("Radarr", `/queue/${queueId}?removeFromClient=false&blocklist=true&skipRedownload=true`,
+        { method: "DELETE" });
+      let confirmed = false;
+      for (let attempt = 0; attempt < 8 && !confirmed; attempt++) {
+        const blocks = await s.arr("Radarr", blocklistRoute);
+        confirmed = Array.isArray(blocks) && blocks.some((entry) =>
+          entry.movieId === movieId && entry.sourceTitle === grabbed.sourceTitle &&
+          Number.isSafeInteger(entry.id) && !previousIds.has(entry.id),
+        );
+        if (!confirmed && attempt < 7) await delay(250);
+      }
+      if (!confirmed) throw Error("Radarr hat die Blockliste nicht bestätigt.");
+      await s.qbit("/torrents/delete", { hashes: hash, deleteFiles: "false" });
+      if (!await this.waitForTorrent(s, hash, (torrent) => torrent === undefined))
+        throw Error("Alter Download ist noch im Client.");
+    } catch {
+      throw Error("Austausch nicht vollständig bestätigt. Der alte Transfer kann gestoppt sein. Warteschlange prüfen und bei Bedarf die normale Suche verwenden. StackPilot hat keine Dateilöschung angefordert.");
+    }
+  }
   async search(body) {
     const id = positiveId(body.requestId);
     await this.hub.requireVpn();
@@ -377,8 +527,24 @@ export class RequestDiagnostics {
         );
       if (!clients.some((v) => v.enable && v.implementation === "QBittorrent"))
         throw Error("Aktivierter qBittorrent-Downloadclient fehlt.");
-      if (commands.some((c) => activeSearch(c, kind, item.id)))
+      const key = `request-search:${plan.rootId || plan.id}:${id}`;
+      const previous = this.hub.engine.vault.get(key);
+      if (commands.some((command) =>
+        activeSearch(command, kind, item.id) ||
+        (previous?.arrId === item.id && previous.commandIds?.includes(command.id) &&
+          ["queued", "started"].includes(command.status))))
         return { ok: true, alreadyRunning: true };
+      const queue = await this.completeQueue(s, service);
+      let candidate;
+      if (body.replaceReview !== undefined) {
+        if (body.confirmation !== "OK" || body.episodeId !== undefined)
+          throw Error("Austausch zuerst bestätigen.");
+        candidate = await this.replacement(s, target, queue);
+        if (candidate.review !== body.replaceReview)
+          throw Error("Download oder Qualitätsprofil wurde geändert. Austausch erneut prüfen.");
+      } else if (queue.records.some((row) => matchesImportTarget(row, target))) {
+        throw Error("Für dieses Medium läuft bereits ein Download oder Import. Prüfe zuerst die Warteschlange in Radarr oder Sonarr.");
+      }
       let transfer;
       try {
         transfer = await s.qbit("/transfer/info");
@@ -392,19 +558,28 @@ export class RequestDiagnostics {
         !Number.isFinite(transfer?.up_info_speed)
       )
         throw Error("Downloadclient-Zustand ist unbekannt.");
-      const key = `request-search:${plan.rootId || plan.id}:${id}`,
-        previous = this.hub.engine.vault.get(key);
       if (previous && Date.now() - Date.parse(previous.startedAt) < 30000)
         throw Error(
           "Eine Suche wurde gerade beauftragt. Bitte kurz warten und den Zustand erneut prüfen.",
         );
-      const searches =
+      let episodeSearch;
+      if (body.episodeId !== undefined) {
+        const rows = await this.seriesEpisodes(s, target, positiveId(body.season));
+        const episode = rows.find((row) => row.id === positiveId(body.episodeId));
+        if (!episode || !this.seasonMonitored(target, episode.seasonNumber) ||
+            !episode.monitored || episode.hasFile ||
+            !(Date.parse(episode.airDateUtc) <= Date.now()))
+          throw Error("Diese Folge ist nicht als fehlende, überwachte Folge bestätigt.");
+        episodeSearch = { name: "EpisodeSearch", episodeIds: [episode.id] };
+      }
+      const searches = episodeSearch ? [episodeSearch] :
         kind === "movie"
           ? [{ name: "MoviesSearch", movieIds: [item.id] }]
           : (request.seasons || [])
               .filter(
                 (v) =>
-                  Number.isSafeInteger(v.seasonNumber) && v.seasonNumber > 0,
+                  Number.isSafeInteger(v.seasonNumber) && v.seasonNumber > 0 &&
+                  this.seasonMonitored(target, v.seasonNumber),
               )
               .map((v) => ({
                 name: "SeasonSearch",
@@ -413,6 +588,13 @@ export class RequestDiagnostics {
               }));
       if (!searches.length || searches.length > 100)
         throw Error("Keine gültigen angefragten Staffeln gefunden.");
+      if (candidate) {
+        const downloadClients = clients.filter((client) => client.enable && client.implementation === "QBittorrent");
+        if (downloadClients.length !== 1 || downloadClients[0].name !== "StackPilot qBittorrent" ||
+            downloadClients[0].removeFailedDownloads !== false)
+          throw Error("Radarr muss den verwalteten qBittorrent verwenden und fehlgeschlagene Downloads behalten.");
+        await this.detachFilmDownload(s, target, candidate);
+      }
       const progress = {
         startedAt: new Date().toISOString(),
         arrId: item.id,
@@ -432,7 +614,9 @@ export class RequestDiagnostics {
         return { ok: true, alreadyRunning: false };
       } catch {
         throw Error(
-          "Suchauftrag nicht vollständig bestätigt. Vor erneutem Versuch die Suchaufträge in Radarr/Sonarr prüfen.",
+          candidate
+            ? "Alter Download entfernt, Dateien erhalten. Die neue Suche wurde nicht bestätigt. Vor erneutem Versuch den Suchauftrag in Radarr prüfen."
+            : "Suchauftrag nicht vollständig bestätigt. Vor erneutem Versuch die Suchaufträge in Radarr/Sonarr prüfen.",
         );
       }
     });

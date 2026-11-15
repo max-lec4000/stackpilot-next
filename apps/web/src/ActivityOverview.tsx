@@ -170,9 +170,11 @@ export function ActivityOverview({
               {data && <details><summary>Schutzdetails</summary><p>{data.vpn.reason}</p>{data.vpn.checkedAt && <small>Geprüft: {new Date(data.vpn.checkedAt).toLocaleTimeString("de-AT")}</small>}</details>}
             </article>
             <article className="dashboard-metric">
-              <h3>Freier Speicher</h3>
-              <strong>{ops?.storage.freeBytes !== null && ops?.storage.freeBytes !== undefined ? formatBytes(ops.storage.freeBytes) : "—"}</strong>
-              <small>{ops?.storage.totalBytes ? `von ${formatBytes(ops.storage.totalBytes)} am Medienpfad` : "Gesamtgröße nicht bestätigt"}</small>
+              <h3>Speicher am Medienpfad</h3>
+              <strong>{ops?.storage.usedBytes != null && ops.storage.totalBytes != null
+                ? `${formatBytes(ops.storage.usedBytes)} von ${formatBytes(ops.storage.totalBytes)} belegt`
+                : "Belegung nicht bestätigt"}</strong>
+              <small>{ops?.storage.freeBytes != null ? `${formatBytes(ops.storage.freeBytes)} verfügbar` : "Freier Speicher nicht bestätigt"}</small>
               {ops && ["warning", "critical"].includes(ops.storage.state) && <StatusBadge tone="warning">Speicher prüfen</StatusBadge>}
             </article>
             <article className="dashboard-metric" hidden={!panels.includes("transfers")}>
@@ -248,11 +250,11 @@ function useDownloadPage(page: number, filter: string, query: string) {
 }
 const downloadStates: Record<string, string> = {
   downloading: "Lädt herunter", forcedDL: "Lädt herunter", forcedMetaDL: "Metadaten werden geladen",
-  forcedUP: "Verteilt", checkingResumeData: "Prüft gespeicherte Daten", moving: "Verschiebt Dateien",
+  forcedUP: "Teilt · ohne Warteschlange", checkingResumeData: "Prüft gespeicherte Daten", moving: "Verschiebt Dateien",
   allocating: "Bereitet Speicher vor", unknown: "Status unbekannt", stalledDL: "Wartet auf Daten",
   metaDL: "Metadaten werden geladen", queuedDL: "In Warteschlange", stoppedDL: "Angehalten",
-  pausedDL: "Pausiert", uploading: "Verteilt", stalledUP: "Verteilt", stoppedUP: "Angehalten",
-  pausedUP: "Pausiert", queuedUP: "Wartet auf Upload", checkingDL: "Wird geprüft", checkingUP: "Wird geprüft",
+  pausedDL: "Pausiert", uploading: "Teilt", stalledUP: "Bereit zum Teilen", stoppedUP: "Angehalten",
+  pausedUP: "Pausiert", queuedUP: "Upload in Warteschlange", checkingDL: "Wird geprüft", checkingUP: "Wird geprüft",
   error: "Fehler", missingFiles: "Dateien fehlen",
 };
 const stopped = (state: string) => /^(stopped|paused)(DL|UP)$/.test(state);
@@ -328,7 +330,7 @@ export function DownloadsView() {
                 <div className="download-row-main">
                   <div className="download-row-title"><h3>{t.name}</h3><StatusBadge tone={issue ? "danger" : paused ? "neutral" : complete ? "success" : "info"}>{downloadStates[t.state] || "Status unbekannt"}</StatusBadge></div>
                   <p className="download-row-metrics">
-                    {issue ? <span>{t.size > 0 ? `Dateigröße ${formatBytes(t.size)}` : "Größe nicht gemeldet"} · Dateizustand prüfen</span> : complete ? <span>{t.size > 0 ? formatBytes(t.size) : "Größe nicht gemeldet"} · Download vollständig</span> : <><span>{Math.round(t.progress * 100)} %</span><span>{t.size > 0 ? `${formatBytes(Math.min(t.downloaded, t.size))} / ${formatBytes(t.size)}` : "Größe wird ermittelt"}</span><span>{rate(t.downloadRate)} ↓</span>{t.etaSeconds !== null && t.etaSeconds > 0 && !paused && <span>noch etwa {Math.ceil(t.etaSeconds / 60)} Min.</span>}</>}
+                    {issue ? <span>{t.size > 0 ? `Dateigröße ${formatBytes(t.size)}` : "Größe nicht gemeldet"} · Dateizustand prüfen</span> : complete ? <span>{t.size > 0 ? formatBytes(t.size) : "Größe nicht gemeldet"} · Download vollständig · Bibliotheksimport hier ungeprüft</span> : <><span>{Math.round(t.progress * 100)} %</span><span>{t.size > 0 ? `${formatBytes(Math.min(t.downloaded, t.size))} / ${formatBytes(t.size)}` : "Größe wird ermittelt"}</span><span>{rate(t.downloadRate)} ↓</span>{t.etaSeconds !== null && t.etaSeconds > 0 && !paused && <span>noch etwa {Math.ceil(t.etaSeconds / 60)} Min.</span>}</>}
                     {complete && t.uploadRate > 0 && <span>{rate(t.uploadRate)} ↑</span>}
                   </p>
                   {!fullyTransferred && !issue && <progress max={1} value={t.progress} aria-label={`Downloadfortschritt ${t.name}`} />}

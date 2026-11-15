@@ -3,9 +3,16 @@ import { setupError } from "./setup-error.js";
 import { createHash } from "node:crypto";
 import { secureSsoProfile } from "./sso-profile.js";
 import { ssoPluginState, ssoCompatibility } from "./sso-release.js";
+// Felder, die das Plugin von sich aus ergänzt, ohne dass sich etwas ändert: Ein leeres
+// "FolderRoleMapping" taucht nach einem Neustart von Jellyfin auf. Es darf den
+// gespeicherten Fingerabdruck nicht ungültig machen (sonst gilt die eigene Konfiguration
+// plötzlich als fremd, und Funnel lässt sich nicht mehr freigeben).
+const ignored = (key, value) =>
+  key === "CanonicalLinks" ||
+  (key === "FolderRoleMapping" && Array.isArray(value) && value.length === 0);
 const staticConfig = (value) =>
   Object.fromEntries(
-    Object.entries(value || {}).filter(([key]) => key !== "CanonicalLinks"),
+    Object.entries(value || {}).filter(([key, v]) => !ignored(key, v)),
   );
 const hash = (v) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
@@ -17,7 +24,7 @@ function pendingMatches(current, expected) {
     ) &&
     Object.entries(current).every(
       ([k, v]) =>
-        k === "CanonicalLinks" ||
+        ignored(k, v) ||
         k in expected ||
         v === null ||
         v === false ||

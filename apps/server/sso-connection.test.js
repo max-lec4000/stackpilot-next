@@ -153,3 +153,14 @@ test("Unverwaltete vorhandene Provider werden nie still übernommen", async () =
 });
 
 test('Unterbrochene Bestätigung wird ohne erneutes Überschreiben gezielt fortgesetzt',async()=>{const f=fixture(),p=await f.connection.plan();f.state.failAfterWrite=true;await assert.rejects(()=>f.connection.apply({review:p.review,libraryIds:['b'.repeat(32)],confirmation:'OK'}),/interrupted/);const pending=await f.connection.plan();assert.equal(pending.resuming,true);assert.equal(pending.canApply,true);assert.deepEqual(pending.selectedLibraryIds,['b'.repeat(32)]);await f.connection.apply({review:pending.review,libraryIds:pending.selectedLibraryIds,confirmation:'OK'});assert.equal((await f.connection.plan()).configured,true);assert.equal(f.state.calls.filter(c=>c.path==='/sso/OID/Add/stackpilot').length,1);});
+
+test("Ein vom Plugin ergänztes leeres FolderRoleMapping gilt nicht als Änderung, ein gefülltes schon", async () => {
+  const f = fixture(),
+    p = await f.connection.plan();
+  await f.connection.apply({ review: p.review, libraryIds: ["b".repeat(32)], confirmation: "OK" });
+  assert.equal((await f.connection.plan()).configured, true);
+  f.state.oid.stackpilot.FolderRoleMapping = [];
+  assert.equal((await f.connection.plan()).configured, true);
+  f.state.oid.stackpilot.FolderRoleMapping = [{ Role: "x", Folders: [] }];
+  assert.equal((await f.connection.plan()).configured, false);
+});

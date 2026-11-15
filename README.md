@@ -112,6 +112,7 @@ npm ci && npm run build && npm test
 Testen ohne den eigenen Server: `scripts/testvm/` legt eine Ubuntu-VM per LXD an
 (`host-setup.sh`), `first-install.mjs` fährt eine komplette Einrichtung über die API.
 
+- [Abläufe im Alltag](docs/ablaeufe.md) – Zuschauer, Geräte, Couchdeck, Sicherungen
 - [Pläne für die Zukunft](docs/zukunft/README.md)
 - [Changelog](CHANGELOG.md)
 - [Dokumentation der Version 0.4](docs/archiv/README-0.4.md)

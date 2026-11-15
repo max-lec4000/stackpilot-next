@@ -3,6 +3,28 @@
 Stand: StackPilot 0.5.0. Ein Eintrag hier ist ein Vorhaben, keine Zusage und keine
 Freigabe für Änderungen an einem laufenden Server.
 
+## Übersicht (Stand 15.11.2026)
+
+| # | Vorhaben | Art | Aufwand |
+| --- | --- | --- | --- |
+| 1 | Seerr-Anfragen in Streamyfin über eine Anfrage-Brücke (ohne Admin-Schlüssel) | Funktion + Sicherheit | groß |
+| 2 | Couchdeck auf dieselbe Brücke umstellen (kein Seerr-Admin-Schlüssel mehr auf dem Gerät) | Sicherheit | mittel |
+| 3 | Container-Updates: neue Versionen anzeigen, vorher sichern, austauschen, prüfen | Sicherheit | groß |
+| 4 | Tresor-Sicherung als Knopf (verschlüsselt, mit Erinnerung) und geprüfte Wiederherstellung | Betrieb | mittel |
+| 5 | Anmeldesperre der StackPilot-Oberfläche pro Gerät statt global | Sicherheit | klein |
+| 6 | Dienst-Schlüssel erneuern (z. B. Bazarr) direkt aus StackPilot | Sicherheit | klein |
+| 7 | Anstehende Umstellungen (z. B. Netztrennung) unter Verwaltung anzeigen; Assistent im Menü erreichbar | Bedienung | klein |
+| 8 | Doppelte Code-Abfrage bei der ersten Zuschauer-Anmeldung beseitigen | Bedienung | klein |
+| 9 | Zugang ohne Tailscale (eigene Domain, eigener Reverse-Proxy) | Funktion | groß |
+| 10 | HexOS / TrueNAS SCALE, vorhandenes Jellyfin einbinden, eigenes Ordnerschema | Plattform | sehr groß |
+| 11 | Wiederherstellungscodes für Zuschauer bei der ersten Anmeldung; Passkeys; Passwort selbst wählen | Bedienung | mittel |
+| 12 | Profile für Zuschauer (Kinder, Gast mit Ablauf), Bibliotheken je Profil | Funktion | mittel |
+| 13 | Speicherwarnung für Systemplatte und Medienplatte getrennt und früher | Betrieb | klein |
+| 14 | Hardwarebeschleunigung in Jellyfin nach Geräteprüfung | Funktion | mittel |
+
+Bewusst **nicht** geplant (Entscheidung): Firewall fürs Tailnet (nur eigene Geräte),
+ablaufende Authentik-Zustimmung.
+
 ## Als Nächstes
 
 ### Seerr-Anfragen in Streamyfin (und Couchdeck) ohne Admin-Schlüssel

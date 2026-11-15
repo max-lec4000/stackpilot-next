@@ -9,6 +9,8 @@ export const acceptanceKeys = ["browserMfa", "quickConnect", "playback", "revoca
 export class PublicFunnel {
   constructor(hub, identity, protection, sso, connection, settings, security, backups, run = tailscaleCommand) {
     Object.assign(this, { hub, identity, protection, sso, connection, settings, security, backups, run });
+    this.withdrawAfter = 2;
+    this.unsafeStreak = 0;
   }
   async config() {
     const r = await this.run("tailscale", ["serve", "status", "--json"]);
@@ -186,7 +188,14 @@ export class PublicFunnel {
         const c = await this.context(true);
         safe = c.blockers.length === 0 && Object.keys(c.desired).every((host) => c.current.AllowFunnel?.[host] === true);
       } catch {}
-      if (!safe) return this.withdraw(current.plan, current.saved.desired);
+      // Nach einem Neustart oder während Container neu erstellt werden, sind Authentik und
+      // Jellyfin kurz nicht prüfbar. Erst zwei Fehlschläge hintereinander nehmen die
+      // Freigabe zurück (sonst ging Funnel nach jedem Server-Neustart aus).
+      this.unsafeStreak = safe ? 0 : (this.unsafeStreak || 0) + 1;
+      if (!safe && this.unsafeStreak >= this.withdrawAfter) {
+        this.unsafeStreak = 0;
+        return this.withdraw(current.plan, current.saved.desired);
+      }
     });
   }
   start() {
@@ -199,7 +208,8 @@ export class PublicFunnel {
     };
     this.timer = setInterval(tick, 300000);
     this.timer.unref?.();
-    this.startupTimer = setTimeout(tick, 30000);
+    // Erste Prüfung erst, wenn Authentik und Jellyfin nach einem Neustart sicher laufen.
+    this.startupTimer = setTimeout(tick, 180000);
     this.startupTimer.unref?.();
   }
   close() { clearInterval(this.timer); clearTimeout(this.startupTimer); this.timer = null; }

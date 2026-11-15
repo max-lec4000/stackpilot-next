@@ -102,7 +102,23 @@ test("Wiederkehrende Prüfung zieht eigene Freigaben bei nicht mehr bestätigter
   await f.service.monitor();
   assert.equal((await f.service.preview()).complete, true);
   f.state.mfa = false;
+  // Ein einzelner Fehlschlag (z. B. kurz nach einem Neustart) nimmt noch nichts zurück …
+  await f.service.monitor();
+  assert.equal((await f.service.preview()).active, true);
+  // … erst der zweite in Folge.
   await f.service.monitor();
   assert.equal((await f.service.preview()).active, false);
   assert.equal(f.state.locked, false);
+});
+
+test("Ein vorübergehender Fehlschlag wird durch eine erfolgreiche Prüfung zurückgesetzt", async () => {
+  const f = fixture();
+  await f.service.apply(await f.body());
+  f.state.mfa = false;
+  await f.service.monitor();
+  f.state.mfa = true;
+  await f.service.monitor();
+  f.state.mfa = false;
+  await f.service.monitor();
+  assert.equal((await f.service.preview()).active, true);
 });

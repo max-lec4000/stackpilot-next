@@ -1,0 +1,43 @@
+{
+  "name": "stackpilot",
+  "version": "0.5.0",
+  "private": true,
+  "stackpilotStateSchema": 1,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite apps/web --config apps/web/vite.config.js --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build apps/web --config apps/web/vite.config.js",
+    "test": "node --test packages/domain/*.test.js apps/server/*.test.js",
+    "test:ui": "node apps/web/testing/ux-smoke.cjs",
+    "start": "node apps/server/start.js",
+    "test:docker": "node --test --test-concurrency=1 apps/server/docker.integration.js apps/server/retirement.integration.js apps/server/vpn-compose.integration.js apps/server/relay.integration.js",
+    "report": "node apps/server/report-cli.js",
+    "report:dev": "node apps/server/report-cli.js --development",
+    "test:install": "node --test apps/server/install.integration.js",
+    "test:media-removal": "node --test apps/server/movie-removal.integration.js",
+    "test:identity": "node --test apps/server/identity.integration.js",
+    "test:identity:browser": "STACKPILOT_TEST_BROWSER=1 node --test apps/server/identity.integration.js",
+    "test:remote-security": "node --test apps/server/remote-security.integration.js",
+    "test:sso-load": "node --test apps/server/sso.integration.js",
+    "test:sso": "node --test apps/server/sso-connection.integration.js",
+    "test:jellyfin-protection": "node --test apps/server/jellyfin-protection.integration.js",
+    "test:media-policies": "node --test apps/server/size-limits.integration.js",
+    "test:request-lifecycle": "node --test apps/server/request-lifecycle.integration.js",
+    "test:runtime": "node --test apps/server/runtime.integration.js",
+    "test:report-upload": "node --test apps/server/report-upload.integration.js",
+    "test:oidc-backchannel": "node --test apps/server/oidc-backchannel.integration.js"
+  },
+  "dependencies": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
+  }
+}

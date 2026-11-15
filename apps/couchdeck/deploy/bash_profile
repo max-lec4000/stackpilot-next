@@ -1,0 +1,93 @@
+# Couchdeck: auf tty1 automatisch die Vollbild-Oberfläche starten –
+# aber nur, solange ein Bildschirm angeschlossen und eingeschaltet ist.
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ "$(tty)" = "/dev/tty1" ]; then
+  umask 0027
+  LOG=/var/log/couchdeck/session.log   # Gruppe adm darf mitlesen
+
+  # Uhrzeit: der Server läuft auf UTC – Couchdeck zeigt Ortszeit (Wien)
+  export TZ="${COUCHDECK_TZ:-Europe/Vienna}"
+
+  # Bild friert gelegentlich ein ("Atomic commit failed: Device or resource busy"):
+  # wlroots/cage bekommt vom Intel-Treiber ein EBUSY und wartet dann ewig auf den nächsten
+  # Bildwechsel. Die ältere (legacy) KMS-Schnittstelle hat dieses Problem nicht.
+  export WLR_DRM_NO_ATOMIC=1
+  log() { echo "=== $* $(date -Is) ===" >> "$LOG"; }
+
+  # Ein Bildschirm gilt als da, wenn irgendein Grafikausgang "connected" meldet.
+  # (Viele Monitore melden sich beim Ausschalten ab.)
+  has_display() { grep -qsx connected /sys/class/drm/card*-*/status; }
+  OFF_GRACE=10   # Sekunden ohne Bildschirm, bevor Couchdeck beendet wird
+
+  # "Couchdeck ausschalten" im Menü legt diesen Merker an. Dann bleibt Couchdeck aus, bis
+  # ein Controller (neu) verbunden wird oder der Bildschirm einmal aus und wieder an war.
+  # Mit StackPilot liegt der Merker im gemeinsamen Steuerordner: StackPilot legt ihn an
+  # (Couchdeck schließen) oder löscht ihn (Couchdeck starten). Ohne StackPilot bleibt er
+  # im eigenen Konto.
+  CTL=/var/lib/couchdeck/control
+  if [ -d "$CTL" ] && [ -w "$CTL" ]; then
+    OFF_FLAG="$CTL/off"
+  else
+    CTL=""
+    OFF_FLAG="$HOME/.local/state/couchdeck/off"
+  fi
+  # Zustand für StackPilot: running | off | no-display, jeweils mit Zeitpunkt
+  state() { [ -n "$CTL" ] && echo "$1 $(date -Is)" > "$CTL/state" 2>/dev/null; return 0; }
+  pads() { ls /dev/input/js* 2>/dev/null | wc -l; }
+  pad_base=""
+
+  waiting_logged=0
+  while true; do
+    if [ -f "$OFF_FLAG" ]; then
+      if [ -z "$pad_base" ]; then pad_base=$(pads); state off; log "Ausgeschaltet – warte auf Controller, Bildschirm aus/an oder StackPilot"; fi
+      now=$(pads)
+      [ "$now" -lt "$pad_base" ] && pad_base=$now   # Controller ausgeschaltet: neue Basis
+      if ! has_display; then
+        rm -f "$OFF_FLAG"; pad_base=""             # Bildschirm aus: beim nächsten Einschalten normal starten
+      elif [ "$now" -gt "$pad_base" ]; then
+        rm -f "$OFF_FLAG"; pad_base=""; log "Controller verbunden – starte"
+      else
+        sleep 2; continue
+      fi
+    fi
+    pad_base=""   # Merker wurde (auch von StackPilot) entfernt: beim nächsten Ausschalten neu zählen
+    if ! has_display; then
+      [ "$waiting_logged" = 1 ] || { state no-display; log "Kein Bildschirm – warte"; waiting_logged=1; }
+      sleep 3
+      continue
+    fi
+    waiting_logged=0
+    sleep 2   # Bildschirm kurz stabil werden lassen
+
+    state running
+    log Start
+    # -d: keine Fensterrahmen, -s: Wechsel auf andere Konsolen (Strg+Alt+F2) erlauben
+    cage -d -s -- /opt/couchdeck/couchdeck-session >> "$LOG" 2>&1 &
+    CAGE=$!
+
+    # Wächter: Bildschirm weg oder ausgeschaltet (Menü/StackPilot) -> Couchdeck sauber beenden
+    off=0
+    while kill -0 "$CAGE" 2>/dev/null; do
+      sleep 2
+      why=""
+      if [ -f "$OFF_FLAG" ]; then
+        why="Ausgeschaltet"
+      elif has_display; then
+        off=0
+      else
+        off=$((off + 2))
+        [ "$off" -ge "$OFF_GRACE" ] && why="Bildschirm getrennt"
+      fi
+      [ -n "$why" ] || continue
+      log "$why – Couchdeck wird beendet"
+      # Electron bekommt SIGTERM und meldet die Wiedergabe an Jellyfin ab; cage endet danach selbst
+      pkill -TERM -u "$(id -u)" -f '^/opt/couchdeck/electron/electron --ozone' 2>/dev/null
+      for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$CAGE" 2>/dev/null || break; sleep 1; done
+      kill -TERM "$CAGE" 2>/dev/null
+      break
+    done
+    wait "$CAGE"
+    log "Ende (Code $?)"
+    tail -n 2000 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+    sleep 2
+  done
+fi

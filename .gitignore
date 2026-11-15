@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.local
+reports/
+.stackpilot/
+.stackpilot-update-*/
+.stackpilot-update.lock
+.stackpilot-maintenance/
+.stackpilot-maintenance.lock
+
+# Generated secrets/state stay local, including with a custom state directory.
+**/master.key
+**/bootstrap-token
+**/state.sqlite*
+
+# WireGuard and VPN-control secrets never belong in source control.
+**/wg0.conf
+**/gluetun/auth.toml
+
+**/streamystats/runtime.env
+
+# Local identity-provider material (including custom state directories).
+**/identity-secrets/
+
+**/identity-backups/
+**/identity-restore-*/
+
+# Couchdeck (apps/couchdeck)
+*.log
+.env

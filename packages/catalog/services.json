@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-11-07T16:48:01.929Z",
+  "services": {
+    "Jellyfin": {
+      "slug": "jellyfin",
+      "image": "docker.io/jellyfin/jellyfin@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
+      "source": "docker.io/jellyfin/jellyfin:latest",
+      "hostPort": 8096,
+      "port": 8096,
+      "installable": true,
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
+    },
+    "Sonarr": {
+      "slug": "sonarr",
+      "image": "docker.io/linuxserver/sonarr@sha256:3b8c947d7fa173f70e40047d2c8d02835fb8416aeb5ae36def57d9ad15e2f906",
+      "source": "docker.io/linuxserver/sonarr:latest",
+      "hostPort": 8989,
+      "port": 8989,
+      "installable": true,
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
+    },
+    "Radarr": {
+      "slug": "radarr",
+      "image": "docker.io/linuxserver/radarr@sha256:ade5937813c6ae415b29db729386e53fea3ecf067a019849bafbe2d2a6ec02ba",
+      "source": "docker.io/linuxserver/radarr:latest",
+      "hostPort": 7878,
+      "port": 7878,
+      "installable": true,
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
+    },
+    "Prowlarr": {
+      "slug": "prowlarr",
+      "image": "docker.io/linuxserver/prowlarr@sha256:431d7efebcef466e56adaa40a7a2fa2b0e85159a037b8bf465eaadbf0cf5bedf",
+      "source": "docker.io/linuxserver/prowlarr:latest",
+      "hostPort": 9696,
+      "port": 9696,
+      "installable": true,
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
+    },
+    "qBittorrent": {
+      "slug": "qbittorrent",
+      "image": "docker.io/linuxserver/qbittorrent@sha256:05c1454f9a32967affc1f34f67f8cc0cc57dd805dca45489fe797095a6286556",
+      "source": "docker.io/linuxserver/qbittorrent:latest",
+      "hostPort": 8080,
+      "port": 8080,
+      "installable": true,
+      "version": "5.3.0",
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test",
+      "compatibility": "5.3-Login mit HTTP 204 und QBT_SID-Portcookie unterst\u00fctzt. Interne Dienste umgehen ausschlie\u00dflich f\u00fcr ihre DNS-Namen einen vorhandenen Internetproxy."
+    },
+    "Lidarr": {
+      "slug": "lidarr",
+      "image": "docker.io/linuxserver/lidarr@sha256:d5707cfe084da21a3864c7ef0edd9c0543b5e26c79c551f84dad5ef8683af8c7",
+      "source": "docker.io/linuxserver/lidarr:latest",
+      "hostPort": 8686,
+      "port": 8686,
+      "installable": true,
+      "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
+    },
+    "Bazarr": {
+      "slug": "bazarr",
+      "image": "docker.io/linuxserver/bazarr@sha256:7ef0e58216900dbce30b123e0eb65f5cb30e36f126de9474acdd2022fb069c54",
+      "source": "docker.io/linuxserver/bazarr:latest",
+      "hostPort": 6767,
+      "port": 6767,
+      "installable": true,
+      "testedScope": "Form-Anmeldung, gesch\u00fctzte API, Medienmount und Sonarr-/Radarr-Verbindungen; keine externen Untertitelanbieter"
+    },
+    "Seerr": {
+      "slug": "seerr",
+      "image": "ghcr.io/seerr-team/seerr@sha256:d8fab675b55ad293ded98fd71efcfd46054cbad9746534ae1cc4794a88c0b3be",
+      "source": "ghcr.io/seerr-team/seerr:latest",
+      "hostPort": 5055,
+      "port": 5055,
+      "installable": true,
+      "testedScope": "Jellyfin-Anmeldung, Bibliotheken und gepr\u00fcfte Sonarr-/Radarr-Verbindungen; keine echte Medienanfrage",
+      "authentication": "jellyfin"
+    },
+    "Streamystats": {
+      "slug": "streamystats",
+      "image": "ghcr.io/fredrikburmester/streamystats-aio@sha256:9bc68f6301cc2ae749da950121d6efcbaa63335d458dad1d5967265af8e49382",
+      "source": "ghcr.io/fredrikburmester/streamystats-aio:latest",
+      "hostPort": 3000,
+      "port": 3000,
+      "installable": true,
+      "testedScope": "Persistente PostgreSQL-Datenbank, technische Jellyfin-Verbindung und gesch\u00fctzte API; keine Statistik aus realer Wiedergabe",
+      "authentication": "jellyfin"
+    },
+    "Gluetun": {
+      "slug": "gluetun",
+      "image": "docker.io/qmcgaw/gluetun@sha256:6c80716ec1f48ea6c525f198dbb0a658fff4dfa3e1334de5b0457d1c8c6dec0c",
+      "source": "docker.io/qmcgaw/gluetun:latest",
+      "hostPort": null,
+      "port": null,
+      "installable": true,
+      "system": true,
+      "testedScope": "WireGuard-Import; Tunnel und Ausfallsperre werden vor qBittorrent auf dem Zielserver nachgewiesen"
+    },
+    "ApiRelay": {
+      "slug": "api-relay",
+      "image": "docker.io/library/node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
+      "source": "docker.io/library/node:24-alpine",
+      "hostPort": null,
+      "port": null,
+      "system": true,
+      "installable": true
+    },
+    "VpnProbe": {
+      "slug": "vpn-probe",
+      "image": "docker.io/library/node@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8",
+      "source": "docker.io/library/node:24-alpine",
+      "hostPort": null,
+      "port": null,
+      "system": true,
+      "installable": true
+    }
+  }
+}

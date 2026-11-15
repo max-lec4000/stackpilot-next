@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' http://127.0.0.1:* http://localhost:* https://image.tmdb.org https://i.ytimg.com https://*.ggpht.com https://*.googleusercontent.com data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Couchdeck</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="splash"><div class="brand big">couch<span>deck</span></div><div class="splash-bar"><i></i></div></div>
+  <div id="bg"><i class="bg-light"></i><i class="bg-counter"></i><div id="motif-wrap"><div id="motif"></div></div><i class="bg-depth"></i></div><div id="grain"></div>
+  <div id="backdrop"><div id="backdrop-img"></div><div id="backdrop-shade"></div></div>
+  <header id="topbar">
+    <div class="brand">couch<span>deck</span></div>
+    <nav id="sections" hidden></nav>
+    <div id="clock"></div>
+  </header>
+  <main id="screens"></main>
+  <div id="overlay" hidden></div>
+  <div id="mini" hidden></div>
+  <div id="toasts"></div>
+  <footer id="hints"></footer>
+  <script src="app.js"></script>
+</body>
+</html>

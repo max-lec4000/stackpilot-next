@@ -1,0 +1,37 @@
+{
+  "reviewedAt": "2026-11-08",
+  "authentik": {
+    "version": "2026.8.5",
+    "image": "ghcr.io/goauthentik/server@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5",
+    "sourceCommit": "4ec0d19b98da3c329781894cd550da95d3033954"
+  },
+  "postgres": {
+    "image": "docker.io/library/postgres@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139",
+    "sourceTag": "16-alpine"
+  },
+  "gateway": {
+    "image": "docker.io/library/nginx@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311",
+    "sourceTag": "stable-alpine"
+  },
+  "ssoPlugin": {
+    "version": "4.0.0.4",
+    "sourceCommit": "83deeb253c668d668ee3cc9b7defc9c5da042424",
+    "targetsJellyfin": "10.11.0",
+    "testedJellyfinVersions": [
+      "12.4.0"
+    ],
+    "automaticInstallation": false,
+    "id": "505ce9d1-d916-42fa-86ca-673ef241d7df",
+    "packageUrl": "https://github.com/9p4/jellyfin-plugin-sso/releases/download/v4.0.0.4/sso-authentication_4.0.0.4.zip",
+    "sha256": "c09f16ba31059a434ddd7f811e4f9608d4b4c4514cc80a5bf1ca33bee61e1107",
+    "manifestChecksum": "1e7908585ebee256203a0869dcdfbaf8",
+    "loadTestedJellyfinVersions": [
+      "12.4.0"
+    ],
+    "requiredPasswordProvider": "Jellyfin.Server.Implementations.Users.InvalidAuthProvider",
+    "requiresProtectedMediaGateway": true,
+    "testedScope": "Authentik-MFA, TLS/Issuer-Prüfung, gesperrter Passwortanbieter, Quick Connect und Gerätewiderruf in isolierter Instanz; keine externe Client-/Proxy-Abnahme",
+    "reviewedInstallation": true,
+    "automaticUpdates": false
+  }
+}

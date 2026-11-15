@@ -1,0 +1,11 @@
+#!/bin/sh
+# Läuft innerhalb von cage. Startet die Couchdeck-Oberfläche.
+export XDG_SESSION_TYPE=wayland
+export LIBVA_DRIVER_NAME=iHD
+export UV_THREADPOOL_SIZE=16   # Reserve für Datei-/Netz-Hilfsthreads
+export TZ="${TZ:-Europe/Vienna}"  # Ortszeit für die Uhr in der Oberfläche
+exec /opt/couchdeck/electron/electron /opt/couchdeck/app \
+  --ozone-platform=wayland \
+  --enable-features=VaapiVideoDecoder \
+  --disable-features=Vulkan \
+  "$@"

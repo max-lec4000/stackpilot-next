@@ -1,0 +1,102 @@
+/* Everyday status and transfer views use the shared theme surfaces. */
+.dashboard,
+.downloads-view { min-width: 0; }
+.dashboard-customize { margin: 0 0 var(--space-4); }
+.dashboard-customize .button-group { gap: 16px; }
+.dashboard-metrics:has(> [hidden]) { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
+.dashboard-panels:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+.dashboard-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3, 12px); margin: var(--space-4, 16px) 0; }
+.dashboard-metric { min-width: 0; padding: var(--space-4, 16px); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2, 8px); }
+.dashboard-metric h3 { font-size: .82rem; font-weight: 600; color: var(--muted); margin: 0; }
+.dashboard-metric strong { font-size: clamp(1.12rem, 1.7vw, 1.5rem); line-height: 1.25; overflow-wrap: anywhere; }
+.dashboard-metric > small { line-height: 1.5; color: var(--muted); }
+.dashboard-metric > button { margin-top: auto; font-size: .78rem; padding: 6px 10px; }
+.dashboard-metric details { font-size: .78rem; width: 100%; }
+.dashboard-metric details p { margin: 8px 0; }
+.dashboard-check-summary { display: flex; flex-wrap: wrap; gap: var(--space-2, 8px) var(--space-3, 12px); align-items: center; margin: 12px 0 18px; }
+.dashboard-check-summary small { color: var(--muted); font-size: .75rem; }
+.dashboard-notices { border: 1px solid var(--border); border-radius: var(--radius-md, 10px); padding: 12px 14px; margin: 14px 0 18px; background: var(--surface-subtle); }
+.dashboard-notices > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; cursor: pointer; font-size: .86rem; }
+.dashboard-notices > summary::after { content: 'Details'; color: var(--accent); font-size: .78rem; margin-left: auto; }
+.dashboard-notices[open] > summary::after { content: 'Schließen'; }
+.dashboard-task-list { list-style: none; padding: 0; margin: 12px 0 0; }
+.dashboard-task-list li { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding: 12px 0; }
+.dashboard-task-list p { color: var(--muted); margin: 4px 0 0; font-size: .82rem; }
+.dashboard-task-list button { flex-shrink: 0; font-size: .78rem; }
+.dashboard-panels { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--space-4, 16px); }
+.dashboard-panel { min-width: 0; padding: var(--space-4, 16px); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--surface); }
+.dashboard-panel .ui-section-heading { margin-bottom: 8px; }
+.dashboard-panel .ui-section-heading h2 { font-size: 1rem; }
+.dashboard-panel .ui-section-heading p { font-size: .8rem; }
+.dashboard-panel .ui-section-heading button { padding: 6px 10px; font-size: .78rem; }
+.dashboard-session-list,
+.dashboard-queue-list { list-style: none; margin: 0; padding: 0; }
+.dashboard-session-list { max-height: 360px; overflow-y: auto; }
+.dashboard-session { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.dashboard-session:last-child { border-bottom: 0; }
+.dashboard-play-icon { display: grid; place-items: center; width: 30px; height: 36px; border-radius: var(--radius-sm, 7px); background: var(--accent-soft); color: var(--accent); }
+.dashboard-session b { display: block; overflow-wrap: anywhere; font-size: .86rem; }
+.dashboard-session small { display: block; color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
+.dashboard-session-state { display: block; font-size: .75rem; color: var(--muted); }
+.dashboard-session progress { display: block; width: 100%; height: 5px; margin-top: 7px; }
+.dashboard-queue-list li { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); padding: 13px 0; font-size: .86rem; }
+.dashboard-queue-list li:last-child { border-bottom: 0; }
+.dashboard-queue-list span { color: var(--muted); }
+.dashboard-empty { color: var(--muted); font-size: .86rem; margin: 12px 0 4px; padding: 12px 0; }
+.dashboard-note,
+.dashboard-updated { font-size: .75rem; color: var(--muted); margin: 12px 0 0; }
+.dashboard-updated { margin: 14px 0 0; }
+.downloads-toolbar { display: flex; align-items: end; gap: var(--space-3, 12px); flex-wrap: wrap; margin: 16px 0; }
+.downloads-toolbar label { display: block; font-size: .78rem; color: var(--muted); margin: 0; min-width: 180px; }
+.downloads-toolbar label:nth-of-type(2) { flex: 1 1 240px; }
+.downloads-toolbar > button { margin-left: auto; min-height: 40px; }
+.downloads-toolbar input,
+.downloads-toolbar select { margin: 5px 0 0; width: 100%; }
+.downloads-summary { display: flex; flex-wrap: wrap; align-items: start; gap: 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 10px; padding-bottom: 12px; }
+.downloads-summary > small { color: var(--muted); font-size: .8rem; padding-top: 4px; }
+.download-vpn { margin: 0; font-size: .8rem; max-width: 50ch; }
+.download-vpn summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; cursor: pointer; }
+.download-vpn summary > span:last-child { color: var(--muted); font-size: .75rem; }
+.download-vpn p { margin: 8px 0 4px; color: var(--muted); }
+.download-vpn small { color: var(--muted); }
+.download-client-control { font-size: .78rem; margin-left: auto; max-width: 40ch; }
+.download-client-control p { color: var(--muted); margin: 8px 0; }
+.downloads-page-count { font-size: .75rem; color: var(--muted); margin: 10px 0; }
+.download-list { border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--surface); overflow: hidden; }
+.download-list:empty { display: none; }
+.download-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-4, 16px); padding: 16px; border-bottom: 1px solid var(--border); }
+.download-row:last-child { border-bottom: 0; }
+.download-row-main { min-width: 0; }
+.download-row-title { display: flex; align-items: start; flex-wrap: wrap; gap: 8px 12px; }
+.download-row h3 { margin: 0; font-size: .9rem; line-height: 1.45; overflow-wrap: anywhere; flex: 1 1 240px; }
+.download-row-title .ui-status { flex-shrink: 0; }
+.download-row-metrics { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: .75rem; color: var(--muted); margin: 8px 0 0; }
+.download-row progress { display: block; width: 100%; height: 5px; margin-top: 10px; }
+.download-row-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 138px; max-width: 240px; font-size: .78rem; }
+.download-row-actions > button { font-size: .78rem; padding: 7px 10px; }
+.download-row-actions summary { cursor: pointer; color: var(--muted); padding: 5px 0; }
+.download-extra-actions { display: grid; gap: 8px; margin-top: 8px; }
+.download-extra-actions button { font-size: .75rem; padding: 8px 10px; text-align: left; white-space: normal; }
+.workspace-app-actions { display: flex; justify-content: flex-end; margin: 0 0 12px; }
+.workspace-info { display: grid; gap: 12px; }
+.workspace-info details { margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md, 10px); background: var(--surface); }
+.workspace-info summary { cursor: pointer; font-weight: 600; }
+.workspace-info p,
+.workspace-info li { font-size: .86rem; color: var(--muted); }
+@media (max-width: 1150px) {
+  .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-panels { grid-template-columns: minmax(0, 1fr); }
+  .download-row { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .download-row-actions { flex-direction: row; align-items: center; max-width: none; min-width: 0; flex-wrap: wrap; }
+  .download-row-actions > details { flex: 1 1 180px; }
+}
+@media (max-width: 600px) {
+  .dashboard-metric { padding: 12px; }
+  .dashboard-metric strong { font-size: 1.1rem; }
+  .dashboard-panel { padding: 14px; }
+  .dashboard-task-list li { flex-direction: column; align-items: start; gap: 8px; }
+  .download-row { padding: 14px; }
+  .download-client-control { margin-left: 0; }
+  .downloads-toolbar label { min-width: 0; flex: 1 1 100%; }
+  .downloads-summary { gap: 10px; }
+}

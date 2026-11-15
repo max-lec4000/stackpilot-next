@@ -1,0 +1,10 @@
+# Default-deny: only documentation and deliberately generated JSON reports.
+*
+!.gitignore
+!README.md
+!reports/
+reports/*
+!reports/README.md
+!reports/*.json
+
+!report-policy.json

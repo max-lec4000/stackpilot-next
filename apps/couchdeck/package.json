@@ -1,0 +1,15 @@
+{
+  "name": "couchdeck",
+  "version": "0.2.0",
+  "description": "Controller-first Vollbild-Oberfläche für Jellyfin & Co. auf einem headless Server",
+  "main": "src/main/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --windowed",
+    "check": "for f in src/main/*.js src/preload.js src/renderer/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "devDependencies": {
+    "electron": "45.3.0"
+  }
+}

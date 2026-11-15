@@ -1,0 +1,89 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { mkdir, readFile, lstat, realpath, statfs, open } from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import { randomUUID, createHash } from "node:crypto";
+import { stackBackupPlan } from "./stack-backup.js";
+import { serviceUnit } from "./service-unit.js";
+import { saveUpdateJob, updateRoot } from "./service-updates.js";
+import { offerMaintenanceSecret } from "./maintenance-secret.js";
+const execute = promisify(execFile);
+export const backupReview = (plan, unit) => createHash("sha256").update(JSON.stringify([plan.planId, plan.rootId, plan.includeData, plan.roots, plan.containers, unit])).digest("hex");
+export async function backupRecord(directory, id) {
+  if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) throw Error("Ungültiger Sicherungsauftrag.");
+  const file = path.join(directory, ".stackpilot-maintenance", id + ".json");
+  const info = await lstat(file);
+  if (!info.isFile() || info.isSymbolicLink() || info.uid !== process.getuid() || info.size > 1024 * 1024) throw Error("Sicherungsauftrag ist nicht eindeutig zugeordnet.");
+  const record = JSON.parse(await readFile(file, "utf8"));
+  if (!["stack-backup", "stack-restore-test"].includes(record.kind) || record.id !== id) throw Error("Dieser Auftrag ist keine Stack-Sicherung.");
+  return record;
+}
+export function backupSummary(record) {
+  return { id: record.id, kind: record.kind, state: record.state, phase: record.phase, message: record.message, createdAt: record.createdAt, updatedAt: record.updatedAt, includeData: record.includeData === true, archiveReady: record.archiveReady === true, sizeBytes: record.sizeBytes ?? null, restorePassed: record.restorePassed === true, reference: record.reference || null };
+}
+export class StackBackupJobs {
+  constructor(engine, options = {}) {
+    this.engine = engine;
+    this.directory = options.directory || updateRoot;
+    this.folder = options.folder || path.join(os.homedir(), "stackpilot-backups");
+    this.unitFile = options.unitFile || path.join(os.homedir(), ".config/systemd/user/stackpilot.service");
+    this.run = options.run || (async (binary, args) => (await execute(binary, args, { cwd: this.directory, timeout: 30000, maxBuffer: 1024 * 1024 })).stdout);
+  }
+  async service() {
+    const info = await lstat(this.unitFile), unit = await readFile(this.unitFile, "utf8");
+    const expected = serviceUnit({ directory: await realpath(this.directory), node: await realpath(process.execPath), state: await realpath(this.engine.store.directory) });
+    if (!info.isFile() || info.isSymbolicLink() || info.uid !== process.getuid() || unit !== expected) throw Error("Ein passend eingerichteter StackPilot-Nutzerdienst ist erforderlich.");
+    const status = (await this.run("systemctl", ["--user", "show", "stackpilot.service", "--property=ActiveState", "--value"])).trim();
+    if (status !== "active") throw Error("StackPilot-Nutzerdienst muss vor der geführten Sicherung aktiv sein.");
+    return unit;
+  }
+  async ensureFolder() {
+    await mkdir(this.folder, { recursive: true, mode: 0o700 });
+    const info = await lstat(this.folder);
+    if (await realpath(this.folder) !== this.folder || !info.isDirectory() || info.uid !== process.getuid() || (info.mode & 0o077)) throw Error("Privater Sicherungsordner ist nicht sicher zugeordnet.");
+  }
+  async preview(includeData = false) {
+    if (typeof includeData !== "boolean") throw Error("Sicherungsumfang ausdrücklich auswählen.");
+    const unit = await this.service();
+    if (this.engine.store.activeLease()) throw Error("Ein anderer Auftrag läuft. Vor einer Sicherung dessen Abschluss abwarten.");
+    const plan = await stackBackupPlan(this.engine, { includeData });
+    await this.ensureFolder();
+    if (plan.roots.some((root) => this.folder === root.directory || this.folder.startsWith(root.directory + path.sep))) throw Error("Sicherungsordner liegt innerhalb der ausgewählten Quelldaten.");
+    const space = await statfs(this.folder);
+    return { ready: true, review: backupReview(plan, unit), includeData, containers: plan.containers.map((container) => ({ name: container.name, running: container.running })), freeBytes: space.bavail * space.bsize, mediaIncluded: includeData, message: "Die zuvor laufenden Medien- und Identitätsdienste werden kurzzeitig gestoppt und nach dem Archivieren wieder gestartet. Eine Sicherung mit Medien kann deutlich länger dauern." };
+  }
+  async launch(record, secret) {
+    await saveUpdateJob(this.directory, record);
+    const channel = await offerMaintenanceSecret(record.id, secret, async (address) => {
+      await this.run("systemd-run", ["--user", "--collect", "--unit=stackpilot-backup-" + record.id, "--property=NoNewPrivileges=yes", "--property=UMask=0077", "--working-directory=" + this.directory, "--setenv=STACKPILOT_STATE_DIR=" + this.engine.store.directory, process.execPath, path.join(this.directory, "apps/server/stack-backup-worker.js"), "--job=" + record.id, "--channel=" + address]);
+    });
+    return { status: backupSummary(record), commit: channel.commit, abort: channel.abort };
+  }
+  async start(body) {
+    if (body.confirmation !== "OK" || typeof body.passphrase !== "string" || body.passphrase.length < 16 || body.passphrase.length > 256) throw Error("Sicherung mit separater Passphrase und OK bestätigen.");
+    if (body.password === body.passphrase) throw Error("Sicherungspassphrase muss vom StackPilot-Passwort verschieden sein.");
+    const preview = await this.preview(body.includeData ?? false);
+    if (preview.review !== body.review) throw Error("Sicherungsvorschau ist nicht mehr aktuell. Erneut prüfen.");
+    const id = randomUUID();
+    return this.launch({ id, kind: "stack-backup", state: "queued", phase: "Sicherung vorbereiten", createdAt: new Date().toISOString(), review: preview.review, includeData: preview.includeData, folder: this.folder, archive: path.join(this.folder, id + ".spstack") }, body.passphrase);
+  }
+  async startTest(body) {
+    if (body.confirmation !== "OK" || typeof body.passphrase !== "string" || body.passphrase.length < 16 || body.passphrase.length > 256) throw Error("Isolierten Wiederherstellungstest mit Passphrase und OK bestätigen.");
+    await this.ensureFolder();
+    const previous = await backupRecord(this.directory, body.id);
+    if (!previous.archiveReady || previous.archive !== path.join(this.folder, previous.id + ".spstack")) throw Error("Fertige Sicherung nicht bestätigt.");
+    const id = randomUUID();
+    return this.launch({ id, kind: "stack-restore-test", state: "queued", phase: "Isolierte Wiederherstellung vorbereiten", createdAt: new Date().toISOString(), reference: previous.id, includeData: previous.includeData, folder: this.folder, archive: previous.archive }, body.passphrase);
+  }
+  async status(id) { return backupSummary(await backupRecord(this.directory, id)); }
+  async download(id) {
+    const record = await backupRecord(this.directory, id);
+    if (!record.archiveReady || record.archive !== path.join(this.folder, record.id + ".spstack")) throw Error("Sicherungsdatei ist nicht bestätigt.");
+    await this.ensureFolder();
+    const file = await open(record.archive, "r");
+    const st = await file.stat();
+    if (!st.isFile() || st.uid !== process.getuid() || st.size !== record.sizeBytes) { await file.close(); throw Error("Sicherungsdatei wurde verändert."); }
+    return { file, size: st.size, filename: record.id + ".spstack" };
+  }
+}

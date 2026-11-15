@@ -98,3 +98,12 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 2. Beziehungen in `packages/domain/apps.js` (`requires`, `linksTo`, `group`).
 3. Adapter: Bereitschaft, Grundkonfiguration, Verbindungen; Partner-Adressen und
    -Schlüssel über `Services.linksFor(name)`.
+
+## Stack konfigurieren und Umstellungen prüfen
+
+Im Hauptmenü öffnet **Stack konfigurieren** den Assistenten. Wenn ein
+bestehender Stack noch die gemeinsame Docker-Netzwerkstruktur nutzt, erscheint
+auf der Übersichtsseite **Verwaltung** der Hinweis **Anstehende Umstellung**.
+**Plan für Netztrennung öffnen** führt direkt zum Plan mit der gespeicherten
+App-Auswahl. Dort kannst du den Plan prüfen und den Neustart der betroffenen
+Container bestätigen. Anschließend verschwindet der Hinweis.

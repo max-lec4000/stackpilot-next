@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { ConnectionChecks } from "./ConnectionChecks";
 import { DeploymentCheck } from "./DeploymentCheck";
 import { Workspace } from "./Workspace";
-import { ServerCheck, type Inventory, type Storage } from "./ServerCheck";
+import { ServerCheck, get, type Inventory, type Storage } from "./ServerCheck";
 const areas = [
   {
     id: "music",
@@ -118,6 +118,9 @@ export function Administration({
   quality,
   storage,
   onWizard,
+  onMigrationPlan,
+  migrationLoading,
+  migrationError,
 }: {
   area: string;
   onAreaChange: (area: string) => void;
@@ -132,9 +135,27 @@ export function Administration({
   quality: string;
   storage: Storage | null;
   onWizard: () => void;
+  onMigrationPlan: () => void;
+  migrationLoading: boolean;
+  migrationError: string;
 }) {
   const panel = areas.some((a) => a.id === area) ? area : "";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [networkUpgrade, setNetworkUpgrade] = useState(false);
+  useEffect(() => {
+    if (panel) return;
+    let mounted = true;
+    get<{ networkUpgrade?: boolean } | null>("/api/stack")
+      .then((stack) => {
+        if (mounted) setNetworkUpgrade(stack?.networkUpgrade === true);
+      })
+      .catch(() => {
+        if (mounted) setNetworkUpgrade(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [panel]);
   const heading = useRef<HTMLHeadingElement>(null),
     active = areas.find((a) => a.id === panel),
     previous = useRef(panel);
@@ -208,9 +229,20 @@ export function Administration({
               </p>
             </div>
             <button className="primary" onClick={onWizard}>
-              ✦ Apps & VPN einrichten
+              Stack konfigurieren
             </button>
           </div>
+          {networkUpgrade && (
+            <section className="tile" aria-labelledby="network-upgrade-title">
+              <h3 id="network-upgrade-title">Anstehende Umstellung</h3>
+              <p>Jellyfin und die Download-Dienste bekommen getrennte Docker-Netze.
+                Die betroffenen Container starten dabei kurz neu.</p>
+              <button disabled={migrationLoading} onClick={onMigrationPlan}>
+                {migrationLoading ? "Stack wird geladen …" : "Plan für Netztrennung öffnen"}
+              </button>
+              {migrationError && <p className="error" role="alert">{migrationError}</p>}
+            </section>
+          )}
           {["Einrichten", "Betrieb", "Nachsehen"].map((group) => (
             <section className="admin-group" key={group}>
               <h3>{group}</h3>

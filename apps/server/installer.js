@@ -17,6 +17,10 @@ import { Services } from "./service-api.js";
 import { probeVpn } from "./vpn.js";
 import { randomUUID } from "node:crypto";
 import { bindAddress } from "./access.js";
+export function needsNetworkUpgrade(plan) {
+  return plan.networkLayout !== networkLayout;
+}
+
 export class DeploymentEngine extends RetirementEngine {
   constructor(store, vault, options = {}) {
     super(store, options.docker || localDocker);
@@ -125,7 +129,7 @@ export class DeploymentEngine extends RetirementEngine {
       }
       result.addsCouchdeck = result.spec.couchdeck && !base.spec.couchdeck;
       // Ältere Stacks bekommen beim nächsten Plan die getrennten Netze.
-      result.networkUpgrade = base.networkLayout !== networkLayout;
+      result.networkUpgrade = needsNetworkUpgrade(base);
       if (result.networkUpgrade)
         result.warnings.push(
           "Netze werden getrennt: Jellyfin kommt in ein eigenes Netz, ohne Zugang zu ARR-Diensten und Downloadclient. Die betroffenen Container (auch VPN und qBittorrent) werden dafür einmal neu erstellt; Daten und Einstellungen bleiben.",

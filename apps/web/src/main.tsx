@@ -124,6 +124,8 @@ function App() {
   const [vpn, setVpn] = useState(true);
   const [vpnProfileId, setVpnProfileId] = useState("");
   const [stackStatus, setStackStatus] = useState<string | null>(null);
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationError, setMigrationError] = useState("");
   const [installed, setInstalled] = useState<string[]>([]);
   useEffect(() => {
     if (mode !== "real" || !inventory) return;
@@ -137,12 +139,15 @@ function App() {
   }, [inventory, installed, mode]);
   function loadStack(navigate = false) {
     return fetch("/api/stack", { cache: "no-store" })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw Error("Stack konnte nicht geladen werden.");
+        return r.json();
+      })
       .then((stack) => {
         if (!stack?.spec) {
           if (navigate && !window.location.hash)
             setView("Stack konfigurieren", "", true);
-          return;
+          return stack;
         }
         if (navigate && !window.location.hash) {
           setView(
@@ -171,8 +176,9 @@ function App() {
         setViewer(spec.viewer || "");
         // Profile handles contain no keys and can safely prefill the wizard.
         if (stack.vpnProfileId) setVpnProfileId(stack.vpnProfileId);
+        return stack;
       })
-      .catch(() => {});
+      .catch(() => null);
   }
   useEffect(() => {
     void loadStack(true);
@@ -247,6 +253,7 @@ function App() {
             "Downloads",
             "Anwendungen",
             "Verwaltung",
+            "Stack konfigurieren",
           ].map((n, i) => (
             <a
               key={n}
@@ -255,7 +262,7 @@ function App() {
               className={"nav-link " + (n === view ? "active" : "")}
             >
               <span className="nav-icon" aria-hidden="true">
-                <Icon name={["home", "discover", "requests", "downloads", "apps", "settings"][i]} />
+                <Icon name={["home", "discover", "requests", "downloads", "apps", "settings", "apps"][i]} />
               </span>
               {n}
             </a>
@@ -339,6 +346,24 @@ function App() {
                   language={language}
                   quality={quality}
                   storage={storage}
+                  migrationLoading={migrationLoading}
+                  migrationError={migrationError}
+                  onMigrationPlan={async () => {
+                    setMigrationLoading(true);
+                    setMigrationError("");
+                    try {
+                      const stack = await loadStack();
+                      if (!stack?.networkUpgrade) {
+                        setMigrationError("Die Umstellung konnte nicht bestätigt werden. Lade die Verwaltung neu und prüfe den aktuellen Stand.");
+                        return;
+                      }
+                      setMode("real");
+                      setStage(5);
+                      setView("Stack konfigurieren");
+                    } finally {
+                      setMigrationLoading(false);
+                    }
+                  }}
                   onWizard={() => {
                     setView("Stack konfigurieren");
                     setStage(

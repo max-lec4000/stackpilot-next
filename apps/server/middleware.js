@@ -40,7 +40,7 @@ import { SafetyCheck } from "./safety-check.js";
 import { DownloadGuard } from "./download-guard.js";
 import { ActivityMonitor } from "./activity.js";
 import { importVpn } from "./vpn.js";
-import { DeploymentEngine } from "./installer.js";
+import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
 import path from "node:path";
@@ -301,6 +301,7 @@ export function inventoryMiddleware(options = {}) {
               planId: current.plan.id,
               status: current.job.status,
               spec: current.plan.spec,
+              networkUpgrade: current.job.status === "completed" && needsNetworkUpgrade(current.plan),
               vpnProfileId: current.plan.vpnProfileId || null,
             }
           : null;

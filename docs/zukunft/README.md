@@ -13,7 +13,6 @@ Freigabe für Änderungen an einem laufenden Server.
 | 4 | Tresor-Sicherung als Knopf (verschlüsselt, mit Erinnerung) und geprüfte Wiederherstellung | Betrieb | mittel |
 | 5 | Anmeldesperre der StackPilot-Oberfläche pro Gerät statt global | Sicherheit | klein |
 | 6 | Dienst-Schlüssel erneuern (z. B. Bazarr) direkt aus StackPilot | Sicherheit | klein |
-| 7 | Anstehende Umstellungen (z. B. Netztrennung) unter Verwaltung anzeigen; Assistent im Menü erreichbar | Bedienung | klein |
 | 8 | Doppelte Code-Abfrage bei der ersten Zuschauer-Anmeldung beseitigen | Bedienung | klein |
 | 9 | Zugang ohne Tailscale (eigene Domain, eigener Reverse-Proxy) | Funktion | groß |
 | 10 | HexOS / TrueNAS SCALE, vorhandenes Jellyfin einbinden, eigenes Ordnerschema | Plattform | sehr groß |

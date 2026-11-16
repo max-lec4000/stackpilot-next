@@ -1127,6 +1127,62 @@ function cancelSeerrRequest(r, after) {
     });
 }
 
+function chooseSeriesCancellations(requests, submit) {
+  const choices = requests.map(request => {
+    const seasons = (request.seasons || []).filter(n => Number.isSafeInteger(n) && n >= 0).sort((a, b) => a - b);
+    return { request, seasons, partial: request.status === 1 && seasons.length > 1 && seasons[0] > 0, selected: new Set() };
+  });
+  const panel = h('div', { class: 'dialog' }, h('h2', {}, 'Serienanfragen zurückziehen'));
+  const options = h('div', { class: 'series-cancel-options' });
+  const proceed = h('button', { class: 'action primary focusable', disabled: true,
+    oncdselect: () => {
+      const selected = choices.filter(choice => choice.selected.size).map(choice => {
+        const { request, seasons, partial } = choice;
+        const whole = !partial || choice.selected.size === seasons.length;
+        return { requestId: request.id, expected: { status: request.status, seasons },
+          seasons: whole ? null : seasons.filter(n => choice.selected.has(n)),
+          label: whole ? `Anfrage #${request.id} vollständig` :
+            `Anfrage #${request.id} · Staffel ${seasons.filter(n => choice.selected.has(n)).join(', ')}` };
+      });
+      if (!selected.length) return;
+      confirmDialog('Auswahl bestätigen', selected.map(item => item.label).join('\n') +
+        '\nLaufende Downloads und vorhandene Dateien werden dadurch nicht entfernt.',
+      'Auswahl zurückziehen', () => submit(selected));
+      $('#overlay .dialog p')?.classList.add('series-cancel-review');
+    },
+  }, 'Weiter zur Bestätigung');
+  for (const { request, seasons, partial, selected } of choices) {
+    const group = h('fieldset', {}, h('legend', {}, `Anfrage #${request.id}${request.status === 1 ? ' · Offen' : ''}`));
+    const actions = h('div', { class: 'actions' });
+    for (const value of partial ? seasons : [null]) {
+      const label = value !== null ? `Staffel ${value}` :
+        seasons.length ? `Ganze Anfrage · Staffel ${seasons.join(', ')}` : 'Ganze Anfrage';
+      const button = h('button', { class: 'action focusable', 'aria-pressed': 'false',
+        oncdselect: () => {
+          if (selected.has(value)) selected.delete(value); else selected.add(value);
+          button.setAttribute('aria-pressed', String(selected.has(value)));
+          proceed.disabled = !choices.some(choice => choice.selected.size);
+        },
+      }, label);
+      actions.append(button);
+    }
+    options.append(append(group, actions));
+  }
+  panel.append(options, h('div', { class: 'actions' }, proceed,
+    h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Abbrechen')));
+  const reopen = () => showOverlay(panel, { centered: true, reopen,
+    onAction: (a) => a === 'back' ? (closeOverlay(), true) : false });
+  reopen();
+}
+
+function upcomingEpisode(episode) {
+  if (episode.hasFile || typeof episode.airDate !== 'string') return null;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(episode.airDate) ? episode.airDate + 'T00:00:00' : episode.airDate);
+  return date.getTime() > Date.now()
+    ? `Voraussichtlich am ${new Intl.DateTimeFormat('de-AT', { dateStyle: 'medium' }).format(date)}`
+    : null;
+}
+
 /** Person aus Seerr: alle Filme/Serien, direkt anfragbar. */
 function seerrPersonScreen(stub) {
   const node = h('div', { class: 'screen' });
@@ -1225,16 +1281,41 @@ function seerrDetailScreen(stub) {
     if (d.mediaType === 'tv' && openSeasons.length) {
       actions.append(h('button', { class: 'action primary focusable', 'data-autofocus': !d.jellyfinId || null,
         oncdselect: () => send(openSeasons.map((x) => x.number)) },
-      openSeasons.length === d.seasons.length ? '＋ Alle Staffeln anfragen' : `＋ Fehlende ${openSeasons.length} Staffeln anfragen`));
+      openSeasons.length === d.seasons.length ? '＋ Alle Staffeln anfragen' :
+        openSeasons.length === 1 ? '＋ Fehlende Staffel anfragen' : `＋ Fehlende ${openSeasons.length} Staffeln anfragen`));
       actions.append(h('button', { class: 'action focusable', oncdselect: () => {
         if (!chosen.size) { toast('Erst unten Staffeln auswählen'); return; }
         send([...chosen]);
       } }, '＋ Auswahl anfragen'));
     }
-    for (const rq of (d.requests || []).filter((x) => x.mine && x.canCancel)) {
-      const label = d.mediaType === 'tv' && rq.seasons?.length ? `✕ Anfrage zurückziehen (Staffel ${rq.seasons.join(', ')})` : '✕ Anfrage zurückziehen';
+    const ownRequests = (d.requests || []).filter((x) => x.mine && x.canCancel);
+    if (d.mediaType === 'tv' && ownRequests.length) {
+      actions.append(h('button', { class: 'action danger focusable', 'data-series-cancel': true,
+        oncdselect: () => {
+          if (busy) return;
+          chooseSeriesCancellations(ownRequests, async (selection) => {
+            if (busy) return;
+            busy = true;
+            const outcomes = [];
+            try {
+              for (const { label, ...target } of selection) {
+                try {
+                  await cd.call(target.seasons ? 'seerr:cancel-season' : 'seerr:cancel-selected', target);
+                  outcomes.push(`${label} · zurückgezogen`);
+                } catch (error) { outcomes.push(`${label} · ${error.message}`); }
+              }
+              await load();
+              if (S.stack.at(-1) === screen && !S.overlay)
+                showOverlay(h('div', { class: 'dialog' }, h('h2', {}, 'Ergebnis'),
+                  ...outcomes.map(line => h('p', {}, line)),
+                  h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Schließen')), { centered: true });
+            } finally { busy = false; }
+          });
+        },
+      }, '✕ Anfragen zurückziehen'));
+    } else if (d.mediaType === 'movie') for (const rq of ownRequests) {
       actions.append(h('button', { class: 'action danger focusable', 'data-req': rq.id, oncdselect: () =>
-        cancelSeerrRequest({ id: rq.id, title: d.title, requestStatus: rq.status }, load) }, label));
+        cancelSeerrRequest({ id: rq.id, title: d.title, requestStatus: rq.status }, load) }, '✕ Anfrage zurückziehen'));
     }
     const state = SEERR_STATUS[d.status];
     scroll.append(h('div', { class: 'detail' },
@@ -1243,6 +1324,8 @@ function seerrDetailScreen(stub) {
         h('h1', {}, d.title),
         h('div', { class: 'meta' },
           h('span', {}, d.mediaType === 'tv' ? 'Serie' : 'Film'),
+          d.mediaType === 'tv' && d.seasons?.length
+            ? h('span', {}, d.seasons.length === 1 ? '1 Staffel insgesamt' : `${d.seasons.length} Staffeln insgesamt`) : null,
           d.year ? h('span', {}, d.year) : null,
           d.runtime ? h('span', {}, `${d.runtime} min`) : null,
           d.rating ? h('span', {}, `★ ${d.rating.toFixed(1)}`) : null,
@@ -1260,8 +1343,6 @@ function seerrDetailScreen(stub) {
           h('span', { class: 'check', 'aria-hidden': 'true' }, '▸'),
           h('div', {}, h('h3', {}, sn.name || `Staffel ${sn.number}`),
             h('p', {}, [`${sn.episodes} Folgen`, SEERR_STATUS[sn.status]].filter(Boolean).join(' · '))));
-        const pendingRequest = (d.requests || []).find((r) =>
-          r.mine && r.status === 1 && r.seasons.length > 1 && r.seasons.includes(sn.number));
         const approvedRequest = (d.requests || []).find((r) =>
           r.mine && r.status === 2 && r.seasons.includes(sn.number));
         const ownSeriesRequest = approvedRequest || (d.requests || []).find((r) =>
@@ -1281,7 +1362,7 @@ function seerrDetailScreen(stub) {
             episodeList.textContent = 'Folgen werden geladen …';
             try {
               const episodes = await cd.call('seerr:season-episodes', {
-                seriesId: d.id, season: sn.number, requestId: ownSeriesRequest?.id,
+                seriesId: d.id, season: sn.number, requestId: ownSeriesRequest?.id, episodeCount: sn.episodes,
               });
               episodeList.textContent = '';
               if (episodes.some((episode) => episode.canSearch)) {
@@ -1306,10 +1387,12 @@ function seerrDetailScreen(stub) {
                 },
               }, `Nur Staffel ${sn.number} suchen`));
               for (const episode of episodes) {
+                const upcoming = upcomingEpisode(episode);
                 const selection = { requestId: ownSeriesRequest?.id, season: sn.number, episodeId: episode.id };
                 const info = h('div', {}, h('p', {},
                   `Folge ${episode.number}${episode.title ? ' · ' + episode.title : ''}`));
-                if (episode.canSearch) info.append(h('button', { class: 'action focusable',
+                if (upcoming) info.append(h('p', { class: 'muted' }, upcoming));
+                if (episode.canSearch && !upcoming) info.append(h('button', { class: 'action focusable',
                   oncdselect: async () => {
                     if (busy) return;
                     busy = true;
@@ -1320,7 +1403,7 @@ function seerrDetailScreen(stub) {
                     } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
                   },
                 }, `Folge ${episode.number} herunterladen`));
-                if (!episode.canSearch && !episode.hasFile && episode.searchBlocker) info.append(h('p', {}, episode.searchBlocker));
+                if (!upcoming && !episode.canSearch && !episode.hasFile && episode.searchBlocker) info.append(h('p', {}, episode.searchBlocker));
                 if (episode.removableFileId) info.append(h('button', { class: 'action danger focusable',
                   oncdselect: () => confirmDialog(`Datei von Folge ${episode.number} löschen?`,
                     'Die Datei wird aus der Mediathek entfernt. Sonarr kann eine überwachte Folge erneut laden.',
@@ -1378,25 +1461,12 @@ function seerrDetailScreen(stub) {
           );
         }
         seasonContent.append(episodeList);
-        if (pendingRequest) seasonContent.append(h('button', {
-          class: 'action danger focusable',
-          oncdselect: () => confirmDialog(`Staffel ${sn.number} entfernen?`,
-            'Die übrigen Staffeln bleiben in der Anfrage.', 'Staffel entfernen', async () => {
-              if (busy) return;
-              busy = true;
-              try {
-                await cd.call('seerr:cancel-season', { requestId: pendingRequest.id, season: sn.number });
-                toast(`Staffel ${sn.number} aus der Anfrage entfernt`);
-                await load();
-              } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
-            }),
-        }, `Staffel ${sn.number} aus Anfrage entfernen`));
       }
       scroll.append(h('h2', { class: 'screen-title', style: { fontSize: '1.5rem', marginTop: '1.6rem' } }, 'Staffeln'), list);
     }
     // Nach einer Anfrage nicht auf "Alle/Fehlende Staffeln anfragen" landen (ein zweites A
     // fragte sonst sofort alle übrigen Staffeln an), sondern auf "Zurückziehen" der neuen Anfrage.
-    const undo = lastRequestId != null && scroll.querySelector(`[data-req="${lastRequestId}"]`);
+    const undo = lastRequestId != null && (scroll.querySelector(`[data-req="${lastRequestId}"]`) || scroll.querySelector('[data-series-cancel]'));
     lastRequestId = null;
     if (undo) setFocus(undo, { scroll: false }); else focusFirst(screen);
   }
@@ -1800,8 +1870,26 @@ function buildSectionBar() {
   }
 }
 
+let mediaFreeReading = false;
+async function updateMediaFree() {
+  const label = $('#media-free');
+  const inCinema = () => S.auth.loggedIn && S.section === 'kino';
+  label.hidden = !inCinema() || !label.textContent;
+  if (!inCinema() || mediaFreeReading) return;
+  mediaFreeReading = true;
+  try {
+    const free = (await cd.call('sys:media-storage'))?.media?.freeBytes;
+    label.textContent = Number.isFinite(free) && free >= 0 ? `${bytes(free)} frei` : '';
+  } catch { label.textContent = ''; }
+  finally {
+    mediaFreeReading = false;
+    label.hidden = !inCinema() || !label.textContent;
+  }
+}
+
 function markSection() {
   for (const [key, pill] of bar.pills) pill.classList.toggle('current', key === S.section);
+  void updateMediaFree();
   if (document.body.dataset.section === S.section) return;
   document.body.dataset.section = S.section;
   // Licht und Bereichsmotiv weich einblenden
@@ -2716,7 +2804,7 @@ cd.on('auth', (a) => {
   const was = S.auth.loggedIn;
   S.auth = a;
   if (a.loggedIn && !was) { toast(`Angemeldet als ${a.userName}`); closeOverlay(); resetAllSections(); S.section = 'kino'; markSection(); bar.el.hidden = false; replaceRoot(homeScreen()); }
-  if (!a.loggedIn && was) { closeOverlay(); resetAllSections(); bar.el.hidden = true; replaceRoot(loginScreen()); }
+  if (!a.loggedIn && was) { closeOverlay(); resetAllSections(); bar.el.hidden = true; void updateMediaFree(); replaceRoot(loginScreen()); }
 });
 cd.on('player-state', (p) => { S.player = p; drawMini(p); if (p.active) stopSaver(); else resetIdle(); });
 cd.on('volume', (v) => { document.querySelectorAll('.setting.volume').forEach((n) => n.showVolume?.(v)); });
@@ -2738,6 +2826,7 @@ setInterval(() => { cd.call('app:heartbeat', { rafAge: Math.round(performance.no
 
 (async function init() {
   tickClock(); setInterval(tickClock, 10000);
+  setInterval(updateMediaFree, 60000);
   const st = await cd.call('app:state');
   S.auth = st.auth;
   S.settings = st.settings;

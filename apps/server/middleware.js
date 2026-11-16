@@ -247,7 +247,7 @@ export function inventoryMiddleware(options = {}) {
           result = await operations.storageSummary(current.plan);
         } else if (body.action === "episodes") result = await requestDiagnostics.episodes(requestId, season, owner);
         else if (body.action === "request-cancel")
-          result = await requestDiagnostics.cancelOwnRequest({ requestId, confirmation: body.confirmation }, owner);
+          result = await requestDiagnostics.cancelOwnRequest({ requestId, confirmation: body.confirmation, expected: body.expected }, owner);
         else if (body.action === "search" && episodeId !== undefined)
           result = await requestDiagnostics.search({ requestId, season, episodeId, capGiB: body.capGiB }, owner);
         else if (body.action === "search-season" && season !== undefined)

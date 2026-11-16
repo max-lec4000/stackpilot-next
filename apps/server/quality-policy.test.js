@@ -5,6 +5,7 @@ import {
   compactValid,
   requestQualityOptions,
 } from "./quality-policy.js";
+import { QualitySettings } from "./quality-settings.js";
 const plan = { id: "p", rootId: "r" },
   profile = {
     id: 2,
@@ -15,6 +16,28 @@ const plan = { id: "p", rootId: "r" },
       { quality: { name: "Remux-1080p" }, allowed: false },
     ],
   };
+
+test("film editor reads the active rate and excludes saved rules for a different profile", async () => {
+  const target = {
+    kind: "movie", service: "Radarr", mediaId: 7, server: { isDefault: true },
+    item: { id: 3, qualityProfileId: 2, movieFile: { size: 6 * 1024 ** 3 } },
+  };
+  const saved = { profileId: 2, size: { profileId: 2, capGiB: 5.5, rate: 2 } };
+  const values = new Map([["quality-policy:r:movie:7", saved]]);
+  const s = { arr: async () => [profile, { ...profile, id: 4 }, { ...profile, id: 5 }] };
+  const hub = { context: async () => ({ s, plan }), engine: { vault: values } };
+  const quality = new QualitySettings(hub, { target: async () => target });
+  assert.deepEqual((await quality.read(1)).sizePolicy, saved.size);
+  target.item.qualityProfileId = 4;
+  assert.equal((await quality.read(1)).sizePolicy, null);
+  values.set("film-size:r:7", { movieId: 3, base: 2, rule: { id: 5, cap: 4 } });
+  assert.equal((await quality.read(1)).activeAutomaticFilmLimit, null);
+  target.item.qualityProfileId = 5;
+  const active = await quality.read(1);
+  assert.deepEqual(active.sizePolicy, saved.size);
+  assert.equal(active.activeAutomaticFilmLimit, 4);
+  assert.equal(active.fileSize, 6 * 1024 ** 3);
+});
 function fixture() {
   const values = new Map([
       [

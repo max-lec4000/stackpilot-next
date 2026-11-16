@@ -449,6 +449,7 @@ const handlers = {
   'seerr:request': (req) => seerr.createRequest(req),
   'seerr:mine': () => seerr.myRequests(),
   'seerr:cancel': (id) => seerr.cancelRequest(id),
+  'seerr:cancel-selected': ({ requestId, expected }) => seerr.cancelRequest(requestId, expected),
   'seerr:season-episodes': (selection) => seerr.seasonEpisodes(selection),
   'seerr:episode-search': ({ requestId, season, episodeId, capGiB }) =>
     seerr.managedMedia({ action: 'search', requestId, season, episodeId, capGiB }),
@@ -484,6 +485,7 @@ const handlers = {
     ]);
     return { ...status, storage };
   },
+  'sys:media-storage': () => seerr.managedMedia({ action: 'storage' }),
   'sys:services': () => system.serviceStatus(),
   'sys:power': (action) => system.power(action),
   'sys:setting': ({ section, key, value }) => {

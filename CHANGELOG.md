@@ -2,6 +2,17 @@
 
 ## 0.5.0 – November 2026
 
+### Serienübersicht und Filmgrößen
+
+- Couchdeck 0.2.6 zeigt in den Seriendetails die Gesamtzahl der
+  Staffeln sowie angekündigte Folgen mit verfügbarem Datum. Im
+  Kino-Bereich wird der freie Medienspeicher eingeblendet.
+- Ein Auswahl-Dialog bündelt das Zurückziehen eigener Serienanfragen
+  und das Entfernen einzelner Staffeln aus einer offenen Anfrage.
+- StackPilot zeigt die aktive Größenrate und Grenze eines Films.
+  Bei bekannter Dateigröße vergleicht der Editor die vorhandene
+  Datei mit der aktiven und der geplanten Grenze.
+
 ### Couchdeck 0.2.5
 
 - Bei einer YouTube-Bot-Bestätigung zeigt Couchdeck den offiziellen

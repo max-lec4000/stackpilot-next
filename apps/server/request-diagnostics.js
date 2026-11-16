@@ -344,6 +344,10 @@ export class RequestDiagnostics {
       const route = `/request/${id}`;
       const request = await s.additional.seerr(route);
       await this.requireOwner(s, { request }, owner);
+      if (body.expected && (request.status !== body.expected.status ||
+          JSON.stringify((request.seasons || []).map(entry => entry.seasonNumber).sort((a, b) => a - b)) !==
+            JSON.stringify(body.expected.seasons)))
+        throw Error("Die Anfrage wurde inzwischen geändert. Erneut auswählen.");
       await s.additional.seerr(route, { method: "DELETE" });
       return { ok: true };
     });
@@ -431,6 +435,7 @@ export class RequestDiagnostics {
       id: episode.id,
       number: episode.episodeNumber,
       title: text(episode.title),
+      airDate: Number.isFinite(Date.parse(episode.airDateUtc)) ? new Date(episode.airDateUtc).toISOString() : null,
       hasFile: episode.hasFile === true,
       canSearchSeason: requested && target.request.status === 2 && target.item.monitored && this.seasonMonitored(target, seasonNumber),
       removableFileId: requested && (!owner || target.request.status === 2) && episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,

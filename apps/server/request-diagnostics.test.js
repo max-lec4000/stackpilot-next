@@ -336,6 +336,23 @@ test("Neue Suche schützt den vorhandenen Transfer und verlangt eine vollständi
 });
 
 
+test("Couchdeck zieht eine eigene Anfrage nur mit unveränderter Auswahl zurück", async () => {
+  const f = fixture(), writes = [];
+  f.request.requestedBy = { id: 9 };
+  f.s.additional.seerr = async (route, options) => {
+    if (route === "/user/9") return { jellyfinUserId: "a-b-c" };
+    if (options?.method === "DELETE") writes.push(route);
+    return f.request;
+  };
+  const body = { requestId: 7, confirmation: "OK", expected: { status: 2, seasons: [1, 3] } };
+  await assert.rejects(f.diagnosis.cancelOwnRequest(body, "someone-else"), /Nur eigene/);
+  f.request.seasons.push({ seasonNumber: 2 });
+  await assert.rejects(f.diagnosis.cancelOwnRequest(body, "abc"), /inzwischen geändert/);
+  assert.deepEqual(writes, []);
+  await f.diagnosis.cancelOwnRequest({ ...body, expected: { status: 2, seasons: [1, 2, 3] } }, "abc");
+  assert.deepEqual(writes, ["/request/7"]);
+});
+
 test("Nur bestätigte Einzelfolge aus einer anderen Staffel einer abgeschlossenen Anfrage laden", async () => {
   const f = fixture();
   f.request.media.mediaType = "tv";
@@ -345,7 +362,9 @@ test("Nur bestätigte Einzelfolge aus einer anderen Staffel einer abgeschlossene
     title: "Testfolge", airDateUtc: "2020-01-01T00:00:00Z", monitored: false, hasFile: false };
   f.setEpisodes([episode, { ...episode, id: 15, seriesId: 99 }]);
   assert.deepEqual(await f.diagnosis.episodeSeasons(7), { seasons: [2], limits: null });
-  assert.equal((await f.diagnosis.episodes(7, 2)).episodes[0].canSearch, true);
+  const firstEpisode = (await f.diagnosis.episodes(7, 2)).episodes[0];
+  assert.equal(firstEpisode.canSearch, true);
+  assert.equal(firstEpisode.airDate, "2020-01-01T00:00:00.000Z");
   const arr = f.s.arr, posts = [];
   const single = { guid: "single", indexerId: 1, protocol: "torrent", fullSeason: false, approved: true,
     downloadAllowed: true, mappedSeriesId: 11, mappedEpisodeInfo: [{ id: 14 }] };

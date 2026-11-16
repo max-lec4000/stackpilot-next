@@ -251,7 +251,7 @@ async function mockAPI(page, f) {
         json = {};
         break;
       case "/api/media/archive": json = { results: f.archived, page: 1, pages: 1, total: f.archived.length }; break;
-      case "/api/media/quality": json = method === "GET" ? { runtime: 120, sizePolicy: null, service: "Radarr", kind: "movie", currentProfileId: 1, defaultProfileId: 1, hasFile: false, canSetDefault: true, canCreateCompact: true, profiles: [{ id: 1, name: "HD-1080p", allowed: ["Bluray-1080p", "Remux-1080p"] }, { id: 2, name: "1080p ohne Remux", allowed: ["Bluray-1080p"] }] } : { message: "Qualität gespeichert.", currentProfileId: 2 }; break;
+      case "/api/media/quality": json = method === "GET" ? { runtime: 120, sizePolicy: null, service: "Radarr", kind: "movie", currentProfileId: 1, defaultProfileId: 1, hasFile: false, canSetDefault: true, canCreateCompact: true, profiles: [{ id: 1, name: "HD-1080p", allowed: ["Bluray-1080p", "Remux-1080p"] }, { id: 2, name: "1080p ohne Remux", allowed: ["Bluray-1080p"] }], ...f.quality } : { message: "Qualität gespeichert.", currentProfileId: 2 }; break;
       case "/api/media/movie-removal/preview": json = { id: "removal-fixture", chosen: [], started: false, title: "Verfügbarer Medienwunsch", size: 6 * GiB, hasFile: true, message: "Die importierte Datei wird entfernt.", downloadWarning: null, downloads: [] }; break;
       case "/api/media/movie-removal/execute":
         assert.equal(body.confirmation, "OK");
@@ -513,9 +513,19 @@ async function run() {
     await page.keyboard.press("Escape");
     const waitingRequest = page.locator(".request-compact").filter({ hasText: "Wartender Medienwunsch" });
     await waitingRequest.getByRole("button", { name: "Details zu Wartender Medienwunsch", exact: true }).click();
+    f.quality = { runtime: 155, sizePolicy: { rate: 2, capGiB: 5.5 }, fileSize: 6 * GiB, hasFile: true };
     await page.getByRole("button", { name: "Qualität ändern", exact: true }).click();
     await page.getByLabel("Neues Qualitätsprofil", { exact: true }).waitFor();
+    await page.getByText(/Aktive Größenregel: 2 GiB\/h · höchstens 5,5 GiB/).waitFor();
+    await page.getByText(/6 GiB\) überschreitet die Grenze/).waitFor();
+    await page.getByLabel("Größenregel für diesen Film", { exact: true }).selectOption("3");
+    await page.getByText(/6 GiB\) liegt innerhalb der Grenze von 8 GiB/).waitFor();
     await page.getByRole("button", { name: "Qualität schließen", exact: true }).click();
+    f.quality.sizePolicy = { capGiB: 7 };
+    await page.getByRole("button", { name: "Qualität ändern", exact: true }).click();
+    await page.getByText(/Aktive Größenregel: höchstens 7 GiB/).waitFor();
+    await page.getByRole("button", { name: "Qualität schließen", exact: true }).click();
+    delete f.quality;
     await page.getByRole("button", { name: "Anfrage abbrechen …", exact: true }).click();
     before = f.mutations.length;
     await page.getByRole("button", { name: "OK – Anfrage abbrechen", exact: true }).waitFor();

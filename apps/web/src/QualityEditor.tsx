@@ -5,8 +5,9 @@ import { action } from "./RetirementPanel";
 type Quality = {
   sizeDefaultRate?: number;
   automaticFilmLimit?: number | null;
+  activeAutomaticFilmLimit?: number | null;
   runtime?: number | null;
-  sizePolicy?: { capGiB: number } | null;
+  sizePolicy?: { capGiB: number; rate?: number } | null;
   service: string;
   kind: string;
   currentProfileId: number;
@@ -20,6 +21,15 @@ type Quality = {
   canCreateCompact: boolean;
   profiles: { id: number; name: string; allowed: string[] }[];
 };
+const gib = (value: number) => value.toLocaleString("de-AT", { maximumFractionDigits: 1 }) + " GiB";
+
+function FileSizeCheck({ size, cap }: { size?: number | null; cap: number }) {
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0) return null;
+  const exceeds = size > cap * 1024 ** 3;
+  return <span className={exceeds ? "warning" : "muted"}>
+    {" "}Die vorhandene Datei ({formatBytes(size)}) {exceeds ? "überschreitet die Grenze" : "liegt innerhalb der Grenze"} von {gib(cap)}.
+  </span>;
+}
 export function QualityEditor({
   requestId,
   onChange,
@@ -57,6 +67,9 @@ export function QualityEditor({
     }
   }
   const selected = data?.profiles.find((v) => String(v.id) === profile);
+  const activeCaps = [data?.sizePolicy?.capGiB, data?.activeAutomaticFilmLimit]
+    .filter((value): value is number => typeof value === "number" && value > 0);
+  const plannedCap = sizeRate > 0 && data?.runtime ? Math.ceil((data.runtime * sizeRate / 60) * 2) / 2 : 0;
   return (
     <div className="quality-editor">
       <button
@@ -120,6 +133,17 @@ export function QualityEditor({
                     ?.name || "Unbekannt"}
                 </b>
               </p>
+              {data.kind === "movie" && activeCaps.length > 0 && (
+                <p>
+                  Aktive Größenregel:{" "}
+                  {data.sizePolicy?.rate ? <>{data.sizePolicy.rate} GiB/h · </> : null}
+                  {data.sizePolicy && <>höchstens {gib(data.sizePolicy.capGiB)}</>}
+                  {data.activeAutomaticFilmLimit ? <>
+                    {data.sizePolicy ? " · " : ""}automatische Obergrenze {gib(data.activeAutomaticFilmLimit)}
+                  </> : null}.
+                  <FileSizeCheck size={data.fileSize} cap={Math.min(...activeCaps)} />
+                </p>
+              )}
               <p>
                 Seerr-Standard für neue Anfragen:{" "}
                 <b>
@@ -135,7 +159,7 @@ export function QualityEditor({
                   . Für die aktuelle Suche gilt das Profil in {data.service}.
                 </p>
               )}
-              {data.savedProfileId != null &&
+              {!data.activeAutomaticFilmLimit && data.savedProfileId != null &&
                 data.savedProfileId !== data.currentProfileId && (
                   <p className="warning">
                     Das aktuelle Dienstprofil weicht von deiner zuletzt
@@ -207,14 +231,11 @@ export function QualityEditor({
                       </option>
                     ))}
                   </select>
-                  {sizeRate > 0 && data.runtime ? (
+                  {plannedCap > 0 ? (
                     <span>
                       Bei {data.runtime} Minuten: höchstens{" "}
-                      {Math.ceil(((data.runtime * sizeRate) / 60) * 2) / 2} GiB.
-                      Eigene native Radarr-Regel, keine globale Größenänderung.
+                      {gib(plannedCap)}.
                     </span>
-                  ) : data.sizePolicy ? (
-                    <span>Aktuelle Grenze: {data.sizePolicy.capGiB} GiB.</span>
                   ) : null}
                   {!data.runtime && (
                     <span>
@@ -254,6 +275,7 @@ export function QualityEditor({
                   {sizeRate > 0 ? `1080p ohne Remux · ${sizeRate} GiB pro Stunde` :
                     profile === "1080p-compact" ? "1080p ohne Remux" : selected?.name}
                 </p>
+                {plannedCap > 0 && !!data.fileSize && <p><FileSizeCheck size={data.fileSize} cap={plannedCap} /></p>}
                 <p>
                   {future
                     ? "Aktuelles Medium und zukünftige Anfragen."

@@ -56,26 +56,26 @@ export class QualitySettings {
     const profiles = await s.arr(target.service, "/qualityprofile");
     if (!Array.isArray(profiles))
       throw Error("Qualitätsprofile nicht erreichbar.");
+    const saved = this.hub.engine.vault.get(qualityPolicyKey(plan, target.kind, target.mediaId));
+    const film = target.kind === "movie" ? this.hub.engine.vault.get(filmLimitKey(plan, target.mediaId)) : null;
+    const automatic = !!film?.rule && !film.pending && film.movieId === target.item.id && film.rule.id === target.item.qualityProfileId;
+    const profile = profiles.find(p => p.id === target.item.qualityProfileId);
+    const sizePolicy = saved?.profileId === (automatic ? film.base : target.item.qualityProfileId)
+      ? saved?.size : profile && this.hub.sizeLimits?.owned?.(plan, profile);
     return {
       service: target.service,
       kind: target.kind,
       currentProfileId: target.item.qualityProfileId,
       hasFile: !!target.item.hasFile,
       runtime: Number(target.item.runtime) || null,
-      automaticFilmLimit: target.kind === "movie"
-        ? this.hub.engine.vault.get(filmLimitKey(plan, target.mediaId))?.rule?.cap ?? 0 : null,
-      sizePolicy:
-        this.hub.engine.vault.get(
-          qualityPolicyKey(plan, target.kind, target.mediaId),
-        )?.size || null,
+      automaticFilmLimit: film?.rule?.cap ?? 0,
+      activeAutomaticFilmLimit: automatic ? film.rule.cap : null,
+      sizePolicy: sizePolicy || null,
       sizeDefaultRate: target.kind === "movie" ? this.hub.sizeLimits?.config(plan).rate ?? 0 : 0,
       canSetDefault: !!target.server.isDefault,
       defaultProfileId: target.server.activeProfileId,
       requestProfileId: target.request?.profileId ?? null,
-      savedProfileId:
-        this.hub.engine.vault.get(
-          qualityPolicyKey(plan, target.kind, target.mediaId),
-        )?.profileId ?? null,
+      savedProfileId: saved?.profileId ?? null,
       fileQuality: target.item.movieFile?.quality?.quality?.name || null,
       fileSize: Number.isFinite(target.item.movieFile?.size)
         ? target.item.movieFile.size
@@ -162,6 +162,10 @@ export class QualitySettings {
         if (body.alsoFuture === true && sizeRate === 0)
           throw Error("Wähle eine Größenregel pro Stunde, um sie als Standard zu speichern.");
         await this.hub.sizeLimits.verify(s, sizePolicy);
+        const previous = this.hub.engine.vault.get(qualityPolicyKey(plan, kind, target.mediaId))?.size;
+        if (!sizeRate && previous?.profileId === sizePolicy.profileId &&
+            previous.capGiB === sizePolicy.capGiB && previous.rate)
+          sizePolicy = { ...sizePolicy, rate: previous.rate };
       }
       const backupId = randomUUID();
       this.hub.engine.vault.set(`quality-change:${backupId}`, {

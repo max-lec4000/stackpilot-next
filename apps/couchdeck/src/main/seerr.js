@@ -11,6 +11,12 @@ const TMDB_IMG = 'https://image.tmdb.org/t/p/';
 // Seerr-Berechtigungen (Bitmaske)
 const REQ_PENDING = 1;
 
+function requestMatches(request, expected) {
+  return request.status === expected.status &&
+    JSON.stringify((request.seasons || []).map(entry => entry.seasonNumber).sort((a, b) => a - b)) ===
+      JSON.stringify(expected.seasons);
+}
+
 function readKeyFile() {
   try { return JSON.parse(fs.readFileSync(KEY_FILE, 'utf8')); } catch { return null; }
 }
@@ -222,12 +228,13 @@ class Seerr {
     return !!req && req.requestedBy?.id === me.id; // nur eigene Anfragen
   }
 
-  async cancelRequest(requestId) {
+  async cancelRequest(requestId, expected) {
     const me = await this.currentUser();
     const req = await this.request('GET', `/request/${Number(requestId)}`);
     if (req?.requestedBy?.id !== me.id) throw new Error('Nur eigene Anfragen können zurückgezogen werden');
+    if (expected && !requestMatches(req, expected)) throw new Error('Die Anfrage wurde inzwischen geändert. Erneut auswählen.');
     if (this.settings.personal && req.status !== REQ_PENDING) {
-      const result = await this.managedMedia({ action: 'request-cancel', requestId, confirmation: 'OK' });
+      const result = await this.managedMedia({ action: 'request-cancel', requestId, confirmation: 'OK', expected });
       if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
     } else await this.request('DELETE', `/request/${Number(requestId)}`);
     return { ok: true, wasApproved: req.status !== REQ_PENDING };
@@ -261,23 +268,42 @@ class Seerr {
     return result;
   }
 
-  async seasonEpisodes({ seriesId, season, requestId }) {
+  async seasonEpisodes({ seriesId, season, requestId, episodeCount }) {
     if (!Number.isSafeInteger(seriesId) || seriesId < 1 ||
         !Number.isSafeInteger(season) || season < 1) throw new Error('Ungültige Serie oder Staffel');
+    let confirmed = null;
     if (Number.isSafeInteger(requestId) && requestId > 0) {
       const managed = await this.managedMedia({ action: 'episodes', requestId, season });
-      if (managed) return managed.episodes;
+      if (managed) {
+        confirmed = managed.episodes;
+        if (!Number.isSafeInteger(episodeCount) || confirmed.length >= episodeCount) return confirmed;
+      }
     }
-    const data = await this.request('GET', `/tv/${seriesId}/season/${season}`, {
-      query: { language: 'de' },
-    });
-    if (!Array.isArray(data?.episodes)) throw new Error('Seerr meldet keine Folgenliste');
-    return data.episodes.map((episode) => ({ number: episode.episodeNumber, title: episode.name || '', searchBlocker: 'Für den Einzelfolgen-Download braucht diese Serie eine genehmigte eigene Anfrage im verwalteten Stack.' }));
+    try {
+      const data = await this.request('GET', `/tv/${seriesId}/season/${season}`, { query: { language: 'de' } });
+      if (!Array.isArray(data?.episodes)) throw new Error('Seerr meldet keine Folgenliste');
+      const metadata = data.episodes.map(episode => ({
+        number: episode.episodeNumber, title: episode.name || '', airDate: episode.airDate || episode.air_date || null,
+        searchBlocker: confirmed ? 'Sonarr meldet diese Folge noch nicht.' :
+          'Für den Einzelfolgen-Download braucht diese Serie eine genehmigte eigene Anfrage im verwalteten Stack.',
+      }));
+      if (!confirmed) return metadata;
+      const byNumber = new Map(metadata.filter(episode => Number.isSafeInteger(episode.number) && episode.number > 0)
+        .map(episode => [episode.number, episode]));
+      for (const episode of confirmed)
+        byNumber.set(episode.number, { ...episode, airDate: episode.airDate || byNumber.get(episode.number)?.airDate || null });
+      return [...byNumber.values()].sort((a, b) => a.number - b.number);
+    } catch (error) {
+      if (confirmed) return confirmed;
+      throw error;
+    }
   }
 
-  async cancelSeason({ requestId, season }) {
+  async cancelSeason({ requestId, seasons, expected }) {
     if (!Number.isSafeInteger(requestId) || requestId < 1 ||
-        !Number.isSafeInteger(season) || season < 1) throw new Error('Ungültige Staffel oder Anfrage');
+        !Array.isArray(seasons) || !seasons.length || seasons.length > 100 ||
+        seasons.some(number => !Number.isSafeInteger(number) || number < 1))
+      throw new Error('Ungültige Staffelauswahl oder Anfrage');
     const me = await this.currentUser();
     const norm = (value) => String(value || '').toLowerCase().replace(/-/g, '');
     if (!this.jf.userId || norm(me.jellyfinUserId) !== norm(this.jf.userId))
@@ -286,18 +312,19 @@ class Seerr {
     const request = await this.request('GET', route);
     if (request?.requestedBy?.id !== me.id || request.media?.mediaType !== 'tv' ||
         request.status !== REQ_PENDING) throw new Error('Nur eigene, noch offene Serienanfragen sind bearbeitbar');
+    if (!expected || !requestMatches(request, expected)) throw new Error('Die Anfrage wurde inzwischen geändert. Erneut auswählen.');
     const selected = request.seasons?.map((entry) => entry.seasonNumber);
-    if (!selected || selected.length < 2 || !selected.includes(season))
-      throw new Error('Die Staffel ist nicht in einer offenen Anfrage mit mehreren Staffeln enthalten');
-    const seasons = selected.filter((number) => number !== season);
-    const body = { mediaType: 'tv', seasons };
+    const remaining = selected?.filter((number) => !seasons.includes(number));
+    if (!remaining?.length || !seasons.every(number => selected.includes(number)))
+      throw new Error('Die Auswahl muss zu einer offenen Anfrage gehören und mindestens eine Staffel übrig lassen.');
+    const body = { mediaType: 'tv', seasons: remaining };
     for (const key of ['serverId', 'profileId', 'rootFolder', 'languageProfileId', 'tags']) {
       if (request[key] != null) body[key] = request[key];
     }
     await this.request('PUT', route, { body });
     const saved = await this.request('GET', route);
-    if (saved?.seasons?.length !== seasons.length ||
-        !seasons.every((number) => saved.seasons.some((entry) => entry.seasonNumber === number)))
+    if (saved?.seasons?.length !== remaining.length ||
+        !remaining.every((number) => saved.seasons.some((entry) => entry.seasonNumber === number)))
       throw new Error('Seerr hat die verbleibenden Staffeln nicht bestätigt');
     return { ok: true };
   }

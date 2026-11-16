@@ -10,6 +10,7 @@ type Maintenance = {
   phase: string | null;
   update: boolean;
   rollback: boolean;
+  note?: string;
 };
 const version = (ref: string) => ref.split("@sha256:").at(-1)?.slice(0, 12);
 export function ContainerMaintenance() {
@@ -34,7 +35,8 @@ export function ContainerMaintenance() {
       <span>{service.update ? `${version(service.from)} → ${version(service.to)}` : version(service.from)}</span>
       {service.update && <button disabled={busy} onClick={() => { select({ service, rollback: false }); setPassword(""); }}>Update vorbereiten</button>}
       {service.rollback && <button disabled={busy} onClick={() => { select({ service, rollback: true }); setPassword(""); }}>Vorherige Version wiederherstellen</button>}
-      {!service.update && !service.rollback && <small>Keine abweichende Katalogversion</small>}
+      {!service.update && !service.rollback && service.from === service.to && <small>Keine abweichende Katalogversion</small>}
+      {service.note && <small>{service.note}</small>}
     </div>)}
     {selected && <form onSubmit={async (event) => {
       event.preventDefault();

@@ -10,6 +10,7 @@ import { musicInventory, withMusicTrack } from "./music-library.js";
 import { inspectMusicTags } from "./music-tags.js";
 import { ServiceUpdates } from "./service-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
+import { JellyfinMaintenance } from "./identity/jellyfin-maintenance.js";
 import { createVaultBackup, stageVaultRestore, vaultRestoreBodyLimit } from "./vault-backup.js";
 import { setReportConsent } from "./dev-report-consent.js";
 import { OidcBackchannel } from "./identity/oidc-backchannel.js";
@@ -83,7 +84,6 @@ export function inventoryMiddleware(options = {}) {
   installer().couchdeck = couchdeck;
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
-  const containerMaintenance = new ContainerMaintenance(hub);
   const notifications = new Notifications(state, operations, hub);
   if (options.background !== false) notifications.start();
   const remoteAccess = new RemoteAccess(hub);
@@ -92,6 +92,9 @@ export function inventoryMiddleware(options = {}) {
   const ssoConnection = new SsoConnection(hub, identity);
   const jellyfinProtection = new JellyfinProtection(hub, identity);
   const connectionCheck = new ConnectionCheck(jellyfinProtection);
+  const containerMaintenance = new ContainerMaintenance(hub, {
+    jellyfin: new JellyfinMaintenance(jellyfinProtection, ssoConnection, connectionCheck),
+  });
   const oidcBackchannel = new OidcBackchannel(
     hub,
     identity,

@@ -56,13 +56,13 @@ export class MediaHub {
     this.makeServices =
       options.services || ((p, r) => new Services(p, engine.vault, r));
   }
-  async context(names = []) {
+  async context(names = [], expectedPlan) {
     const current = this.engine.current();
     if (!current || current.job.status !== "completed")
       throw Object.assign(Error("Zuerst die Einrichtung abschließen."), {
         userFacing: true,
       });
-    const plan = current.plan;
+    const plan = expectedPlan?.id === current.plan.id ? expectedPlan : current.plan;
     for (const name of names)
       if (!plan.spec.selected.includes(name))
         throw Object.assign(Error(`${name} ist noch nicht eingerichtet.`), {
@@ -80,14 +80,14 @@ export class MediaHub {
       };
     return { plan, s: this.cachedServices.value };
   }
-  async mutate(names, fn) {
+  async mutate(names, fn, context = () => this.context(names)) {
     const owner = "media:" + randomUUID();
     if (!this.engine.store.claim(owner))
       throw Error("Ein anderer Auftrag läuft. Bitte danach erneut versuchen.");
     const timer = setInterval(() => this.engine.store.claim(owner), 10000);
     timer.unref?.();
     try {
-      const ctx = await this.context(names);
+      const ctx = await context();
       const result = await fn({ ...ctx, leaseOwner: owner });
       this.invalidateRequests();
       return result;

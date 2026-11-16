@@ -174,6 +174,15 @@ Installationsplan gebunden und benötigt das bisherige lokale Docker-Image.
 Bei einem abgebrochenen Wartungsvorgang lässt sich die Rückkehr hier erneut
 anstoßen.
 
+Bei geschütztem Jellyfin müssen beide Images für die Authentik-Anmeldung
+abgenommen sein. StackPilot verlangt für den Wechsel die bestätigten privaten
+HTTPS-Routen. Bei aktivem Funnel oder Streamyfin-Gateway bleibt die Wartung
+gesperrt. Nach dem Start prüft StackPilot das Schutz-Gateway, die Sperre der
+alternativen Anmeldewege und den SSO-Einstieg zu Authentik. Der Wechsel sichert
+Jellyfins Konfiguration einschließlich seiner Datenbank. Medien bleiben
+schreibgeschützt eingebunden. Eine neue Katalogversion erscheint erst zur
+Auswahl, wenn deren Image mit der geschützten Anmeldung abgenommen wurde.
+
 ## StackPilot-Tresor verschlüsselt herunterladen
 
 Öffne StackPilot direkt am Server oder über SSH. Beispielsweise leitet

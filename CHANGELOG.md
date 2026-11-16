@@ -2,6 +2,15 @@
 
 ## 0.5.0 – November 2026
 
+### Geschütztes Jellyfin und Couchdeck 0.2.4
+
+- StackPilot bereitet einen Rückweg für geschütztes Jellyfin vor und
+  prüft danach die Authentik-Weiterleitung. Der Test mit zwei offiziellen
+  Image-Referenzen von Jellyfin 12.4.0 bestand. Eine neue Katalogversion
+  erfordert eine eigene Abnahme der geschützten Anmeldung.
+- Couchdeck unterdrückt nach einer YouTube-Bot-Bestätigung zusätzliche
+  Ausweichabrufe und pausiert das automatische Vorladen.
+
 ### Tresor-Wiederherstellung
 
 - Nach der Archivprüfung zeigt StackPilot den Serverbefehl für die

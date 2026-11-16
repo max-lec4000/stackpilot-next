@@ -1,6 +1,6 @@
 'use strict';
 // YouTube über yt-dlp: Suche (Videos, Kanäle, Playlists), Kanal-/Playlist-Inhalte,
-// Favoriten, Verlauf und ein "Neu von deinen Kanälen"-Feed. Kein Google-Konto nötig.
+// Favoriten, Verlauf und ein "Neu von deinen Kanälen"-Feed.
 // Abgespielt wird über mpv (ytdl-Hook) – dabei gibt es keine Werbespots.
 const { execFile } = require('child_process');
 const fs = require('fs');
@@ -12,11 +12,19 @@ const BIN = process.env.COUCHDECK_YTDLP || '/opt/couchdeck/bin/yt-dlp';
 const NODE_WRAPPER = process.env.COUCHDECK_NODE || '/opt/couchdeck/bin/node';
 
 const SEARCH_FILTER = { channel: 'EgIQAg%3D%3D', playlist: 'EgIQAw%3D%3D' };
+const botPause = 2 * 60 * 1000;
+const prefetchPause = 10 * 60 * 1000;
+const botCode = 'YOUTUBE_BOT_CHECK';
+
+function botCheckError() {
+  return Object.assign(new Error('YouTube verlangt für diesen Abruf eine Anmeldung zur Bot-Prüfung.'), { code: botCode });
+}
 
 function run(args, timeout = 45000) {
   return new Promise((resolve, reject) => {
     execFile(BIN, args, { timeout, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error((stderr || err.message).split('\n').filter(Boolean).slice(-1)[0] || 'yt-dlp-Fehler'));
+      if (err && /not a bot|confirm you.*bot/i.test(stderr || err.message)) reject(botCheckError());
+      else if (err) reject(new Error((stderr || err.message).split('\n').filter(Boolean).slice(-1)[0] || 'yt-dlp-Fehler'));
       else resolve(stdout);
     });
   });
@@ -60,6 +68,7 @@ class YouTube {
   constructor() {
     this.jsArgs = null;
     this.feedCache = null;
+    this.lastBotCheck = -Infinity;
   }
 
   get available() {
@@ -131,6 +140,7 @@ class YouTube {
     const hit = this.resolved.get(key);
     if (hit && Date.now() - hit.at < 30 * 60000) return Promise.resolve(hit);
     if (this.inflight.has(key)) return this.inflight.get(key);
+    if (Date.now() - this.lastBotCheck < botPause) return Promise.reject(botCheckError());
     const url = `https://www.youtube.com/watch?v=${entry.id}`;
     const attempt = async (extra) => {
       const out = await run([...(await this.baseArgs()), ...extra, '-f', this.formatString(), '-J', url], 40000);
@@ -145,7 +155,14 @@ class YouTube {
       return { at: Date.now(), video: video.url, audio: audio?.url || null, duration: d.duration || null, height: video.height || null };
     };
     const p = attempt(['--extractor-args', 'youtube:player_client=visionos'])
-      .catch(() => attempt([]))
+      .catch((error) => {
+        if (error.code === botCode || /sign in/i.test(error.message)) throw error;
+        return attempt([]);
+      })
+      .catch((error) => {
+        if (error.code === botCode) this.lastBotCheck = Date.now();
+        throw error;
+      })
       .then((r) => { this.resolved.set(key, r); return r; })
       .finally(() => this.inflight.delete(key));
     this.inflight.set(key, p);
@@ -163,6 +180,7 @@ class YouTube {
   /** Im Hintergrund vorbereiten (z. B. sobald eine Kachel markiert ist). */
   prefetch(entry) {
     if (!entry || entry.kind !== 'video' || entry.live) return;
+    if (Date.now() - this.lastBotCheck < prefetchPause) return;
     // höchstens 2 Vorlade-Vorgänge gleichzeitig – sonst bremsen viele yt-dlp-Prozesse den Server
     if ((this.inflight?.size || 0) >= 2 && !this.inflight.has(`${entry.id}@${this.settings.maxHeight}`)) return;
     this.resolve(entry).catch(() => {});

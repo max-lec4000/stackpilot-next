@@ -8,7 +8,7 @@ function qualityItems(items) {
   return items.map(({ id, allowed, quality, items: children }) => [id, allowed, quality?.id, qualityItems(children || [])]);
 }
 
-function profileSignature(profile) {
+export function profileSignature(profile) {
   const { upgradeAllowed, cutoff, minFormatScore, cutoffFormatScore, minUpgradeFormatScore, items, formatItems } = profile;
   return createHash("sha256").update(JSON.stringify([
     upgradeAllowed, cutoff, minFormatScore, cutoffFormatScore, minUpgradeFormatScore, qualityItems(items),

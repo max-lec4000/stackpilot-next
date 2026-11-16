@@ -692,7 +692,7 @@ test("Neue Anfrage übernimmt die bestätigte profilspezifische Auswahl statt ei
   ];
   const original = f.services.additional.seerr;
   f.services.additional.seerr = async (route, options) => {
-    if (route === "/auth/me") return { permissions: 1 };
+    if (route === "/auth/me") return { permissions: 2 };
     if (route === "/settings/radarr")
       return [
         {
@@ -731,7 +731,7 @@ test("Bestätigtes Filmprofil geht dem Größenstandard vor; explizite neue Grö
     arr = f.services.arr;
   f.services.additional.seerr = async (route, options) =>
     route === "/auth/me"
-      ? { permissions: 1 }
+      ? { permissions: 2 }
       : route === "/settings/radarr"
         ? [
             {

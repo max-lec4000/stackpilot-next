@@ -1,6 +1,7 @@
 import { validateIdentityInput } from "./config.js";
+import { streamyfinLocation, streamyfinMaps } from "./streamyfin-gateway.js";
 // Render-only. Deployment and external proxy/client-IP acceptance remain separate gates.
-export function mediaGateway(input, sessionGuard = false) {
+export function mediaGateway(input, sessionGuard = false, { streamyfin = false } = {}) {
   const { hostname } = validateIdentityInput(input);
   const proxy = `proxy_http_version 1.1;
       proxy_set_header Host ${hostname};
@@ -12,7 +13,7 @@ export function mediaGateway(input, sessionGuard = false) {
       proxy_buffering off;
       proxy_read_timeout 300s;
       proxy_pass http://jellyfin:8096;`;
-  return `map $http_upgrade $sp_media_upgrade { default upgrade; '' close; }
+  return `${streamyfin ? streamyfinMaps : ""}map $http_upgrade $sp_media_upgrade { default upgrade; '' close; }
 server {
   listen 8081;
   access_log off;
@@ -40,6 +41,8 @@ server {
   add_header X-Frame-Options SAMEORIGIN always;
   add_header Referrer-Policy no-referrer always;
   add_header Content-Security-Policy "frame-ancestors 'self'" always;
+  location = /seerr { return 404; }
+  ${streamyfin ? streamyfinLocation : "location ^~ /seerr/ { return 404; }"}
   location ~* ^/users/authenticatewithquickconnect/?$ { ${proxy} }
   location ~* (^|/)users/([^/]+/)?(authenticate[^/]*|password|forgotpassword)(/|$) { return 403; }
   # Die Startseite führt direkt zur Anmeldung über Authentik: Zuschauer haben kein

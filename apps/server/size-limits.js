@@ -1,5 +1,5 @@
 import { compactProfile, compactProfileName } from "./quality-settings.js";
-import { compactValid } from "./quality-policy.js";
+import { compactValid, seerrServiceAdmin } from "./quality-policy.js";
 import { positiveId } from "./media-hub.js";
 const rates = [1, 2, 3, 4, 6, 8];
 function validFixedCap(cap) {
@@ -204,10 +204,7 @@ export class SizeLimits {
   }
   async forRequest(s, plan, detail, rate, capGiB = 0) {
     const actor = await s.additional.seerr("/auth/me");
-    if (
-      !Number.isSafeInteger(actor?.permissions) ||
-      (actor.permissions & 1) !== 1
-    )
+    if (!seerrServiceAdmin(actor))
       throw Error(
         "Seerr erlaubt keine verbindliche Profilvorgabe. Dienstberechtigungen zuerst prüfen.",
       );

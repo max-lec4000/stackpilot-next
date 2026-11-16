@@ -1,4 +1,11 @@
+import { filmLimitKey, verifyFilmLimitProfile } from "./radarr-film-limit.js";
 import { seriesLimitsKey, verifySeriesLimitProfile } from "./series-limits.js";
+
+const seerrAdmin = 2;
+export function seerrServiceAdmin(actor) {
+  const permissions = actor?.permissions;
+  return Number.isSafeInteger(permissions) && permissions >= 0 && (permissions & seerrAdmin) === seerrAdmin;
+}
 
 export const qualityPolicyKey = (plan, kind, id) =>
   `quality-policy:${plan.rootId || plan.id}:${kind}:${id}`;
@@ -30,10 +37,7 @@ export async function requestQualityOptions(hub, s, plan, kind, id) {
     policy = specific || global;
   if (!policy) return {};
   const actor = await s.additional.seerr("/auth/me");
-  if (
-    !Number.isSafeInteger(actor?.permissions) ||
-    (actor.permissions & 1) !== 1
-  )
+  if (!seerrServiceAdmin(actor))
     throw Error(
       "Seerr bestätigt keine Administratorrechte für verbindliche Profilvorgaben. Dienstkonto prüfen; es wird kein Auftrag mit einem Ersatzprofil gestartet.",
     );
@@ -86,8 +90,16 @@ export async function verifyCurrentQuality(hub, s, plan, target) {
       throw Error("Das Sonarr-Profil dieser Serie hat sich geändert. Größenlimits prüfen.");
     await verifySeriesLimitProfile(s, managed);
   }
+  const film = target.kind === "movie" ? hub.engine.vault.get(filmLimitKey(plan, target.mediaId)) : null;
+  if (film?.pending) throw Error("Schließe zuerst den Profilwechsel unter der Filmobergrenze ab.");
+  if (film?.rule) {
+    if (target.item?.id !== film.movieId || target.item.tmdbId !== film.tmdbId ||
+        target.item.qualityProfileId !== film.rule.id || (policy && film.base !== policy.profileId))
+      throw Error("Das Radarr-Profil dieses Films hat sich geändert. Filmobergrenze prüfen.");
+    await verifyFilmLimitProfile(s, film.rule);
+  }
   if (!policy) return;
-  const profileId = managed?.profileId ?? policy.profileId;
+  const profileId = film?.rule?.id ?? managed?.profileId ?? policy.profileId;
   if (target.item?.qualityProfileId !== profileId)
     throw Error(
       "Das Dienstprofil weicht von deiner bestätigten Auswahl ab. Vor der Suche unter Qualität ändern erneut speichern.",

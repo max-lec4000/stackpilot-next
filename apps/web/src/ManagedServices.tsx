@@ -48,7 +48,7 @@ function stateTone(state: string) {
     return "warning" as const;
   return "neutral" as const;
 }
-function BazarrKeyRotation({ planId }: { planId: string }) {
+function ServiceKeyRotation({ planId, name }: { planId: string; name: "Bazarr" | "Lidarr" }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -56,16 +56,17 @@ function BazarrKeyRotation({ planId }: { planId: string }) {
 
   return (
     <details className="service-technical">
-      <summary>Bazarr-API-Schlüssel erneuern</summary>
+      <summary>{name}-API-Schlüssel erneuern</summary>
       <p>Der bisherige Schlüssel wird ungültig. Externe Apps, die ihn verwenden,
-        brauchen danach den neuen Schlüssel aus den Einstellungen von Bazarr.</p>
+        brauchen danach den neuen Schlüssel aus den Einstellungen von {name}.</p>
+      {name === "Lidarr" && <p>Lidarr wird kurz neu gestartet. StackPilot aktualisiert die verwaltete Verbindung zu Prowlarr.</p>}
       <form onSubmit={async (event) => {
         event.preventDefault();
         setBusy(true);
         setError("");
         setComplete(false);
         try {
-          await action("/api/credentials/rotate-bazarr", {
+          await action("/api/credentials/rotate-" + name.toLowerCase(), {
             planId,
             password,
             confirmation: "OK",
@@ -94,7 +95,7 @@ function BazarrKeyRotation({ planId }: { planId: string }) {
         </button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
-      {complete && <p role="status">Bazarr akzeptiert den neuen Schlüssel. Der bisherige ist ungültig.</p>}
+      {complete && <p role="status">{name} akzeptiert den neuen Schlüssel. Der bisherige ist ungültig.</p>}
     </details>
   );
 }
@@ -346,10 +347,10 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
               <p>Nur lokal am Server veröffentlicht. Bei Zugriff über SSH zusätzlich den Webport weiterleiten:</p>
               <pre><code>ssh -L {selected.hostPort}:127.0.0.1:{selected.hostPort} benutzer@server</code></pre>
             </details>
-            {selected.slug === "bazarr" &&
-              selected.state === "running" &&
+            {(selected.name === "Bazarr" || selected.name === "Lidarr") &&
+              (selected.state === "running" || (selected.name === "Lidarr" && selected.state === "exited")) &&
               selected.installationStatus === "completed" && (
-                <BazarrKeyRotation key={serviceKey(selected)} planId={selected.planId} />
+                <ServiceKeyRotation key={serviceKey(selected)} planId={selected.planId} name={selected.name} />
               )}
             <div className="service-credentials">
               {!showReveal ? (

@@ -2,7 +2,7 @@ import { backup, DatabaseSync } from "node:sqlite";
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Vault } from "./vault.js";
-import { encryptBackup, decryptBackup, requirePassphrase } from "./identity/backup-format.js";
+import { backupLimit, encryptBackup, decryptBackup, requirePassphrase } from "./identity/backup-format.js";
 
 const magic = Buffer.from("STACKPILOT_VAULT_BACKUP_V1\n");
 const dbLimit = 64 * 1024 * 1024;
@@ -70,5 +70,27 @@ export async function verifyVaultBackup(archive, passphrase, destination) {
   } finally {
     database.fill(0);
     key.fill(0);
+  }
+}
+
+
+export const vaultRestoreBodyLimit = Math.ceil(backupLimit / 3) * 4 + 8192;
+
+export async function stageVaultRestore(store, archive, passphrase) {
+  if (typeof archive !== "string" || !archive.length ||
+      archive.length > Math.ceil(backupLimit / 3) * 4 || archive.length % 4 ||
+      /[^A-Za-z0-9+/=]/.test(archive))
+    throw Error("Ungültige oder zu große Sicherungsdatei.");
+  const bytes = Buffer.from(archive, "base64");
+  if (bytes.length > backupLimit || bytes.toString("base64") !== archive)
+    throw Error("Ungültige Kodierung der Sicherungsdatei.");
+  const root = await mkdtemp(path.join(store.directory, "tresor-wiederherstellung-"));
+  const directory = path.join(root, "wiederhergestellt");
+  try {
+    const entries = await verifyVaultBackup(bytes, passphrase, directory);
+    return { directory, entries };
+  } catch (error) {
+    await rm(root, { recursive: true, force: true });
+    throw error;
   }
 }

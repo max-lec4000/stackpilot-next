@@ -84,6 +84,7 @@ export class ContainerMaintenance {
     return { slug, base, directory, manifest: path.join(manifests, "compose.json"),
       bootstrap: path.join(manifests, "bootstrap.json"), data: path.join(plan.appdata, slug),
       snapshot: path.join(directory, "snapshot"), failedData: path.join(directory, "after-update"),
+      failedRestore: path.join(directory, "after-rollback"),
       restore: path.join(directory, "restoring") };
   }
   async noSharedWrites(container, data) {
@@ -156,13 +157,20 @@ export class ContainerMaintenance {
     await this.noSharedWrites(current, files.data);
     this.engine.vault.set(key, { ...record, phase: "rolling-back" });
     await this.stop(current, false);
-    if (!await hasDirectory(files.failedData)) await rename(files.data, files.failedData);
-    if (!await hasDirectory(files.data)) {
-      await rm(files.restore, { recursive: true, force: true });
-      await this.run("cp", ["-a", "--reflink=auto", "--", files.snapshot, files.restore], 180000);
-      await this.run("sync", ["-f", files.restore], 90000);
-      await rename(files.restore, files.data);
+    const savedUpdateData = await hasDirectory(files.failedData);
+    const currentData = await hasDirectory(files.data);
+    if (!savedUpdateData && !currentData) throw Error("Die bisherige Dienstkonfiguration fehlt.");
+    await rm(files.restore, { recursive: true, force: true });
+    await this.run("cp", ["-a", "--reflink=auto", "--", files.snapshot, files.restore], 180000);
+    await this.run("sync", ["-f", files.restore], 90000);
+    if (!savedUpdateData) {
+      await rename(files.data, files.failedData);
+    } else if (currentData) {
+      if (await hasDirectory(files.failedRestore))
+        await rm(files.failedRestore, { recursive: true, force: true });
+      await rename(files.data, files.failedRestore);
     }
+    await rename(files.restore, files.data);
     await this.startAndVerify(s, plan, files, record, record.from);
     this.saveVersion(plan, record, record.from, "rolled-back");
   }

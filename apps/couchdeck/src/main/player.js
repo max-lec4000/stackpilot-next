@@ -250,7 +250,11 @@ class Player extends EventEmitter {
     const direct = await this.yt.resolve(entry).catch((e) => { resolveError = e.message; return null; });
     if (this.current !== cur || gen !== this.loadGen) return; // inzwischen abgebrochen oder etwas anderes gestartet
     if (resolveError && /not a bot|confirm you|sign in/i.test(resolveError)) {
-      this.emit('error', 'YouTube blockiert gerade Anfragen von diesem Server (Bot-Schutz). Das legt sich meist nach einiger Zeit von selbst.');
+      const botCheck = /not a bot|confirm you.*bot/i.test(resolveError);
+      this.emit('log', botCheck ? 'YouTube: Bot-Prüfung mit Anmeldeaufforderung.' : 'YouTube: Anmeldung erforderlich.');
+      this.emit('error', botCheck
+        ? 'YouTube verlangt für diesen Abruf eine Anmeldung zur Bot-Prüfung.'
+        : 'YouTube verlangt für diesen Abruf eine Anmeldung.');
       await this.finish('error');
       return;
     }

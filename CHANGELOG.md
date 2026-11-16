@@ -2,6 +2,25 @@
 
 ## 0.5.0 – November 2026
 
+### Update für Filmprofile und Wartung
+
+- Verbindliche Filmprofile erkennen die Seerr-Administratorberechtigung
+  korrekt. Größen- und Qualitätsvorgaben bleiben bei fehlender
+  Berechtigung gesperrt.
+- Für bereits in Radarr erfasste Filme lässt sich ein dauerhaftes
+  Größenlimit für automatische Downloads setzen. Beim Ausschalten wird
+  das bisherige Profil wieder zugewiesen.
+- Die Wartungsoberfläche kann den Lidarr-Schlüssel erneuern und die
+  verwaltete Prowlarr-Verbindung mit aktualisieren. Sie kann verschlüsselte
+  Tresor-Sicherungen in einen privaten Ordner wiederherstellen.
+- Nach gescheiterter Container-Rückkehr startet ein erneuter Versuch
+  aus der ursprünglichen Sicherung.
+- Couchdeck unterscheidet YouTubes Bot-Schutz von allgemeinen
+  Anmeldefehlern. Das vorbereitete Streamyfin-Gateway bleibt bis zur
+  Abnahme eines gepatchten Seerr-Images deaktiviert.
+
+### Neubau
+
 Neubau auf Basis von 0.4 mit dem Ziel „so wenige Schritte wie möglich“.
 
 - **Ein Installationsbefehl** (`install.sh`): Docker, Node, Systemdienst, Tailscale-Rechte,

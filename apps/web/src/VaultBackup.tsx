@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { action } from "./RetirementPanel";
 import { get } from "./ServerCheck";
 
 export function VaultBackup() {
@@ -60,5 +61,56 @@ export function VaultBackup() {
     </form>}
     {message && <p role="status">{message}</p>}
     {error && <p role="alert">{error}</p>}
+    {local && <VaultRestore />}
   </div>;
+}
+
+
+function VaultRestore() {
+  const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  return <details>
+    <summary>Tresor-Sicherung in einen neuen Ordner wiederherstellen</summary>
+    <p>StackPilot prüft die Sicherung und legt die wiederhergestellten Dateien in einem privaten Ordner auf dem Server ab. Für die spätere Übernahme des Tresors muss StackPilot gestoppt werden.</p>
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      if (!file) return;
+      setError("");
+      setMessage("");
+      setBusy(true);
+      try {
+        if (file.size > 128 * 1024 * 1024) throw Error("Die Sicherung darf höchstens 128 MiB groß sein.");
+        const data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+          reader.onerror = () => reject(Error("Die Sicherung konnte nicht gelesen werden."));
+          reader.readAsDataURL(file);
+        });
+        const result = await action<{ entries: number; directory: string }>("/api/vault-backup/restore", {
+          archive: data, password, passphrase,
+        });
+        setMessage(`${result.entries} Tresoreinträge geprüft. Dateien liegen auf dem Server unter ${result.directory}.`);
+      } catch (error) {
+        setError((error as Error).message);
+      } finally {
+        setPassword("");
+        setPassphrase("");
+        setBusy(false);
+      }
+    }}>
+      <label>Tresor-Sicherung <input required type="file" accept=".spvault" disabled={busy}
+        onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+      <label>Administratorpasswort für Wiederherstellung <input required type="password" autoComplete="current-password"
+        value={password} disabled={busy} onChange={(event) => setPassword(event.target.value)} /></label>
+      <label>Passphrase des Archivs <input required type="password" autoComplete="off" minLength={16}
+        value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} /></label>
+      <button disabled={busy || !file}>Sicherung wiederherstellen</button>
+    </form>
+    {message && <p role="status">{message}</p>}
+    {error && <p role="alert">{error}</p>}
+  </details>;
 }

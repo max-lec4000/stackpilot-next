@@ -4,6 +4,7 @@ import {
   qualityPolicyKey,
   qualityDefaultKey,
 } from "./quality-policy.js";
+import { filmLimitKey, isFilmLimitProfile, saveAutomaticFilmLimit } from "./radarr-film-limit.js";
 import { randomUUID } from "node:crypto";
 import { positiveId } from "./media-hub.js";
 import { isSeriesLimitProfile, seriesLimitsKey } from "./series-limits.js";
@@ -61,6 +62,8 @@ export class QualitySettings {
       currentProfileId: target.item.qualityProfileId,
       hasFile: !!target.item.hasFile,
       runtime: Number(target.item.runtime) || null,
+      automaticFilmLimit: target.kind === "movie"
+        ? this.hub.engine.vault.get(filmLimitKey(plan, target.mediaId))?.rule?.cap ?? 0 : null,
       sizePolicy:
         this.hub.engine.vault.get(
           qualityPolicyKey(plan, target.kind, target.mediaId),
@@ -77,13 +80,22 @@ export class QualitySettings {
       fileSize: Number.isFinite(target.item.movieFile?.size)
         ? target.item.movieFile.size
         : null,
-      profiles: profiles.filter((p) => !isSeriesLimitProfile(p) || p.id === target.item.qualityProfileId).map((p) => ({
+      profiles: profiles.filter((p) => (!isSeriesLimitProfile(p) && !isFilmLimitProfile(p)) || p.id === target.item.qualityProfileId).map((p) => ({
         id: p.id,
         name: p.name,
         allowed: allowedQualities(p.items),
       })),
       canCreateCompact: !profiles.some((p) => p.name === compactProfileName),
     };
+  }
+  async filmLimit(body) {
+    if (body.confirmation !== "OK" || typeof body.capGiB !== "number") throw Error("Filmgrößenlimit bestätigen.");
+    return this.hub.mutate(["Seerr", "Radarr"], async ({ s, plan }) => {
+      const target = await this.diagnostics.target(s, positiveId(body.requestId));
+      if (target.kind !== "movie" || target.service !== "Radarr" || !target.item)
+        throw Error("Der Film ist noch nicht im verwalteten Radarr eingerichtet.");
+      return saveAutomaticFilmLimit(s, this.hub.engine.vault, filmLimitKey(plan, target.mediaId), target.item, body.capGiB);
+    });
   }
   async apply(body) {
     if (body.confirmation !== "OK") throw Error("Profiländerung bestätigen.");
@@ -95,6 +107,9 @@ export class QualitySettings {
       const { item, service, kind, server } = target;
       if (!item)
         throw Error("Das Medium ist noch nicht in der ARR-App angekommen.");
+      const film = kind === "movie" ? this.hub.engine.vault.get(filmLimitKey(plan, target.mediaId)) : null;
+      if (film?.rule || film?.pending)
+        throw Error("Stelle zuerst das Radarr-Profil über das automatische Filmgrößenlimit wieder her.");
       const series = kind === "tv" ? this.hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId)) : null;
       if (series?.automatic || series?.pending)
         throw Error("Schalte unter Größenlimits zuerst die automatischen Sonarr-Limits aus. Danach kannst du die Qualität ändern.");
@@ -129,7 +144,7 @@ export class QualitySettings {
           body: compactProfile(schema),
         });
       } else {
-        profile = profiles.find((p) => p.id === positiveId(body.profile) && !isSeriesLimitProfile(p));
+        profile = profiles.find((p) => p.id === positiveId(body.profile) && !isSeriesLimitProfile(p) && !isFilmLimitProfile(p));
         if (!profile)
           throw Error("Gewähltes Qualitätsprofil existiert nicht mehr.");
       }

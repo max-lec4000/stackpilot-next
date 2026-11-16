@@ -47,6 +47,8 @@ export class PublicFunnel {
     const record = await this.identity.verify();
     validateIdentityInput(record.input);
     const gateway = await this.protection.verify();
+    if (gateway.streamyfin)
+      throw setupError("Das Streamyfin-Gateway ist nur für die private Abnahme freigegeben. Vor Funnel die bisherige Konfiguration wiederherstellen.");
     const sso = await this.sso.plan();
     if (!sso.configured || sso.hostname !== record.input.hostname || gateway.hostname !== record.input.hostname)
       throw setupError("SSO und Jellyfin-Schutz müssen für dieselbe Serveradresse bestätigt sein.");

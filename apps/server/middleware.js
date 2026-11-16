@@ -10,7 +10,7 @@ import { musicInventory, withMusicTrack } from "./music-library.js";
 import { inspectMusicTags } from "./music-tags.js";
 import { ServiceUpdates } from "./service-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
-import { createVaultBackup } from "./vault-backup.js";
+import { createVaultBackup, stageVaultRestore, vaultRestoreBodyLimit } from "./vault-backup.js";
 import { setReportConsent } from "./dev-report-consent.js";
 import { OidcBackchannel } from "./identity/oidc-backchannel.js";
 import {
@@ -46,6 +46,7 @@ import { importVpn } from "./vpn.js";
 import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
+import { rotateLidarrKey } from "./lidarr-key.js";
 import { rotateBazarrKey } from "./bazarr-key.js";
 import path from "node:path";
 import { Auth, sessionCookie } from "./auth.js";
@@ -491,6 +492,8 @@ export function inventoryMiddleware(options = {}) {
         req.method === "GET"
       ) {
         result = await privateServe.preview();
+      } else if (url.pathname === "/api/remote-access/streamyfin" && req.method === "GET") {
+        result = await jellyfinProtection.streamyfinPreview();
       } else if (url.pathname === "/api/remote-access/funnel" && req.method === "GET") {
         result = await publicFunnel.preview();
       } else if (
@@ -563,13 +566,18 @@ export function inventoryMiddleware(options = {}) {
       } else if (url.pathname === "/api/operations" && req.method === "GET") {
         result = { operations: executor().list() };
       } else if (req.method === "POST") {
-        let text = "";
+        const vaultRestore = url.pathname === "/api/vault-backup/restore";
+        if (vaultRestore && !vaultBackupLocal)
+          throw Error("Öffne StackPilot am Server oder über einen SSH-Tunnel.");
+        const limit = vaultRestore ? vaultRestoreBodyLimit : 8192;
+        const chunks = [];
+        let length = 0;
         for await (const chunk of req) {
-          text += chunk;
-          if (Buffer.byteLength(text) > 8192)
-            throw new Error("Anfrage zu groß.");
+          length += chunk.length;
+          if (length > limit) throw Error("Anfrage zu groß.");
+          chunks.push(chunk);
         }
-        const body = JSON.parse(text || "{}");
+        const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
         if (
           url.pathname === "/api/auth/setup" ||
           url.pathname === "/api/auth/login"
@@ -612,6 +620,9 @@ export function inventoryMiddleware(options = {}) {
         } else if (["/api/container-maintenance/update", "/api/container-maintenance/rollback"].includes(url.pathname)) {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await containerMaintenance.apply(body, url.pathname.endsWith("/rollback"));
+        } else if (vaultRestore) {
+          await manager.reauthenticate(body.password, remoteAddress);
+          result = await hub.mutate([], () => stageVaultRestore(state, body.archive, body.passphrase));
         } else if (url.pathname === "/api/vault-backup") {
           if (!vaultBackupLocal) throw Error("Öffne StackPilot am Server oder über einen SSH-Tunnel.");
           if (body.password === body.passphrase) throw Error("Verwende eine eigene Sicherungspassphrase.");
@@ -653,6 +664,19 @@ export function inventoryMiddleware(options = {}) {
                 "Einrichtung geprüft; Entwicklungsbericht konnte nicht auf GitHub übertragen werden. Lokale Git-Berechtigung prüfen oder Bericht herunterladen.";
             }
           }
+        } else if (url.pathname === "/api/remote-access/streamyfin/activate" ||
+                   url.pathname === "/api/remote-access/streamyfin/rollback") {
+          await manager.reauthenticate(body.password, remoteAddress);
+          if (body.confirmation !== "OK") throw new Error("Gateway-Änderung mit OK bestätigen.");
+          result = url.pathname.endsWith("/activate")
+            ? await jellyfinProtection.activateStreamyfin()
+            : await jellyfinProtection.rollbackStreamyfin();
+        } else if (url.pathname === "/api/remote-access/streamyfin/prepare") {
+          await manager.reauthenticate(body.password, remoteAddress);
+          if (body.confirmation !== "OK")
+            throw new Error("Vorbereitung mit OK bestätigen.");
+          const { ready, version, minimumVersion } = await jellyfinProtection.prepareStreamyfin();
+          result = { ready, version, minimumVersion };
         } else if (url.pathname === "/api/remote-access/protection/start") {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await jellyfinProtection.start(body);
@@ -723,6 +747,8 @@ export function inventoryMiddleware(options = {}) {
           result = await hub.library.run(true);
         else if (url.pathname === "/api/media/size-settings")
           result = await sizeLimits.save(body);
+        else if (url.pathname === "/api/media/film-limit")
+          result = await qualitySettings.filmLimit(body);
         else if (url.pathname === "/api/media/quality")
           result = await qualitySettings.apply(body);
         else if (url.pathname === "/api/media/season-transfer/replace")
@@ -763,14 +789,15 @@ export function inventoryMiddleware(options = {}) {
           result = await installer().resume(body.operationId);
         else if (url.pathname === "/api/deployment/end")
           result = installer().end(body.operationId, body.confirmation);
-        else if (url.pathname === "/api/credentials/rotate-bazarr") {
+        else if (["/api/credentials/rotate-bazarr", "/api/credentials/rotate-lidarr"].includes(url.pathname)) {
           if (body.confirmation !== "OK")
             throw Error("Schlüsselwechsel zuerst bestätigen.");
           await manager.reauthenticate(body.password, remoteAddress);
-          result = await hub.mutate(["Bazarr"], ({ plan, s }) => {
+          const service = url.pathname.endsWith("-lidarr") ? "Lidarr" : "Bazarr";
+          result = await hub.mutate([service], ({ plan, s }) => {
             if (body.planId !== plan.id)
               throw Error("Der Stack hat sich geändert. Bitte öffne die Anwendung erneut.");
-            return rotateBazarrKey(s);
+            return service === "Lidarr" ? rotateLidarrKey(s, installer().docker) : rotateBazarrKey(s);
           });
         } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);

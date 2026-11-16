@@ -38,7 +38,7 @@ function fixture() {
       arr: async () => [structuredClone(profile)],
       additional: {
         seerr: async (route) =>
-          route === "/auth/me" ? { permissions: 1 } : [server],
+          route === "/auth/me" ? { permissions: 2 } : [server],
       },
     },
   };
@@ -101,7 +101,7 @@ test("Veränderter Seerr-Standard wird vor einer künftigen Anfrage gemeldet", a
 
 test("Ohne bestätigte Seerr-Adminrechte wird kein verbindliches Profil als wirksam angenommen", async () => {
   const f = fixture();
-  f.s.additional.seerr = async () => ({ permissions: 0 });
+  f.s.additional.seerr = async () => ({ permissions: 1 });
   await assert.rejects(
     () => requestQualityOptions(f.hub, f.s, plan, "movie", 42),
     /Administratorrechte/,

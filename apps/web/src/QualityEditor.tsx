@@ -4,6 +4,7 @@ import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
 type Quality = {
   sizeDefaultRate?: number;
+  automaticFilmLimit?: number | null;
   runtime?: number | null;
   sizePolicy?: { capGiB: number } | null;
   service: string;
@@ -32,6 +33,7 @@ export function QualityEditor({
     [future, setFuture] = useState(false),
     [searchAfterSave, setSearchAfterSave] = useState(false),
     [sizeRate, setSizeRate] = useState(0),
+    [filmCap, setFilmCap] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
@@ -46,6 +48,7 @@ export function QualityEditor({
       setProfile(String(result.currentProfileId));
       setFuture(false);
       setSizeRate(0);
+      setFilmCap(result.automaticFilmLimit ? String(result.automaticFilmLimit) : "");
     } catch (e) {
       setData(null);
       setError((e as Error).message);
@@ -85,6 +88,31 @@ export function QualityEditor({
           )}
           {data && (
             <>
+              {data.kind === "movie" && <form onSubmit={async (event) => {
+                event.preventDefault();
+                setBusy(true);
+                setError("");
+                setMessage("");
+                try {
+                  const result = await action<{ capGiB: number }>("/api/media/film-limit", {
+                    requestId, capGiB: Number(filmCap || 0), confirmation: "OK",
+                  });
+                  setMessage(result.capGiB
+                    ? `Radarr berücksichtigt für diesen Film höchstens ${result.capGiB} GiB, auch bei automatischen Downloads.`
+                    : "Das automatische Limit ist aus. Radarr verwendet wieder das bisherige Profil.");
+                  await refresh();
+                  await onChange?.();
+                } catch (error) {
+                  setError((error as Error).message);
+                } finally { setBusy(false); }
+              }}>
+                <label>Automatische Filmobergrenze in GiB
+                  <input type="number" min={0} max={200} step={0.5}
+                    value={filmCap} onChange={(event) => setFilmCap(event.target.value)} disabled={busy} />
+                </label>
+                <p>Gilt für diesen Film in Radarr. Leeres Feld oder 0 stellt das bisherige Profil wieder her.</p>
+                <button disabled={busy}>Filmobergrenze speichern</button>
+              </form>}
               <p>
                 Aktuell in {data.service}:{" "}
                 <b>
@@ -248,7 +276,7 @@ export function QualityEditor({
               <button
                 className="primary"
                 disabled={
-                  busy ||
+                  busy || !!data.automaticFilmLimit ||
                   (!future &&
                     sizeRate === 0 &&
                     profile === String(data.currentProfileId) &&

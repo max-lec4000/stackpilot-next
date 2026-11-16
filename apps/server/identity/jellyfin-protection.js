@@ -16,6 +16,8 @@ import { localDocker } from "../retirement.js";
 import { localIdentityRequest } from "./local-request.js";
 import { releases } from "./config.js";
 import { mediaGateway } from "./media-gateway.js";
+import { StreamyfinDeployment } from "./streamyfin-deployment.js";
+import { inspectStreamyfinSeerr } from "./streamyfin-version.js";
 import { ssoPluginState, ssoCompatibility } from "./sso-release.js";
 import { downloadSsoArchive, unpackSsoArchive } from "./plugin-archive.js";
 const hash = (v) =>
@@ -35,8 +37,8 @@ export async function safeDirectory(dir, uid) {
       "Verzeichnis benötigt den verwalteten Besitzer und geschützte Schreibrechte.",
     );
 }
-export function mediaGatewayConfig(input) {
-  return `pid /tmp/nginx.pid;\nerror_log /dev/null crit;\nworker_processes auto;\nevents { worker_connections 512; }\nhttp {\n server_tokens off;\n client_body_timeout 10s;\n client_header_timeout 10s;\n client_body_temp_path /tmp/client;\n proxy_temp_path /tmp/proxy;\n fastcgi_temp_path /tmp/fastcgi;\n uwsgi_temp_path /tmp/uwsgi;\n scgi_temp_path /tmp/scgi;\n${mediaGateway(input, true)}\n}\n`;
+export function mediaGatewayConfig(input, options) {
+  return `pid /tmp/nginx.pid;\nerror_log /dev/null crit;\nworker_processes auto;\nevents { worker_connections 512; }\nhttp {\n server_tokens off;\n client_body_timeout 10s;\n client_header_timeout 10s;\n client_body_temp_path /tmp/client;\n proxy_temp_path /tmp/proxy;\n fastcgi_temp_path /tmp/fastcgi;\n uwsgi_temp_path /tmp/uwsgi;\n scgi_temp_path /tmp/scgi;\n${mediaGateway(input, true, options)}\n}\n`;
 }
 export function protectionCompose(record) {
   const compose = {
@@ -139,6 +141,7 @@ export class JellyfinProtection {
   ) {
     Object.assign(this, { hub, identity, docker, download });
     this.pending = null;
+    this.streamyfinDeployment = new StreamyfinDeployment(this, protectedMediaPort);
   }
   key(plan) {
     return "jellyfin-protection:" + (plan.rootId || plan.id);
@@ -302,13 +305,52 @@ export class JellyfinProtection {
       ]),
     };
   }
+  async streamyfinPreview() {
+    const context = await this.hub.context(["Seerr"]);
+    const { ready, version, minimumVersion, reason } = await inspectStreamyfinSeerr(context, this.docker);
+    const phase = this.current()?.streamyfin?.phase || null;
+    return { ready, version, minimumVersion, reason, phase, active: phase === "active" };
+  }
+  async checkStreamyfinRelease(context, previous) {
+    const release = await inspectStreamyfinSeerr(context, this.docker);
+    if (!release.ready) throw setupError(release.reason);
+    if (previous && (previous.containerId !== release.containerId || previous.image !== release.image ||
+        previous.version !== release.version))
+      throw setupError("Seerr wurde während der Gateway-Übernahme ausgetauscht.");
+    return release;
+  }
+  async streamyfinCandidate(context) {
+    const release = await this.checkStreamyfinRelease(context);
+    await this.streamyfinDeployment.requirePrivate();
+    await this.verify();
+    const record = this.current();
+    const identity = await this.identity.verify();
+    return { release, record, config: mediaGatewayConfig(identity.input, { streamyfin: true }) };
+  }
+  prepareStreamyfin() {
+    return this.hub.mutate(["Jellyfin", "Seerr"], async (context) => {
+      const { release, config } = await this.streamyfinCandidate(context);
+      return { ...release, config };
+    });
+  }
+  activateStreamyfin() {
+    return this.hub.mutate(["Jellyfin", "Seerr"], (context) => this.streamyfinDeployment.activate(context));
+  }
+  rollbackStreamyfin() {
+    return this.hub.mutate(["Jellyfin"], (context) => {
+      const record = this.current();
+      return record?.streamyfin
+        ? this.streamyfinDeployment.restore(context, record)
+        : { active: false, restored: false };
+    });
+  }
   async preview() {
     const c = await this.context();
     return {
       ...this.summary(),
       review: c.review,
       hostname: c.identity.input.hostname,
-      canStart: !this.pending,
+      canStart: !this.pending && !this.current()?.streamyfin,
       pluginInstalled: c.plugin.releaseMatches,
       steps: [
         "Offizielles SSO-Archiv mit festem SHA-256 prüfen",
@@ -324,6 +366,8 @@ export class JellyfinProtection {
     if (body.confirmation !== "OK")
       throw setupError("Jellyfin-Schutz mit OK bestätigen.");
     if (this.pending) throw setupError("Einrichtungsauftrag läuft bereits.");
+    if (this.current()?.streamyfin)
+      throw setupError("Streamyfin vor einer erneuten Gateway-Einrichtung zurücknehmen.");
     const c = await this.context();
     if (c.review !== body.review)
       throw setupError("Zustand wurde geändert. Vorschau neu prüfen.");
@@ -351,7 +395,10 @@ export class JellyfinProtection {
         requireLease();
         if (review !== c.review)
           throw setupError("Zustand wurde vor dem Start geändert.");
-        r = this.current();
+        const saved = this.current();
+        if (saved?.streamyfin)
+          throw setupError("Streamyfin vor einer erneuten Gateway-Einrichtung zurücknehmen.");
+        r = saved;
         if (!r) {
           const id = randomUUID();
           r = {
@@ -565,7 +612,7 @@ export class JellyfinProtection {
       }
     });
   }
-  async verifyContainer(r, running = true) {
+  async verifyContainer(r, running = true, { allowMissingGateway = false } = {}) {
     for (const [name, expected] of Object.entries(r.files || {})) {
       const file = path.join(r.directory, name),
         st = await lstat(file);
@@ -592,16 +639,15 @@ export class JellyfinProtection {
       .trim()
       .split(/\s+/)
       .filter(Boolean);
-    if (ids.length !== 2)
-      throw setupError(
-        "Schutz-Gateway und Sitzungsprüfung nicht eindeutig bestätigt.",
-      );
+    if (ids.length !== 2 && !(allowMissingGateway && ids.length === 1))
+      throw setupError("Schutz-Gateway und Sitzungsprüfung nicht eindeutig bestätigt.");
     let gateway;
     const rows = JSON.parse(await this.docker(["inspect", ...ids]));
     for (const role of ["gateway", "authguard"]) {
       const matches = rows.filter(
         (v) => v.Config.Labels?.["io.stackpilot.role"] === role,
       );
+      if (allowMissingGateway && role === "gateway" && !matches.length && rows.length === 1) continue;
       if (matches.length !== 1)
         throw setupError("Schutzdienst nicht eindeutig zugeordnet.");
       const v = matches[0],
@@ -636,8 +682,8 @@ export class JellyfinProtection {
             ports[0].HostIp !== "127.0.0.1" ||
             ports[0].HostPort !== String(protectedMediaPort)
           : Object.keys(h.PortBindings || {}).length !== 0) ||
-        Object.keys(v.NetworkSettings.Networks || {}).length !== 1 ||
-        !v.NetworkSettings.Networks[r.network] ||
+        ((!allowMissingGateway || v.State.Running || Object.keys(v.NetworkSettings.Networks || {}).length > 0) &&
+          (Object.keys(v.NetworkSettings.Networks || {}).length !== 1 || !v.NetworkSettings.Networks[r.network])) ||
         v.Mounts.length !== 1 ||
         !v.Mounts.some(
           (m) =>
@@ -719,6 +765,8 @@ export class JellyfinProtection {
   async verify() {
     const c = await this.context(),
       r = this.current();
+    if (r?.streamyfin && r.streamyfin.phase !== "active")
+      throw setupError("Die Streamyfin-Gateway-Übernahme ist unterbrochen. Rückkehr anstoßen.");
     if (
       r?.status !== "ready" ||
       r.hostname !== c.identity.input.hostname ||

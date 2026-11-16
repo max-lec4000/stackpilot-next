@@ -59,6 +59,7 @@ const services = ["Jellyfin", "qBittorrent", "Radarr", "Sonarr", "Prowlarr", "Ba
   url: "http://127.0.0.1:" + (i === 0 ? 8096 : 8000 + i),
   state: i === 5 ? "exited" : "running",
   installationStatus: "completed",
+  updateAvailable: name === "Jellyfin",
   image: "fixture.invalid/private/image-" + i + "@sha256:" + "f".repeat(64),
   username: "managed-private-user",
 }));
@@ -79,6 +80,8 @@ function fixture() {
     waitDownloads: null,
     waitCredentials: null,
     stackStatus: "completed",
+    containerUpdate: true,
+    couchdeckUpdate: true,
     funnelBlocked: true,
     funnelActive: false,
     viewerSetup: false,
@@ -134,7 +137,7 @@ async function mockAPI(page, f) {
     }
     let json;
     switch (endpoint) {
-      case "/api/couchdeck": json = { installed: true, state: "running", version: "0.2.0", outdated: true, controllable: true, linked: { user: "wohnzimmer", seerr: true }, helper: { available: true, running: null, failed: null } }; break;
+      case "/api/couchdeck": json = { installed: true, state: "running", version: "0.2.0", updateVersion: f.couchdeckUpdate ? "0.2.6" : null, controllable: true, linked: { user: "wohnzimmer", seerr: true }, helper: { available: true, running: null, failed: null } }; break;
       case "/api/remote-setup": json = { status: f.viewerSetup ? "completed" : "idle", running: false, steps: [], error: null, result: null }; break;
       case "/api/viewers/action":
       case "/api/viewers":
@@ -158,8 +161,17 @@ async function mockAPI(page, f) {
       case "/api/media/size-settings": json = { rate: 3, rates: [1, 2, 3, 4, 6, 8], scope: "Größenstandard für neue Filme." }; break;
       case "/api/safety": json = { operations: [] }; break;
       case "/api/audit": json = { page: 1, pages: 1, total: 0, events: [] }; break;
-      case "/api/container-maintenance": json = { services: [{ name: "Seerr", from: "ghcr.io/example@sha256:0123456789abcdef",
-        to: "ghcr.io/example@sha256:123456789abcdef0", review: "fixture-maintenance", update: true, rollback: false, phase: null }] }; break;
+      case "/api/container-maintenance": json = { services: [{ name: "Jellyfin", from: "ghcr.io/example@sha256:0123456789abcdef",
+        to: "ghcr.io/example@sha256:123456789abcdef0", review: "fixture-maintenance", update: f.containerUpdate, rollback: false, phase: null }] }; break;
+      case "/api/container-maintenance/batch":
+        assert.equal(body.password, "fixture-password");
+        assert.equal(body.confirmation, "OK");
+        json = { results: body.targets.map(({ name }) => {
+          if (name === "Couchdeck") f.couchdeckUpdate = false;
+          else f.containerUpdate = false;
+          return { name, phase: name === "Couchdeck" ? "started" : "updated" };
+        }) };
+        break;
       case "/api/vault-backup":
         if (method === "GET") json = { local: true };
         else {
@@ -349,6 +361,10 @@ async function run() {
     await page.locator(".service-list-row").filter({ hasText: "Jellyfin" }).waitFor();
     const couchdeckRow = page.locator(".services-list > .service-list-row").filter({ hasText: "Couchdeck" });
     await couchdeckRow.getByText("Läuft", { exact: true }).waitFor();
+    await couchdeckRow.getByText("Update verfügbar", { exact: true }).waitFor();
+    const jellyfinBadges = page.locator(".service-list-row").filter({ hasText: "Jellyfin" }).locator(".service-list-badges");
+    assert.deepEqual(await jellyfinBadges.locator(".ui-status").allTextContents(), ["Läuft", "Update verfügbar"]);
+    assert.equal(await page.locator(".service-list-row").filter({ hasText: "Sonarr" }).getByText("Update verfügbar", { exact: true }).count(), 0);
     await page.getByLabel("App suchen", { exact: true }).fill("Couchdeck");
     assert.equal(await page.locator(".service-list-row").count(), 1);
     await couchdeckRow.getByRole("button", { name: "Details zu Couchdeck" }).click();
@@ -662,6 +678,31 @@ async function run() {
     ]);
     assert.match(vaultFile.suggestedFilename(), /\.spvault$/);
     await navigate(page, "Verwaltung");
+
+    await navigate(page, "Anwendungen");
+    await page.getByRole("button", { name: "Details zu Jellyfin" }).click();
+    const detail = page.getByRole("dialog");
+    await detail.getByRole("button", { name: "Auf neue Version aktualisieren" }).click();
+    await detail.locator(".service-update-form").getByLabel("StackPilot-Administratorpasswort", { exact: true }).fill("fixture-password");
+    await post(page, "/api/container-maintenance/batch", () => detail.getByRole("button", { name: "Update bestätigen" }).click());
+    assert.deepEqual(f.mutations.at(-1).body.targets, [{ name: "Jellyfin", review: "fixture-maintenance" }]);
+    await detail.getByRole("status").filter({ hasText: "Aktualisiert" }).waitFor();
+    await page.keyboard.press("Escape");
+    f.containerUpdate = true;
+    const refresh = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/container-maintenance");
+    await page.getByRole("button", { name: "Status aktualisieren", exact: true }).click();
+    await refresh;
+    const all = page.getByRole("button", { name: "Alles updaten", exact: true });
+    await all.click();
+    await page.getByText("Stabile Updates für Jellyfin, Couchdeck", { exact: false }).waitFor();
+    await page.getByLabel("StackPilot-Administratorpasswort", { exact: true }).fill("fixture-password");
+    await post(page, "/api/container-maintenance/batch", () => page.getByRole("button", { name: "Update bestätigen" }).click());
+    assert.deepEqual(f.mutations.at(-1).body.targets, [
+      { name: "Jellyfin", review: "fixture-maintenance" },
+      { name: "Couchdeck", review: "0.2.6" },
+    ]);
+    await page.getByRole("status").filter({ hasText: "Update gestartet" }).waitFor();
+    assert(await all.isDisabled());
 
     // Direct wizard links resume unfinished real jobs; fresh stacks start at Server.
     for (const status of [null, "running"]) {

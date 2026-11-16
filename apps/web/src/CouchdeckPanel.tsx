@@ -7,6 +7,7 @@ type Status = {
   installed: boolean;
   version: string | null;
   outdated?: boolean;
+  updateVersion?: string | null;
   controllable: boolean;
   state: "missing" | "running" | "off" | "no-display" | "unknown";
   since: string | null;
@@ -51,11 +52,11 @@ export function useCouchdeck() {
       clearInterval(timer);
     };
   }, [load]);
-  async function run(name: string) {
+  async function run(name: string, version?: string) {
     setBusy(name);
     setError("");
     try {
-      setStatus(await action<Status>("/api/couchdeck/action", { action: name }));
+      setStatus(await action<Status>("/api/couchdeck/action", { action: name, version }));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -149,8 +150,9 @@ export function CouchdeckPanel({ controller }: { controller: ReturnType<typeof u
                 Couchdeck schließen
               </button>
             )}
-            {status.outdated && (
-              <button className="primary" disabled={locked} onClick={() => void run("install")}>
+            {status.updateVersion && (
+              <button className="primary" disabled={locked || !status.helper.available}
+                onClick={() => void run("update", status.updateVersion!)}>
                 Auf neue Version aktualisieren
               </button>
             )}

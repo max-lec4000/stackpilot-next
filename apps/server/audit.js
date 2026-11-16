@@ -12,6 +12,7 @@ const actions = {
   "/api/remote-access/funnel/disable": "Öffentliche Jellyfin-Freigabe zurückgenommen",
   "/api/updates/start": "StackPilot-Code-Update angefordert",
   "/api/container-maintenance/update": "Container-Update ausgeführt",
+  "/api/container-maintenance/batch": "App-Updates angefordert",
   "/api/container-maintenance/rollback": "Container-Rückkehr ausgeführt",
   "/api/vault-backup/restore": "Tresor-Sicherung isoliert wiederhergestellt",
   "/api/vault-backup": "Verschlüsselte Tresor-Sicherung heruntergeladen",

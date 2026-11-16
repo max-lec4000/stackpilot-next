@@ -6,7 +6,7 @@ import path from "node:path";
 import catalogFile from "../../packages/catalog/services.json" with { type: "json" };
 
 const execute = promisify(execFile);
-const supported = ["Sonarr", "Radarr", "Lidarr", "Prowlarr", "Bazarr", "Seerr", "Jellyfin"];
+const supported = ["Sonarr", "Radarr", "Lidarr", "Prowlarr", "Bazarr", "Seerr", "Jellyfin", "qBittorrent", "Streamystats"];
 const inProgress = ["snapshotting", "changing", "rolling-back", "recovery-required"];
 const digestRef = /^[a-z0-9.\/:-]+@sha256:[a-f0-9]{64}$/;
 const owns = (root, file) => file === root || file.startsWith(root + path.sep);
@@ -51,24 +51,73 @@ export class ContainerMaintenance {
   }
   status(plan, name) {
     const record = this.engine.vault.get(this.key(plan, name));
-    const from = plan.images[name], to = this.catalog[name].image;
+    const from = plan.images[name], { image: to, channel } = this.catalog[name];
     const samePlan = record?.planId === plan.id;
-    const eligible = name !== "Jellyfin" || (this.jellyfin?.compatible(from) && this.jellyfin.compatible(to));
+    const eligible = (name !== "Jellyfin" || (this.jellyfin?.compatible(from) && this.jellyfin.compatible(to))) &&
+      (name !== "qBittorrent" || (plan.spec.vpn && !this.engine.vault.get(`safety-latch:${this.root(plan)}`)));
     return {
       name, from, to,
       review: reviewOf([plan.id, name, from, to, record?.id, record?.phase]),
       phase: samePlan ? record.phase : null,
-      update: Boolean(eligible && (!samePlan || !inProgress.includes(record.phase)) && from !== to && digestRef.test(from) && digestRef.test(to)),
+      update: Boolean(channel === "stable" && eligible && (!samePlan || !inProgress.includes(record.phase)) &&
+        from !== to && digestRef.test(from) && digestRef.test(to)),
       rollback: samePlan && (inProgress.includes(record.phase) || record.phase === "updated"),
       ...(name === "Jellyfin" && { note: from !== to && !eligible
         ? "Für den Wechsel fehlt die Abnahme beider Jellyfin-Images mit geschützter Anmeldung."
         : "Jellyfin-Wartung nur mit privatem HTTPS und abgeschaltetem Funnel." }),
     };
   }
-  list() {
+  async list() {
     const current = this.engine.current();
     if (current?.job.status !== "completed") return { services: [] };
-    return { services: supported.filter((name) => current.plan.spec.selected.includes(name)).map((name) => this.status(current.plan, name)) };
+    const blocked = this.engine.store.activeLease() || pendingContainerMaintenance(current.plan, this.engine.vault);
+    const services = supported.filter((name) => current.plan.spec.selected.includes(name)).map((name) => {
+      const status = this.status(current.plan, name);
+      return { ...status, update: !blocked && status.update };
+    });
+    const jellyfin = services.find((service) => service.name === "Jellyfin" && service.update);
+    if (jellyfin) {
+      try {
+        await this.jellyfin.privateGateway(current.plan);
+      } catch (error) {
+        jellyfin.update = false;
+        if (error.userFacing) jellyfin.note = error.message;
+      }
+    }
+    return { services };
+  }
+  async applyBatch(body, couchdeck) {
+    const targets = body.targets;
+    if (body.confirmation !== "OK" || !Array.isArray(targets) || !targets.length ||
+        targets.length > supported.length + 1 ||
+        targets.some((target) => !target || typeof target.review !== "string" ||
+          (!supported.includes(target.name) && target.name !== "Couchdeck")) ||
+        new Set(targets.map((target) => target.name)).size !== targets.length)
+      throw Error("Anwendungen und Bestätigung fehlen oder sind ungültig.");
+
+    const available = new Map((await this.list()).services.filter((service) => service.update)
+      .map(({ name, review }) => [name, review]));
+    if (targets.some(({ name }) => name === "Couchdeck")) {
+      const status = await couchdeck.status();
+      if (status.updateVersion && status.helper.available && !status.helper.running)
+        available.set("Couchdeck", status.updateVersion);
+    }
+    if (targets.some(({ name, review }) => available.get(name) !== review))
+      throw Error("Die Update-Auswahl ist nicht mehr aktuell. Bitte erneut prüfen.");
+
+    const results = [];
+    for (const { name, review } of targets) {
+      try {
+        const { phase } = name === "Couchdeck"
+          ? await couchdeck.update(review)
+          : await this.apply({ name, review, confirmation: "OK" });
+        results.push({ name, phase });
+      } catch (error) {
+        results.push({ name, phase: "failed", error: error.userFacing ? error.message :
+          "Update fehlgeschlagen. Den Dienst und die Wartungsübersicht prüfen." });
+      }
+    }
+    return { results };
   }
   async container(plan, slug, images) {
     const ids = (await this.engine.docker(["ps", "-aq", "--no-trunc", "--filter", `label=com.docker.compose.project=${plan.project}`, "--filter", `label=com.docker.compose.service=${slug}`])).trim().split(/\s+/).filter(Boolean);
@@ -138,8 +187,48 @@ export class ContainerMaintenance {
     if (record.name === "Jellyfin") {
       await s.wait(record.name);
       await this.jellyfin.verify(this.planAtImage(plan, record.name, image), image, true);
-    } else await this.verify(s, record.name);
+    } else await this.verifyService(s, record.name, this.planAtImage(plan, record.name, image));
     if ((await this.container(plan, files.slug, [image])).Id !== running.Id) throw Error("Container hat sich während der Prüfung geändert.");
+  }
+  async verifyService(s, name, plan) {
+    if (name === "qBittorrent") {
+      if (!plan.spec.vpn || this.engine.vault.get(`safety-latch:${this.root(plan)}`))
+        throw Error("qBittorrent-Wartung braucht den aktiven VPN-Schutz.");
+      await this.engine.vpnCheck(plan);
+    }
+    await this.verify(s, name);
+    if (name === "qBittorrent") await s.verifyQbit();
+    if (name === "Streamystats") await s.additional.verify(name);
+  }
+  async copyData(name, source, target) {
+    if (name !== "Streamystats") {
+      await this.run("cp", ["-a", "--reflink=auto", "--", source, target], 180000);
+      await this.run("sync", ["-f", target], 90000);
+      return;
+    }
+    if (!await hasDirectory(source)) throw Error("Streamystats-Daten fehlen.");
+    // PostgreSQL runs as a different UID. Use the pinned StackPilot helper to
+    // preserve ownership without exposing the Docker socket to the helper.
+    await mkdir(target, { mode: 0o700 });
+    await this.engine.docker(["run", "--rm", "--pull", "never", "--network", "none",
+      "--read-only", "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=DAC_OVERRIDE", "--cap-add=FOWNER",
+      "--security-opt=no-new-privileges:true", "--user", "0:0",
+      "--mount", `type=bind,source=${source},target=/snapshot-source,readonly`,
+      "--mount", `type=bind,source=${target},target=/snapshot-target`,
+      "--entrypoint", "/bin/sh", catalogFile.services.ApiRelay.image,
+      "-ec", "cp -a /snapshot-source/. /snapshot-target/ && sync -f /snapshot-target"], { timeout: 270000 });
+  }
+  async removeCopy(name, file) {
+    if (name !== "Streamystats") {
+      await rm(file, { recursive: true, force: true });
+    } else if (await hasDirectory(file)) {
+      await this.engine.docker(["run", "--rm", "--pull", "never", "--network", "none",
+        "--read-only", "--cap-drop=ALL", "--cap-add=DAC_OVERRIDE",
+        "--security-opt=no-new-privileges:true", "--user", "0:0",
+        "--mount", `type=bind,source=${path.dirname(file)},target=/copies`,
+        "--entrypoint", "rm", catalogFile.services.ApiRelay.image,
+        "-rf", "--", `/copies/${path.basename(file)}`], { timeout: 90000 });
+    }
   }
   planAtImage(plan, name, image) {
     const slug = this.catalog[name].slug;
@@ -167,7 +256,7 @@ export class ContainerMaintenance {
       if (record.name === "Jellyfin") {
         await s.wait(record.name);
         await this.jellyfin.verify(plan, record.from, true);
-      } else await this.verify(s, record.name);
+      } else await this.verifyService(s, record.name, plan);
       this.engine.vault.set(key, { ...record, phase: "rolled-back" });
       return;
     }
@@ -179,14 +268,13 @@ export class ContainerMaintenance {
     const savedUpdateData = await hasDirectory(files.failedData);
     const currentData = await hasDirectory(files.data);
     if (!savedUpdateData && !currentData) throw Error("Die bisherige Dienstkonfiguration fehlt.");
-    await rm(files.restore, { recursive: true, force: true });
-    await this.run("cp", ["-a", "--reflink=auto", "--", files.snapshot, files.restore], 180000);
-    await this.run("sync", ["-f", files.restore], 90000);
+    await this.removeCopy(record.name, files.restore);
+    await this.copyData(record.name, files.snapshot, files.restore);
     if (!savedUpdateData) {
       await rename(files.data, files.failedData);
     } else if (currentData) {
       if (await hasDirectory(files.failedRestore))
-        await rm(files.failedRestore, { recursive: true, force: true });
+        await this.removeCopy(record.name, files.failedRestore);
       await rename(files.data, files.failedRestore);
     }
     await rename(files.restore, files.data);
@@ -214,12 +302,13 @@ export class ContainerMaintenance {
       const record = { id: randomUUID(), planId: plan.id, name, from: status.from, to: status.to, phase: "snapshotting" };
       const files = this.paths(plan, record);
       const current = await this.container(plan, files.slug, [record.from]);
+      const dataMount = name === "Streamystats" ? path.join(files.data, "database") : files.data;
       if (!current.State.Running || !await hasDirectory(files.data) ||
-          !current.Mounts.some((mount) => mount.RW && mount.Type === "bind" && mount.Source === files.data))
+          !current.Mounts.some((mount) => mount.RW && mount.Type === "bind" && mount.Source === dataMount))
         throw Error("Laufender Container oder Konfigurationsordner konnte nicht bestätigt werden.");
       await this.noSharedWrites(current, files.data);
       if (name === "Jellyfin") await this.jellyfin.verify(plan, record.from);
-      else await this.verify(s, name);
+      else await this.verifyService(s, name, plan);
       await this.engine.docker(["image", "inspect", record.from, "--format", "{{.Id}}"]);
       try {
         await this.engine.docker(["image", "inspect", record.to, "--format", "{{.Id}}"]);
@@ -234,8 +323,7 @@ export class ContainerMaintenance {
       this.engine.vault.set(key, record);
       try {
         await this.stop(current, true);
-        await this.run("cp", ["-a", "--reflink=auto", "--", files.data, files.snapshot], 180000);
-        await this.run("sync", ["-f", files.snapshot], 90000);
+        await this.copyData(name, files.data, files.snapshot);
         record.phase = "changing";
         this.engine.vault.set(key, record);
         await this.startAndVerify(s, plan, files, record, record.to);

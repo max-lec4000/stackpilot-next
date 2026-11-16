@@ -9,6 +9,7 @@ import { globalSearch } from "./global-search.js";
 import { musicInventory, withMusicTrack } from "./music-library.js";
 import { inspectMusicTags } from "./music-tags.js";
 import { ServiceUpdates } from "./service-updates.js";
+import { AppUpdates } from "./app-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
 import { JellyfinMaintenance } from "./identity/jellyfin-maintenance.js";
 import { createVaultBackup, stageVaultRestore, vaultRestoreBodyLimit } from "./vault-backup.js";
@@ -86,6 +87,8 @@ export function inventoryMiddleware(options = {}) {
   installer().couchdeck = couchdeck;
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
+  const appUpdates = new AppUpdates(installer());
+  if (options.background !== false) appUpdates.start();
   const notifications = new Notifications(state, operations, hub);
   if (options.background !== false) notifications.start();
   const remoteAccess = new RemoteAccess(hub);
@@ -320,7 +323,7 @@ export function inventoryMiddleware(options = {}) {
       if (url.pathname === "/api/updates/job" && req.method === "GET") {
         result = await serviceUpdates.job();
       } else if (url.pathname === "/api/container-maintenance" && req.method === "GET") {
-        result = containerMaintenance.list();
+        result = await containerMaintenance.list();
       } else if (url.pathname === "/api/vault-backup" && req.method === "GET") {
         result = { local: vaultBackupLocal };
       } else if (url.pathname === "/api/music/tags" && req.method === "GET") {
@@ -559,7 +562,7 @@ export function inventoryMiddleware(options = {}) {
           url.searchParams.get("requestId"),
         );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
-        result = await managedServices(installer(), host);
+        result = await managedServices(installer(), host, appUpdates);
       } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
         result = await viewerProfiles.list();
       } else if (url.pathname === "/api/viewers" && req.method === "GET") {
@@ -625,6 +628,9 @@ export function inventoryMiddleware(options = {}) {
         } else if (["/api/container-maintenance/update", "/api/container-maintenance/rollback"].includes(url.pathname)) {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await containerMaintenance.apply(body, url.pathname.endsWith("/rollback"));
+        } else if (url.pathname === "/api/container-maintenance/batch") {
+          await manager.reauthenticate(body.password, remoteAddress);
+          result = await containerMaintenance.applyBatch(body, couchdeck);
         } else if (vaultRestore) {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await hub.mutate([], () => stageVaultRestore(state, body.archive, body.passphrase));
@@ -836,6 +842,10 @@ export function inventoryMiddleware(options = {}) {
             stop: () => couchdeck.stop(),
             link: () => couchdeck.link(),
             install: () => couchdeck.install(false),
+            update: async () => {
+              await couchdeck.update(body.version);
+              return couchdeck.status();
+            },
             "install-youtube": () => couchdeck.install(true),
             remove: () => couchdeck.remove(),
           };
@@ -927,6 +937,7 @@ export function inventoryMiddleware(options = {}) {
   };
   middleware.shutdown = async (timeoutMs = 240000) => {
     draining = true;
+    appUpdates.close();
     notifications.close();
     publicFunnel.close();
     oidcBackchannel.close();

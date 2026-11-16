@@ -19,10 +19,20 @@ type Service = {
   hostPort: number;
   url: string | null;
   state: string;
+  updateAvailable?: boolean;
   installationStatus: string;
   image: string;
   username: string;
   authentication?: string;
+};
+type Maintenance = { name: string; review: string; update: boolean; note?: string };
+type UpdateTarget = { name: string; review: string };
+type UpdateResult = { name: string; phase: string; error?: string };
+const updateResult: Record<string, string> = {
+  updated: "Aktualisiert",
+  "rolled-back": "Vorherige Version wiederhergestellt",
+  started: "Update gestartet",
+  failed: "Update fehlgeschlagen",
 };
 const states: Record<string, string> = {
   running: "Läuft",
@@ -116,6 +126,12 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
   const [loaded, setLoaded] = useState(false),
     [loading, setLoading] = useState(false),
     [services, setServices] = useState<Service[]>([]),
+    [maintenance, setMaintenance] = useState<Maintenance[]>([]),
+    [updateSelection, setUpdateSelection] = useState<{ all: boolean; targets: UpdateTarget[] } | null>(null),
+    [updatePassword, setUpdatePassword] = useState(""),
+    [updating, setUpdating] = useState(false),
+    [updateError, setUpdateError] = useState(""),
+    [updateResults, setUpdateResults] = useState<UpdateResult[]>([]),
     [error, setError] = useState(""),
     [query, setQuery] = useState(""),
     [filter, setFilter] = usePreference<string>("app-filter", "all", oneOf("all", "running", "other")),
@@ -142,22 +158,31 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     setPassword("");
     setRevealError("");
     setBusy(false);
+    if (!updateSelection?.all && !updating) {
+      setUpdateSelection(null);
+      setUpdatePassword("");
+    }
     opener.current?.focus({ preventScroll: true });
   }
   async function load() {
     const sequence = ++loadId.current;
     setLoading(true);
     try {
-      const result = await get<{ services: Service[] }>("/api/managed");
+      const [result, catalog] = await Promise.all([
+        get<{ services: Service[] }>("/api/managed"),
+        compact ? null : get<{ services: Maintenance[] }>("/api/container-maintenance").catch(() => null),
+      ]);
       if (sequence !== loadId.current) return;
       if (!Array.isArray(result.services))
         throw Error("Der Anwendungsstatus konnte nicht gelesen werden.");
       setServices(result.services);
+      setMaintenance(catalog?.services ?? []);
       setLoaded(true);
       setError("");
     } catch (e) {
       if (sequence !== loadId.current) return;
       setServices([]);
+      setMaintenance([]);
       setLoaded(false);
       setError((e as Error).message);
     } finally {
@@ -183,6 +208,63 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     const timer = setTimeout(closePanel, 20000);
     return () => clearTimeout(timer);
   }, [credentials]);
+  const targets = maintenance.filter((entry) => entry.update &&
+    services.some((service) => service.name === entry.name && service.state === "running"))
+    .map(({ name, review }) => ({ name, review }));
+  const couch = couchdeck.status;
+  if (couch?.updateVersion && couch.helper.available && !couch.helper.running && !couchdeck.busy)
+    targets.push({ name: "Couchdeck", review: couch.updateVersion });
+  const selectedTarget = targets.find((target) => target.name === selected?.name);
+  function prepareUpdate(all: boolean, chosen: UpdateTarget[]) {
+    setUpdatePassword("");
+    setUpdateError("");
+    setUpdateResults([]);
+    setUpdateSelection({ all, targets: chosen });
+  }
+  async function runUpdates(selection: NonNullable<typeof updateSelection>) {
+    setUpdating(true);
+    setUpdateError("");
+    try {
+      const result = await action<{ results: UpdateResult[] }>("/api/container-maintenance/batch", {
+        targets: selection.targets, password: updatePassword, confirmation: "OK",
+      });
+      setUpdateResults(result.results);
+      setUpdateSelection(null);
+    } catch (e) {
+      setUpdateError((e as Error).message);
+    } finally {
+      setUpdatePassword("");
+      await Promise.all([load(), couchdeck.load()]);
+      setUpdating(false);
+    }
+  }
+  const confirmation = updateSelection && (
+    <form className="service-update-form" onSubmit={(event) => {
+      event.preventDefault();
+      void runUpdates(updateSelection);
+    }}>
+      <p>Stabile Updates für {updateSelection.targets.map(({ name }) => name).join(", ")}. Die Dienste können dabei kurz ausfallen.</p>
+      {updateError && <p className="error" role="alert">{updateError}</p>}
+      <label>StackPilot-Administratorpasswort
+        <input type="password" autoComplete="current-password" value={updatePassword}
+          onChange={(event) => setUpdatePassword(event.target.value)} required disabled={updating} />
+      </label>
+      <div className="service-update-actions">
+        <button className="primary" disabled={updating}>{updating ? "Wird aktualisiert …" : "Update bestätigen"}</button>
+        <button type="button" disabled={updating} onClick={() => {
+          setUpdateSelection(null);
+          setUpdatePassword("");
+        }}>Abbrechen</button>
+      </div>
+    </form>
+  );
+  const results = (items: UpdateResult[]) => items.length > 0 && (
+    <ul className="service-update-results" role="status">
+      {items.map(({ name, phase, error }) => (
+        <li key={name}><strong>{name}</strong> · {error || updateResult[phase]}</li>
+      ))}
+    </ul>
+  );
   const rows = useMemo(() => {
     const entries = services.map((service) => ({
       key: serviceKey(service), name: service.name, state: service.state, service: service as Service | null,
@@ -217,11 +299,17 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
         title="Installierte Anwendungen"
         description="Status im Überblick. Zugänge und technische Details öffnest du bei Bedarf."
         actions={
-          <button disabled={loading} onClick={() => { void load(); void couchdeck.load(); }}>
-            {loading ? "Wird aktualisiert …" : "Status aktualisieren"}
-          </button>
+          <div className="service-update-actions">
+            <button className="primary" disabled={updating || !targets.length || !!updateSelection}
+              onClick={() => prepareUpdate(true, targets)}>Alles updaten</button>
+            <button disabled={loading} onClick={() => { void load(); void couchdeck.load(); }}>
+              {loading ? "Wird aktualisiert …" : "Status aktualisieren"}
+            </button>
+          </div>
         }
       />
+      {updateSelection?.all && confirmation}
+      {results(updateResults)}
       <div className="services-toolbar">
         <label>
           App suchen
@@ -282,8 +370,12 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
                 <span className="service-avatar" aria-hidden="true">{name.slice(0, 2)}</span>
                 <div className="service-list-name">
                   <h3>{name}</h3>
-                  {!service && couchdeck.status ? <CouchdeckStatus status={couchdeck.status} /> :
-                    <StatusBadge tone={stateTone(state)}>{states[state] || state || "Status unbekannt"}</StatusBadge>}
+                  <div className="service-list-badges">
+                    {!service && couchdeck.status ? <CouchdeckStatus status={couchdeck.status} /> :
+                      <StatusBadge tone={stateTone(state)}>{states[state] || state || "Status unbekannt"}</StatusBadge>}
+                    {(service ? service.updateAvailable || targets.some((target) => target.name === name) : couchdeck.status?.updateVersion) &&
+                      <StatusBadge tone="warning">Update verfügbar</StatusBadge>}
+                  </div>
                 </div>
                 <div className="service-list-actions">
                   {service?.url && (
@@ -340,6 +432,16 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
               </StatusBadge>
               <span>Installationsauftrag: {states[selected.installationStatus] || selected.installationStatus || "Unbekannt"}</span>
             </div>
+            <div className="service-update-actions">
+              <button className="primary" disabled={!selectedTarget || updating || !!updateSelection}
+                onClick={() => selectedTarget && prepareUpdate(false, [selectedTarget])}>Auf neue Version aktualisieren</button>
+            </div>
+            {!selectedTarget && (selected.updateAvailable || maintenance.find(({ name }) => name === selected.name)?.note) && (
+              <p>{maintenance.find(({ name }) => name === selected.name)?.note ||
+                "Für diese App steht derzeit kein stabiles Update zur Installation über StackPilot bereit."}</p>
+            )}
+            {updateSelection && !updateSelection.all && updateSelection.targets[0]?.name === selected.name && confirmation}
+            {results(updateResults.filter(({ name }) => name === selected.name))}
             {selected.url && (
               <a className="service-open primary" href={selected.url} target="_blank" rel="noopener noreferrer">
                 {selected.name} öffnen <span aria-hidden="true">↗</span>
@@ -354,6 +456,7 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
             </dl>
             <details className="service-technical">
               <summary>Image und lokaler Zugriff</summary>
+              {selected.updateAvailable && <p>Beim Anbieter gibt es ein neueres Container-Image. Die für StackPilot freigegebene Version findest du unter „Verwaltung → Sicherungen &amp; Updates → Container-Updates und Rückkehr“.</p>}
               <p><code>{selected.image}</code></p>
               <p>Nur lokal am Server veröffentlicht. Bei Zugriff über SSH zusätzlich den Webport weiterleiten:</p>
               <pre><code>ssh -L {selected.hostPort}:127.0.0.1:{selected.hostPort} benutzer@server</code></pre>

@@ -3,6 +3,7 @@
   "verifiedAt": "2026-11-07T16:48:01.929Z",
   "services": {
     "Jellyfin": {
+      "channel": "stable",
       "slug": "jellyfin",
       "image": "docker.io/jellyfin/jellyfin@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771",
       "source": "docker.io/jellyfin/jellyfin:latest",
@@ -12,6 +13,7 @@
       "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
     },
     "Sonarr": {
+      "channel": "stable",
       "slug": "sonarr",
       "image": "docker.io/linuxserver/sonarr@sha256:3b8c947d7fa173f70e40047d2c8d02835fb8416aeb5ae36def57d9ad15e2f906",
       "source": "docker.io/linuxserver/sonarr:latest",
@@ -21,6 +23,7 @@
       "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
     },
     "Radarr": {
+      "channel": "stable",
       "slug": "radarr",
       "image": "docker.io/linuxserver/radarr@sha256:ade5937813c6ae415b29db729386e53fea3ecf067a019849bafbe2d2a6ec02ba",
       "source": "docker.io/linuxserver/radarr:latest",
@@ -30,6 +33,7 @@
       "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
     },
     "Prowlarr": {
+      "channel": "stable",
       "slug": "prowlarr",
       "image": "docker.io/linuxserver/prowlarr@sha256:431d7efebcef466e56adaa40a7a2fa2b0e85159a037b8bf465eaadbf0cf5bedf",
       "source": "docker.io/linuxserver/prowlarr:latest",
@@ -39,6 +43,7 @@
       "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
     },
     "qBittorrent": {
+      "channel": "stable",
       "slug": "qbittorrent",
       "image": "docker.io/linuxserver/qbittorrent@sha256:05c1454f9a32967affc1f34f67f8cc0cc57dd805dca45489fe797095a6286556",
       "source": "docker.io/linuxserver/qbittorrent:latest",
@@ -50,6 +55,7 @@
       "compatibility": "5.3-Login mit HTTP 204 und QBT_SID-Portcookie unterst\u00fctzt. Interne Dienste umgehen ausschlie\u00dflich f\u00fcr ihre DNS-Namen einen vorhandenen Internetproxy."
     },
     "Lidarr": {
+      "channel": "stable",
       "slug": "lidarr",
       "image": "docker.io/linuxserver/lidarr@sha256:d5707cfe084da21a3864c7ef0edd9c0543b5e26c79c551f84dad5ef8683af8c7",
       "source": "docker.io/linuxserver/lidarr:latest",
@@ -59,6 +65,7 @@
       "testedScope": "Gemeinsamer Bootstrap, Kontoanlage, Pfade, Dienstverbindungen und lokale Ver\u00f6ffentlichung; kein Download/VPN/GPU-Test"
     },
     "Bazarr": {
+      "channel": "stable",
       "slug": "bazarr",
       "image": "docker.io/linuxserver/bazarr@sha256:7ef0e58216900dbce30b123e0eb65f5cb30e36f126de9474acdd2022fb069c54",
       "source": "docker.io/linuxserver/bazarr:latest",
@@ -68,6 +75,7 @@
       "testedScope": "Form-Anmeldung, gesch\u00fctzte API, Medienmount und Sonarr-/Radarr-Verbindungen; keine externen Untertitelanbieter"
     },
     "Seerr": {
+      "channel": "stable",
       "slug": "seerr",
       "image": "ghcr.io/seerr-team/seerr@sha256:aadee014b40e28cf9aa4928bc9d1183a6eb08f8c44d543cddc9efdcb16549be2",
       "source": "ghcr.io/seerr-team/seerr:latest",
@@ -78,6 +86,7 @@
       "authentication": "jellyfin"
     },
     "Streamystats": {
+      "channel": "stable",
       "slug": "streamystats",
       "image": "ghcr.io/fredrikburmester/streamystats-aio@sha256:9bc68f6301cc2ae749da950121d6efcbaa63335d458dad1d5967265af8e49382",
       "source": "ghcr.io/fredrikburmester/streamystats-aio:latest",

@@ -494,6 +494,28 @@ export class Services {
       }
     await this.additional.connect();
   }
+  async verifyQbit() {
+    const p = await this.qbit("/app/preferences");
+    if (p.web_ui_username !== this.plan.spec.username)
+      throw new Error("qBittorrent: Benutzername stimmt nicht.");
+    if (this.plan.spec.vpn && p.current_network_interface !== "tun0")
+      throw new Error(
+        "qBittorrent ist nicht an das VPN-Interface gebunden.",
+      );
+    const categories = await this.qbit("/torrents/categories");
+    for (const [category, folder] of [
+      ["stackpilot-tv", "tv"],
+      ["stackpilot-movies", "movies"],
+      ["stackpilot-music", "music"],
+    ])
+      if (
+        categories[category]?.savePath !==
+        "/data/downloads/complete/" + folder
+      )
+        throw new Error(
+          "qBittorrent: Downloadkategorie fehlt oder hat einen anderen Pfad.",
+        );
+  }
   async verify() {
     const checks = [];
     for (const name of this.plan.spec.selected) {
@@ -524,26 +546,7 @@ export class Services {
         )
           throw new Error("Jellyfin: Bibliotheken fehlen.");
       } else if (name === "qBittorrent") {
-        const p = await this.qbit("/app/preferences");
-        if (p.web_ui_username !== this.plan.spec.username)
-          throw new Error("qBittorrent: Benutzername stimmt nicht.");
-        if (this.plan.spec.vpn && p.current_network_interface !== "tun0")
-          throw new Error(
-            "qBittorrent ist nicht an das VPN-Interface gebunden.",
-          );
-        const categories = await this.qbit("/torrents/categories");
-        for (const [category, folder] of [
-          ["stackpilot-tv", "tv"],
-          ["stackpilot-movies", "movies"],
-          ["stackpilot-music", "music"],
-        ])
-          if (
-            categories[category]?.savePath !==
-            "/data/downloads/complete/" + folder
-          )
-            throw new Error(
-              "qBittorrent: Downloadkategorie fehlt oder hat einen anderen Pfad.",
-            );
+        await this.verifyQbit();
       } else {
         const h = await this.arr(name, "/config/host");
         if (

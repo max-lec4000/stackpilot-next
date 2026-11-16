@@ -2,7 +2,7 @@ import { readContainers } from "./retirement.js";
 import { catalog } from "./catalog.js";
 import { Services } from "./service-api.js";
 import { serviceUrl } from "./access.js";
-export async function managedServices(engine, requestHost = "") {
+export async function managedServices(engine, requestHost = "", appUpdates) {
   const current = engine.current();
   const jobs = current ? [current.job] : [];
   const containers = await readContainers(engine.docker);
@@ -33,6 +33,7 @@ export async function managedServices(engine, requestHost = "") {
             ? serviceUrl(entry.slug, plan.ports[name], plan.bind, requestHost)
             : null,
         state: c?.status || "missing",
+        updateAvailable: appUpdates?.available(name, c?.image) ?? false,
         installationStatus: job.status,
         image: plan.images[name],
         username: plan.spec.username,

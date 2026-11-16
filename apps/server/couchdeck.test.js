@@ -114,6 +114,26 @@ test("Root-Hilfe: nur feste Aufträge, kein zweiter Auftrag parallel, Ablehnung 
   }
 });
 
+test("Couchdeck bietet nur neuere stabile Versionen aus dem Lieferumfang an", async () => {
+  const f = await fixture();
+  try {
+    await mkdir(f.couchdeck.bundledDir);
+    const file = path.join(f.couchdeck.bundledDir, "package.json");
+    for (const version of ["0.0.9", "0.1.0", "0.2.0-beta.1"]) {
+      await writeFile(file, JSON.stringify({ version }));
+      assert.equal((await f.couchdeck.status()).updateVersion, null);
+      await assert.rejects(f.couchdeck.update(version), /stabile Couchdeck-Version/);
+    }
+    await writeFile(file, JSON.stringify({ version: "0.2.0" }));
+    assert.equal((await f.couchdeck.status()).updateVersion, "0.2.0");
+    assert.deepEqual(await f.couchdeck.update("0.2.0"), { phase: "started" });
+    assert.deepEqual(f.calls.filter((args) => args[0] === "start"),
+      [["start", "--no-block", "stackpilot-root@couchdeck-install.service"]]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("Entfernen löscht die Übergabedatei mit dem Zugang", async () => {
   const f = await fixture();
   try {

@@ -19,6 +19,14 @@ const helperJobs = {
   remove: "couchdeck-remove",
 };
 const userFacing = (message) => Object.assign(Error(message), { userFacing: true });
+const stableVersion = (version) => /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/.test(version || "");
+
+function newerStableVersion(version, bundled) {
+  if (!stableVersion(bundled) || !stableVersion(version)) return null;
+  const installed = version.split(".").map(Number), candidate = bundled.split(".").map(Number);
+  const change = candidate.findIndex((part, index) => part !== installed[index]);
+  return change !== -1 && candidate[change] > installed[change] ? bundled : null;
+}
 
 async function systemctl(args) {
   try {
@@ -114,6 +122,7 @@ export class Couchdeck {
       installed,
       version,
       outdated,
+      updateVersion: newerStableVersion(version, bundled),
       controllable,
       // Was die Startschleife zuletzt gemeldet hat; "off" gilt sofort, sobald der Merker liegt.
       state: !installed ? "missing" : off ? "off" : state || "unknown",
@@ -195,6 +204,13 @@ export class Couchdeck {
   }
   install(youtube = false) {
     return this.runHelper(youtube ? "install-youtube" : "install");
+  }
+  async update(expected) {
+    const status = await this.status();
+    if (!status.updateVersion || expected !== status.updateVersion)
+      throw userFacing("Die stabile Couchdeck-Version hat sich geändert. Bitte erneut prüfen.");
+    await this.install();
+    return { phase: "started" };
   }
   async remove() {
     await unlink(this.integrationFile).catch(() => {});

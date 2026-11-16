@@ -210,6 +210,27 @@ export class Couchdeck {
       throw userFacing("Couchdeck ist nicht installiert oder der Übergabeordner fehlt.");
     return this.hub.mutate(["Jellyfin"], (context) => this.linkWith(context));
   }
+  async integrationFor(plan) {
+    const text = await readFile(this.integrationFile, "utf8").catch(error => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (text === null) return null;
+    const link = JSON.parse(text);
+    if (link.version !== 1 || link.stack !== (plan.rootId || plan.id))
+      throw userFacing("Die Couchdeck-Verknüpfung gehört nicht eindeutig zum aktuellen Stack.");
+    return link;
+  }
+  async writeIntegration(link) {
+    const temp = `${this.integrationFile}.${randomBytes(6).toString("hex")}.tmp`;
+    try {
+      await writeFile(temp, JSON.stringify(link, null, 2), { mode: 0o640, flag: "wx", flush: true });
+      await chmod(temp, 0o640);
+      await rename(temp, this.integrationFile);
+    } finally {
+      await unlink(temp).catch(error => { if (error.code !== "ENOENT") throw error; });
+    }
+  }
   async mediaOwner(token) {
     if (typeof token !== "string" || !/^[a-f0-9]{32}$/i.test(token)) return null;
     const { plan, s } = await this.hub.context(["Jellyfin"]);
@@ -325,10 +346,7 @@ export class Couchdeck {
             .map((name) => [name, `http://127.0.0.1:${plan.ports[name]}${pings[name]}`]),
         ),
       };
-      const temp = `${this.integrationFile}.${randomBytes(6).toString("hex")}.tmp`;
-      await writeFile(temp, JSON.stringify(link, null, 2), { mode: 0o640 });
-      await chmod(temp, 0o640);
-      await rename(temp, this.integrationFile);
+      await this.writeIntegration(link);
       // Ein neuer Zugang wird erst beim nächsten Start von Couchdeck übernommen.
       const before = await this.status();
       if (!valid && before.state === "running") return this.restart();

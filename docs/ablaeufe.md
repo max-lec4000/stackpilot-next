@@ -62,15 +62,28 @@ Medien-Container laufen weiter.
 
 Unter **Anwendungen → Dienst → Details → API-Schlüssel erneuern** das
 StackPilot-Administratorpasswort eingeben. Die Aktion steht für Bazarr,
-Lidarr, Sonarr und Radarr zur Verfügung. Lidarr, Sonarr und Radarr starten
-beim Wechsel kurz neu.
+Lidarr, Sonarr, Radarr, Prowlarr und Seerr zur Verfügung. Lidarr, Sonarr,
+Radarr und Prowlarr starten beim Wechsel kurz neu.
 
 StackPilot aktualisiert bei Lidarr die verwaltete Prowlarr-Verbindung.
 Bei Sonarr und Radarr übernimmt es den Schlüssel für die zugeordneten
-Verbindungen in Prowlarr, Seerr und Bazarr. Bei einer Unterbrechung
-dieselbe Aktion erneut ausführen. StackPilot setzt den angefangenen
-Wechsel mit dem im Tresor vorbereiteten Schlüssel fort. Externe
-Verbraucher müssen den neuen Schlüssel separat erhalten.
+Verbindungen in Prowlarr, Seerr und Bazarr. Bei Prowlarr aktualisiert
+StackPilot die zugeordneten Indexer in Sonarr, Radarr und Lidarr.
+Seerrs eigener Wechsel aktualisiert auch eine ältere, per Schlüssel
+verbundene Couchdeck-Installation. Persönliche Seerr-Sitzungen werden
+weiterverwendet. Für Schlüssel aus der Seerr-Umgebungsvariable
+`API_KEY` ist die Installationskonfiguration maßgeblich.
+
+Meldet StackPilot einen unterbrochenen Wechsel, dieselbe Aktion
+erneut ausführen. Externe Verbraucher müssen den neuen Schlüssel
+separat erhalten.
+
+Unter **Anwendungen → Jellyfin → Details** lässt sich der Dienstzugang
+für Couchdeck, Seerr oder Streamystats einzeln erneuern. StackPilot
+prüft zuerst den neuen Zugang beim Dienst und widerruft anschließend
+den bisher dort verwendeten Token. Der Streamystats-Schritt gilt
+für das integrierte und geprüfte StackPilot-Image. Ein laufendes
+Couchdeck startet nach seiner eigenen Token-Erneuerung neu.
 
 ### Zugriff von unterwegs
 - Einrichten: im Assistenten „Von unterwegs“ wählen oder später unter

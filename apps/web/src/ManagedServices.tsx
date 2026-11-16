@@ -48,12 +48,14 @@ function stateTone(state: string) {
     return "warning" as const;
   return "neutral" as const;
 }
-const rotatableKeys = ["Bazarr", "Lidarr", "Sonarr", "Radarr"] as const;
+const rotatableKeys = ["Bazarr", "Lidarr", "Sonarr", "Radarr", "Prowlarr", "Seerr"] as const;
 type RotatableKey = (typeof rotatableKeys)[number];
 function canRotateKey(name: string): name is RotatableKey {
   return rotatableKeys.some(service => service === name);
 }
-function ServiceKeyRotation({ planId, name }: { planId: string; name: RotatableKey }) {
+function ServiceKeyRotation({ planId, name, consumer }: {
+  planId: string; name: RotatableKey | "Jellyfin"; consumer?: "Couchdeck" | "Seerr" | "Streamystats";
+}) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -61,10 +63,12 @@ function ServiceKeyRotation({ planId, name }: { planId: string; name: RotatableK
 
   return (
     <details className="service-technical">
-      <summary>{name}-API-Schlüssel erneuern</summary>
-      <p>Der bisherige Schlüssel wird ungültig. Externe Apps, die ihn verwenden,
-        brauchen danach den neuen Schlüssel aus den Einstellungen von {name}.</p>
-      {name !== "Bazarr" && <p>{name} wird kurz neu gestartet. StackPilot aktualisiert die verwalteten Verbindungen
+      <summary>{consumer ? `Diensttoken für ${consumer} erneuern` : `${name}-API-Schlüssel erneuern`}</summary>
+      {consumer ? <p>StackPilot übergibt den neuen Token an {consumer} und widerruft den bisherigen Dienstzugang.</p> :
+        <p>Der bisherige Schlüssel wird ungültig. Externe Apps, die ihn verwenden,
+          brauchen danach den neuen Schlüssel aus den Einstellungen von {name}.</p>}
+      {name === "Prowlarr" && <p>Prowlarr startet kurz neu. StackPilot aktualisiert die verwalteten Indexer in Sonarr, Radarr und Lidarr.</p>}
+      {["Sonarr", "Radarr", "Lidarr"].includes(name) && <p>{name} wird kurz neu gestartet. StackPilot aktualisiert die verwalteten Verbindungen
         {name === "Lidarr" ? " zu Prowlarr." : " zu Prowlarr, Seerr und Bazarr."}</p>}
       <form onSubmit={async (event) => {
         event.preventDefault();
@@ -72,7 +76,7 @@ function ServiceKeyRotation({ planId, name }: { planId: string; name: RotatableK
         setError("");
         setComplete(false);
         try {
-          await action("/api/credentials/rotate-" + name.toLowerCase(), {
+          await action("/api/credentials/rotate-" + [name, consumer].filter(Boolean).join("-").toLowerCase(), {
             planId,
             password,
             confirmation: "OK",
@@ -97,11 +101,12 @@ function ServiceKeyRotation({ planId, name }: { planId: string; name: RotatableK
           />
         </label>
         <button className="primary" disabled={busy || !password}>
-          {busy ? "Schlüssel wird geprüft …" : "API-Schlüssel erneuern"}
+          {busy ? "Zugang wird geprüft …" : consumer ? "Diensttoken erneuern" : "API-Schlüssel erneuern"}
         </button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
-      {complete && <p role="status">{name} akzeptiert den neuen Schlüssel. Der bisherige ist ungültig.</p>}
+      {complete && <p role="status">{consumer ? `${consumer} hat den neuen Diensttoken. Der bisherige ist ungültig.` :
+        `${name} akzeptiert den neuen Schlüssel. Der bisherige ist ungültig.`}</p>}
     </details>
   );
 }
@@ -354,10 +359,16 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
               <pre><code>ssh -L {selected.hostPort}:127.0.0.1:{selected.hostPort} benutzer@server</code></pre>
             </details>
             {canRotateKey(selected.name) &&
-              (selected.state === "running" || (selected.name !== "Bazarr" && selected.state === "exited")) &&
+              (selected.state === "running" || (!["Bazarr", "Seerr"].includes(selected.name) && selected.state === "exited")) &&
               selected.installationStatus === "completed" && (
                 <ServiceKeyRotation key={serviceKey(selected)} planId={selected.planId} name={selected.name} />
               )}
+            {selected.name === "Jellyfin" && selected.state === "running" && selected.installationStatus === "completed" &&
+              (["Couchdeck", "Seerr", "Streamystats"] as const).filter(consumer =>
+                consumer === "Couchdeck" ? Boolean(couchdeck.status?.linked) :
+                  services.some(service => service.name === consumer && service.installationStatus === "completed")
+              ).map(consumer =>
+                <ServiceKeyRotation key={consumer} planId={selected.planId} name="Jellyfin" consumer={consumer} />)}
             <div className="service-credentials">
               {!showReveal ? (
                 <button onClick={() => setShowReveal(true)}>Zugang geschützt anzeigen</button>

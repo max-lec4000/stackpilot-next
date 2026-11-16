@@ -2,6 +2,15 @@
 
 ## 0.5.0 – November 2026
 
+### Prowlarr-, Seerr- und Jellyfin-Dienstzugänge
+
+- StackPilot erneuert Prowlarrs API-Schlüssel und aktualisiert seine
+  verwalteten Indexer in Sonarr, Radarr und Lidarr.
+- Seerrs eigener API-Schlüssel kann erneuert werden. Ein älteres,
+  über den Schlüssel verbundenes Couchdeck wird berücksichtigt.
+- Jellyfin-Dienstzugänge für Couchdeck, Seerr und Streamystats
+  lassen sich unter Jellyfin einzeln wechseln und widerrufen.
+
 ### Sonarr- und Radarr-Schlüssel
 
 - Die Schlüssel lassen sich in StackPilot erneuern. Verwaltete

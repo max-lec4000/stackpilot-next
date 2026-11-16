@@ -48,6 +48,8 @@ import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
 import { rotateArrKey } from "./arr-key.js";
+import { rotateSeerrKey } from "./seerr-key.js";
+import { rotateCouchdeckToken, rotateSeerrJellyfinToken, rotateStreamystatsJellyfinToken } from "./jellyfin-service-tokens.js";
 import { rotateBazarrKey } from "./bazarr-key.js";
 import path from "node:path";
 import { Auth, sessionCookie } from "./auth.js";
@@ -792,15 +794,21 @@ export function inventoryMiddleware(options = {}) {
           result = await installer().resume(body.operationId);
         else if (url.pathname === "/api/deployment/end")
           result = installer().end(body.operationId, body.confirmation);
-        else if (/^\/api\/credentials\/rotate-(bazarr|lidarr|sonarr|radarr)$/.test(url.pathname)) {
+        else if (/^\/api\/credentials\/rotate-(bazarr|lidarr|sonarr|radarr|prowlarr|seerr|jellyfin-(couchdeck|seerr|streamystats))$/.test(url.pathname)) {
           if (body.confirmation !== "OK")
             throw Error("Schlüsselwechsel zuerst bestätigen.");
           await manager.reauthenticate(body.password, remoteAddress);
           const slug = url.pathname.slice("/api/credentials/rotate-".length);
-          const service = slug[0].toUpperCase() + slug.slice(1);
-          result = await hub.mutate([service], ({ plan, s }) => {
+          const service = slug.startsWith("jellyfin-") ? "Jellyfin" : slug[0].toUpperCase() + slug.slice(1);
+          const required = slug === "jellyfin-seerr" ? [service, "Seerr"]
+            : slug === "jellyfin-streamystats" ? [service, "Streamystats"] : [service];
+          result = await hub.mutate(required, ({ plan, s }) => {
             if (body.planId !== plan.id)
               throw Error("Der Stack hat sich geändert. Bitte öffne die Anwendung erneut.");
+            if (slug === "seerr") return rotateSeerrKey(s, installer(), couchdeck);
+            if (slug === "jellyfin-couchdeck") return rotateCouchdeckToken(s, couchdeck);
+            if (slug === "jellyfin-seerr") return rotateSeerrJellyfinToken(s);
+            if (slug === "jellyfin-streamystats") return rotateStreamystatsJellyfinToken(s, installer());
             return service === "Bazarr" ? rotateBazarrKey(s) : rotateArrKey(s, installer().docker, service);
           });
         } else if (url.pathname === "/api/credentials/reveal")

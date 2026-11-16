@@ -207,6 +207,7 @@ async function mockAPI(page, f) {
         break;
       case "/api/credentials/rotate-sonarr":
       case "/api/credentials/rotate-radarr":
+      case "/api/credentials/rotate-jellyfin-couchdeck":
         json = { ok: true };
         break;
       case "/api/media/search":
@@ -412,6 +413,14 @@ async function run() {
       assert.equal(await password.inputValue(), "");
       await page.keyboard.press("Escape");
     }
+    await appRow.getByRole("button", { name: /Details/ }).click();
+    const tokenDetails = page.getByRole("dialog").locator("details").filter({ hasText: "Diensttoken für Couchdeck erneuern" });
+    await tokenDetails.locator("summary").click();
+    await tokenDetails.getByLabel("StackPilot-Administratorpasswort", { exact: true }).fill("fixture-password");
+    await post(page, "/api/credentials/rotate-jellyfin-couchdeck", () =>
+      tokenDetails.getByRole("button", { name: "Diensttoken erneuern", exact: true }).click());
+    await tokenDetails.getByRole("status").filter({ hasText: "Couchdeck hat den neuen Diensttoken" }).waitFor();
+    await page.keyboard.press("Escape");
 
     // Download actions depend on the actual state. Completed rows have no bar.
     await navigate(page, "Downloads");

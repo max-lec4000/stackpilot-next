@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { lstat, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { arrKeyConsumers } from "./arr-key-consumers.js";
+import { prowlarrKeyConsumers } from "./prowlarr-key.js";
 import { catalog } from "./catalog.js";
 import { serviceCredentialKey } from "./provision-files.js";
 
@@ -30,7 +31,7 @@ async function configKey(dir, uid) {
 }
 
 export async function rotateArrKey(services, docker, name) {
-  if (!["Sonarr", "Radarr", "Lidarr"].includes(name))
+  if (!["Sonarr", "Radarr", "Lidarr", "Prowlarr"].includes(name))
     throw Error("Schlüsselwechsel für diesen Dienst ist nicht verfügbar.");
   const { slug } = catalog.services[name];
   const { plan, vault } = services;
@@ -61,7 +62,9 @@ export async function rotateArrKey(services, docker, name) {
   const found = await configKey(dir, plan.uid);
   if (![previous, next].includes(found.key))
     throw Error("Der bisherige Schlüssel stimmt nicht mit der Dienstkonfiguration überein.");
-  const consumers = await arrKeyConsumers(services, name, previous, next, !!pendingApiKey, pendingConsumers);
+  const consumers = name === "Prowlarr"
+    ? await prowlarrKeyConsumers(services, previous, next, !!pendingApiKey, pendingConsumers)
+    : await arrKeyConsumers(services, name, previous, next, !!pendingApiKey, pendingConsumers);
   if (!pendingApiKey && (!container.State.Running || !await accepts(services, name, previous)))
     throw Error(`${name} bestätigt den bisherigen Schlüssel nicht.`);
   if (!pendingApiKey || !pendingConsumers)

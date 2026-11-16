@@ -30,7 +30,7 @@ apt-get install -y --no-install-recommends \
   pipewire pipewire-audio pipewire-pulse wireplumber pulseaudio-utils libspa-0.2-modules libpipewire-0.3-modules \
   avahi-daemon libnss-mdns \
   intel-media-va-driver-non-free vainfo \
-  bluez curl ca-certificates unzip \
+  bluez curl ca-certificates unzip qrencode \
   fonts-noto-core fonts-noto-color-emoji \
   libgtk-3-0t64 libnss3 libgbm1 libasound2t64 libxss1 libxtst6 libatk-bridge2.0-0t64 libcups2t64 \
   libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libsecret-1-0 \

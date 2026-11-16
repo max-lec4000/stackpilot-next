@@ -1,6 +1,6 @@
 {
   "name": "couchdeck",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Controller-first Vollbild-Oberfläche für Jellyfin & Co. auf einem headless Server",
   "main": "src/main/main.js",
   "private": true,

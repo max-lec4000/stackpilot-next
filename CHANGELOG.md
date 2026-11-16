@@ -2,6 +2,12 @@
 
 ## 0.5.0 – November 2026
 
+### Couchdeck 0.2.5
+
+- Bei einer YouTube-Bot-Bestätigung zeigt Couchdeck den offiziellen
+  Videolink als QR-Code für Handy oder Tablet. Der Link lässt sich auch
+  in den Videodetails anzeigen. Couchdeck erzeugt den QR-Code lokal.
+
 ### Geschütztes Jellyfin und Couchdeck 0.2.4
 
 - StackPilot bereitet einen Rückweg für geschütztes Jellyfin vor und

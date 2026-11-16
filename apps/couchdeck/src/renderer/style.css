@@ -533,6 +533,13 @@ img.logo { max-height: 7.5rem; max-width: 34rem; object-fit: contain; object-pos
 .dialog h2 { margin-top: 0; }
 .dialog .actions { justify-content: center; }
 .infopop, .dialog { box-shadow: inset 0 0.25rem 0 var(--accent), 0 2rem 5rem rgba(0, 0, 0, 0.55); }
+.yt-share-code {
+  display: block;
+  width: min(16rem, 60vw, 37vh);
+  height: auto;
+  margin: 1rem 0;
+  image-rendering: pixelated;
+}
 .infopop {
   display: flex; gap: 1.6rem; width: 46rem; max-height: 70vh;
   border-radius: 1rem; padding: 1.6rem; animation: popin 0.15s ease;

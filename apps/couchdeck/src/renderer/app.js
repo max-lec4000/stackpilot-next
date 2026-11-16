@@ -1961,6 +1961,25 @@ async function ytPlay(entries, startIndex = 0) {
   try { await cd.call('yt:play', { entries: entries.filter((x) => x.kind === 'video'), startIndex: Math.max(0, startIndex) }); } catch (e) { toast('YouTube: ' + e.message, 'error'); }
 }
 
+function showYouTubeLink(id, blocked = false) {
+  const result = h('div', { class: 'yt-share-result' }, 'Link wird vorbereitet …');
+  const panel = h('div', { class: 'dialog yt-share' },
+    h('h2', {}, 'Auf YouTube ansehen'),
+    blocked ? h('p', {}, 'YouTube verlangt auf diesem Server eine Bot-Bestätigung.') : null,
+    result,
+    h('div', { class: 'actions' },
+      h('button', { class: 'action primary focusable', 'data-autofocus': true, oncdselect: closeOverlay }, 'Schließen')));
+  showOverlay(panel, { centered: true, onAction: (a) => a === 'back' ? (closeOverlay(), true) : false,
+    hints: () => [['A', 'a', 'Schließen'], ['B', 'b', 'Zurück']] });
+  cd.call('yt:share', id).then(({ url, image }) => {
+    if (!result.isConnected) return;
+    result.textContent = '';
+    if (image) result.append(h('p', {}, 'Scanne den QR-Code mit der Kamera deines Handys oder Tablets.'),
+      h('img', { class: 'yt-share-code', src: image, alt: 'QR-Code zum YouTube-Video', width: 264, height: 264 }));
+    result.append(h('p', {}, h('code', {}, url)));
+  }).catch(() => { result.textContent = 'Der YouTube-Link konnte nicht erstellt werden.'; });
+}
+
 function ytRow(title, entries, { list } = {}) {
   if (!entries?.length) return null;
   return h('section', { class: 'row' }, h('h2', {}, title),
@@ -2178,6 +2197,7 @@ function showYtInfo(card) {
       h('div', { class: 'actions' },
         h('button', { class: 'action primary focusable', 'data-autofocus': true, oncdselect: () => { closeOverlay(); (card.infoCard || card).dispatchEvent(new CustomEvent('cdselect')); } },
           e.kind === 'video' ? '▶ Abspielen' : 'Öffnen'),
+        e.kind === 'video' ? h('button', { class: 'action focusable', oncdselect: () => showYouTubeLink(e.id) }, 'Auf Handy ansehen') : null,
         e.kind === 'video' ? h('button', { class: 'action focusable wl-btn', oncdselect: async () => {
           const r = await call('yt:toggleWatchLater', e); closeOverlay();
           toast(r.watchLater ? `„${e.title}“ auf „Später ansehen“` : 'Von „Später ansehen“ entfernt');
@@ -2691,6 +2711,7 @@ document.addEventListener('click', (e) => {
 // ---------- Ereignisse aus dem Hauptprozess ----------
 
 cd.on('toast', ({ text, kind }) => toast(text, kind));
+cd.on('youtube-bot-check', (id) => showYouTubeLink(id, true));
 cd.on('auth', (a) => {
   const was = S.auth.loggedIn;
   S.auth = a;

@@ -252,10 +252,9 @@ class Player extends EventEmitter {
     if (resolveError && (resolveError.code === 'YOUTUBE_BOT_CHECK' || /sign in/i.test(resolveError.message))) {
       const botCheck = resolveError.code === 'YOUTUBE_BOT_CHECK';
       this.emit('log', botCheck ? 'YouTube: Bot-Prüfung mit Anmeldeaufforderung.' : 'YouTube: Anmeldung erforderlich.');
-      this.emit('error', botCheck
-        ? 'YouTube verlangt für diesen Abruf eine Anmeldung zur Bot-Prüfung.'
-        : 'YouTube verlangt für diesen Abruf eine Anmeldung.');
       await this.finish('error');
+      if (botCheck) this.emit('youtube-bot-check', entry.id);
+      else this.emit('error', 'YouTube verlangt für diesen Abruf eine Anmeldung.');
       return;
     }
     // YouTube-HLS: keine Verbindungs-Wiederverwendung – YouTube verteilt Segmente auf wechselnde

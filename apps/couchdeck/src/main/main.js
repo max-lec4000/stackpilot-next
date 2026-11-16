@@ -9,6 +9,7 @@ const { Gamepads } = require('./gamepad');
 const system = require('./system');
 const { Seerr } = require('./seerr');
 const { YouTube } = require('./youtube');
+const { youtubeShare } = require('./youtube-share');
 const sound = require('./sound');
 
 const windowed = process.argv.includes('--windowed');
@@ -274,6 +275,7 @@ function cycleSleep() {
 player.on('ended', () => {
   if (SLEEP_STEPS[sleep.step] === 'end') { sleep.step = 0; } send('player-state', player.publicState()); send('refresh'); if (win) win.focus(); });
 player.on('error', (msg) => toast(msg, 'error'));
+player.on('youtube-bot-check', (id) => send('youtube-bot-check', id));
 player.on('loading', (l) => send('player-loading', l));
 player.on('notice', (msg) => { toast(msg); player.osd(msg, 4000); });
 player.on('log', (l) => { if (l) log('mpv:', l); });
@@ -437,6 +439,7 @@ const handlers = {
   'yt:toggleFavorite': (entry) => yt.toggleFavorite(entry),
   'yt:setting': ({ key, value }) => { yt.saveSettings({ [key]: value }); return yt.settings; },
   'yt:play': ({ entries, startIndex }) => player.playYouTube(entries, startIndex),
+  'yt:share': (id) => youtubeShare(id),
   'yt:prefetch': (entry) => { yt.prefetch(entry); },
   'seerr:status': () => seerr.status(),
   'seerr:trending': (page) => seerr.trending(page || 1),

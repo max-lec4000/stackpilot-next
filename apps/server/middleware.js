@@ -47,7 +47,7 @@ import { importVpn } from "./vpn.js";
 import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
-import { rotateLidarrKey } from "./lidarr-key.js";
+import { rotateArrKey } from "./arr-key.js";
 import { rotateBazarrKey } from "./bazarr-key.js";
 import path from "node:path";
 import { Auth, sessionCookie } from "./auth.js";
@@ -792,15 +792,16 @@ export function inventoryMiddleware(options = {}) {
           result = await installer().resume(body.operationId);
         else if (url.pathname === "/api/deployment/end")
           result = installer().end(body.operationId, body.confirmation);
-        else if (["/api/credentials/rotate-bazarr", "/api/credentials/rotate-lidarr"].includes(url.pathname)) {
+        else if (/^\/api\/credentials\/rotate-(bazarr|lidarr|sonarr|radarr)$/.test(url.pathname)) {
           if (body.confirmation !== "OK")
             throw Error("Schlüsselwechsel zuerst bestätigen.");
           await manager.reauthenticate(body.password, remoteAddress);
-          const service = url.pathname.endsWith("-lidarr") ? "Lidarr" : "Bazarr";
+          const slug = url.pathname.slice("/api/credentials/rotate-".length);
+          const service = slug[0].toUpperCase() + slug.slice(1);
           result = await hub.mutate([service], ({ plan, s }) => {
             if (body.planId !== plan.id)
               throw Error("Der Stack hat sich geändert. Bitte öffne die Anwendung erneut.");
-            return service === "Lidarr" ? rotateLidarrKey(s, installer().docker) : rotateBazarrKey(s);
+            return service === "Bazarr" ? rotateBazarrKey(s) : rotateArrKey(s, installer().docker, service);
           });
         } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);

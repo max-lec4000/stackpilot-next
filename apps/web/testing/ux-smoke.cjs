@@ -205,6 +205,10 @@ async function mockAPI(page, f) {
         if (f.waitCredentials) await f.waitCredentials;
         json = { username: "managed-private-user", password: "FIXTURE-SECRET" };
         break;
+      case "/api/credentials/rotate-sonarr":
+      case "/api/credentials/rotate-radarr":
+        json = { ok: true };
+        break;
       case "/api/media/search":
         json = { results: f.empty.has(endpoint) ? [] : media.map((m) => ({ ...m, requested: f.requested.has(m.id) })), totalPages: 2 };
         break;
@@ -393,6 +397,21 @@ async function run() {
     await lateReply;
     f.waitCredentials = null;
     assert.equal(await page.getByText("FIXTURE-SECRET", { exact: true }).count(), 0);
+
+    for (const service of ["Sonarr", "Radarr"]) {
+      await page.getByRole("button", { name: "Details zu " + service, exact: true }).click();
+      const details = page.getByRole("dialog");
+      await details.getByText(service + "-API-Schlüssel erneuern", { exact: true }).click();
+      const button = details.getByRole("button", { name: "API-Schlüssel erneuern", exact: true });
+      assert(await button.isDisabled());
+      const password = details.getByLabel("StackPilot-Administratorpasswort", { exact: true });
+      await password.fill("fixture-password");
+      await post(page, "/api/credentials/rotate-" + service.toLowerCase(), () => button.click());
+      assert.deepEqual(f.mutations.at(-1).body, { planId: "plan-fixture", password: "fixture-password", confirmation: "OK" });
+      await details.getByRole("status").filter({ hasText: service + " akzeptiert den neuen Schlüssel" }).waitFor();
+      assert.equal(await password.inputValue(), "");
+      await page.keyboard.press("Escape");
+    }
 
     // Download actions depend on the actual state. Completed rows have no bar.
     await navigate(page, "Downloads");

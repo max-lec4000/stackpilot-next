@@ -48,7 +48,12 @@ function stateTone(state: string) {
     return "warning" as const;
   return "neutral" as const;
 }
-function ServiceKeyRotation({ planId, name }: { planId: string; name: "Bazarr" | "Lidarr" }) {
+const rotatableKeys = ["Bazarr", "Lidarr", "Sonarr", "Radarr"] as const;
+type RotatableKey = (typeof rotatableKeys)[number];
+function canRotateKey(name: string): name is RotatableKey {
+  return rotatableKeys.some(service => service === name);
+}
+function ServiceKeyRotation({ planId, name }: { planId: string; name: RotatableKey }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -59,7 +64,8 @@ function ServiceKeyRotation({ planId, name }: { planId: string; name: "Bazarr" |
       <summary>{name}-API-Schlüssel erneuern</summary>
       <p>Der bisherige Schlüssel wird ungültig. Externe Apps, die ihn verwenden,
         brauchen danach den neuen Schlüssel aus den Einstellungen von {name}.</p>
-      {name === "Lidarr" && <p>Lidarr wird kurz neu gestartet. StackPilot aktualisiert die verwaltete Verbindung zu Prowlarr.</p>}
+      {name !== "Bazarr" && <p>{name} wird kurz neu gestartet. StackPilot aktualisiert die verwalteten Verbindungen
+        {name === "Lidarr" ? " zu Prowlarr." : " zu Prowlarr, Seerr und Bazarr."}</p>}
       <form onSubmit={async (event) => {
         event.preventDefault();
         setBusy(true);
@@ -347,8 +353,8 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
               <p>Nur lokal am Server veröffentlicht. Bei Zugriff über SSH zusätzlich den Webport weiterleiten:</p>
               <pre><code>ssh -L {selected.hostPort}:127.0.0.1:{selected.hostPort} benutzer@server</code></pre>
             </details>
-            {(selected.name === "Bazarr" || selected.name === "Lidarr") &&
-              (selected.state === "running" || (selected.name === "Lidarr" && selected.state === "exited")) &&
+            {canRotateKey(selected.name) &&
+              (selected.state === "running" || (selected.name !== "Bazarr" && selected.state === "exited")) &&
               selected.installationStatus === "completed" && (
                 <ServiceKeyRotation key={serviceKey(selected)} planId={selected.planId} name={selected.name} />
               )}

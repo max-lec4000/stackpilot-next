@@ -1,5 +1,7 @@
 const actions = {
   "/api/credentials/rotate-lidarr": "Lidarr-API-Schlüssel erneuert",
+  "/api/credentials/rotate-sonarr": "Sonarr-API-Schlüssel erneuert",
+  "/api/credentials/rotate-radarr": "Radarr-API-Schlüssel erneuert",
   "/api/credentials/rotate-bazarr": "Bazarr-API-Schlüssel erneuert",
   "/api/remote-access/funnel/enable": "Öffentliche Jellyfin-Freigabe angefordert",
   "/api/remote-access/funnel/disable": "Öffentliche Jellyfin-Freigabe zurückgenommen",

@@ -2,6 +2,13 @@
 
 ## 0.5.0 – November 2026
 
+### Sonarr- und Radarr-Schlüssel
+
+- Die Schlüssel lassen sich in StackPilot erneuern. Verwaltete
+  Verbindungen in Prowlarr, Seerr und Bazarr übernehmen den
+  neuen Schlüssel automatisch. Ein unterbrochener Wechsel lässt
+  sich mit derselben Aktion fortsetzen.
+
 ### Serienübersicht und Filmgrößen
 
 - Couchdeck 0.2.6 zeigt in den Seriendetails die Gesamtzahl der

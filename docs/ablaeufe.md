@@ -58,6 +58,20 @@ Heimnetz, nicht über die HTTPS-Adresse.
 **Verwaltung → Sicherungen & Updates → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
 Medien-Container laufen weiter.
 
+### Dienstschlüssel erneuern
+
+Unter **Anwendungen → Dienst → Details → API-Schlüssel erneuern** das
+StackPilot-Administratorpasswort eingeben. Die Aktion steht für Bazarr,
+Lidarr, Sonarr und Radarr zur Verfügung. Lidarr, Sonarr und Radarr starten
+beim Wechsel kurz neu.
+
+StackPilot aktualisiert bei Lidarr die verwaltete Prowlarr-Verbindung.
+Bei Sonarr und Radarr übernimmt es den Schlüssel für die zugeordneten
+Verbindungen in Prowlarr, Seerr und Bazarr. Bei einer Unterbrechung
+dieselbe Aktion erneut ausführen. StackPilot setzt den angefangenen
+Wechsel mit dem im Tresor vorbereiteten Schlüssel fort. Externe
+Verbraucher müssen den neuen Schlüssel separat erhalten.
+
 ### Zugriff von unterwegs
 - Einrichten: im Assistenten „Von unterwegs“ wählen oder später unter
   **Verwaltung → Externer Zugriff → In einem Schritt einrichten**.

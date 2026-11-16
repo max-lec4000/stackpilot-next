@@ -24,8 +24,11 @@ Freigabe für Änderungen an einem laufenden Server.
 
 ### Weitere Wartung
 
-- Schlüsselerneuerung für weitere Dienste und deren Verbraucher. Bazarr und
-  Lidarr samt verwalteter Prowlarr-Verbindung sind umgesetzt.
+- Schlüsselerneuerung für weitere Dienste und deren Verbraucher.
+  Bazarr, Lidarr sowie Sonarr und Radarr sind umgesetzt. Die verwalteten
+  Verbindungen in Prowlarr, Seerr und Bazarr übernehmen unterstützte
+  Schlüsselwechsel. Der eigene Prowlarr-Schlüssel, der Seerr-Schlüssel
+  und Jellyfin-Diensttokens stehen noch aus.
 - Sicherheitsprüfung nach Änderungen an Gateway, Tailscale, Sitzungen,
   Containerrechten oder Images fortführen. Die erste vollständige Prüfung
   ist dokumentiert.

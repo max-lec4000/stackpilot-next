@@ -91,7 +91,14 @@ export async function verifyMfaFlows(base, host) {
     r = await c.solve({ uid_field: name });
     r = await c.solve({ password: "Fixture-Identity-Test-2026!" });
     if (name === "fixture-no-mfa") {
-      assert.match(r.component, /denied/);
+      assert.match(r.component, /authenticator-validate/);
+      assert.ok(r.configuration_stages.some((stage) => stage.meta_model_name.includes("totp")));
+      assert.ok(r.configuration_stages.some((stage) => stage.meta_model_name.includes("webauthn")));
+      assert.ok([401, 403].includes((await c.whoami()).status), "Ohne eingerichteten Faktor gibt es keine Sitzung");
+      const totp = r.configuration_stages.find((stage) => stage.meta_model_name.includes("totp"));
+      r = await c.solve({ selected_stage: totp.pk });
+      assert.match(r.component, /authenticator-totp/);
+      assert.ok([401, 403].includes((await c.whoami()).status), "Auch das Öffnen der Einrichtung gibt keine Sitzung frei");
     } else {
       assert.match(r.component, /authenticator-validate/);
       r = await c.solve({ code: "000000" });

@@ -107,7 +107,7 @@ export class Couchdeck {
       linked = {
         at: link.writtenAt || null,
         user: link.auth?.userName || null,
-        seerr: !!link.seerr?.apiKey,
+        seerr: !!(link.seerr?.apiKey || link.seerr?.personalSession),
       };
     } catch {}
     return {
@@ -212,7 +212,7 @@ export class Couchdeck {
   }
   async mediaOwner(token) {
     if (typeof token !== "string" || !/^[a-f0-9]{32}$/i.test(token)) return null;
-    const { plan, s } = await this.hub.context(["Jellyfin", "Seerr"]);
+    const { plan, s } = await this.hub.context(["Jellyfin"]);
     const link = s.vault.get(`deployment:${plan.rootId || plan.id}:couchdeck`);
     if (!link?.userId || typeof link.token !== "string" || link.token.length !== token.length ||
         !timingSafeEqual(Buffer.from(link.token), Buffer.from(token))) return null;
@@ -274,10 +274,10 @@ export class Couchdeck {
         saved.token = login.AccessToken;
         s.vault.set(key, saved);
       }
-      // 3. Seerr: Konto übernehmen (damit Anfragen in seinem Namen laufen) und Schlüssel holen
+      // 3. Seerr: Wohnzimmer-Konto übernehmen und den von Couchdeck unterstützten Zugang wählen
       let seerr = null;
       if (plan.spec.selected.includes("Seerr")) {
-        const main = await s.additional.seerr("/settings/main");
+
         const normalize = (id) => String(id || "").toLowerCase().replaceAll("-", "");
         const list = await s.additional.seerr("/user?take=100&skip=0");
         if (!(list.results || []).some((u) => normalize(u.jellyfinUserId) === normalize(saved.userId)))
@@ -285,9 +285,20 @@ export class Couchdeck {
             method: "POST",
             body: { jellyfinUserIds: [saved.userId] },
           });
-        if (typeof main?.apiKey !== "string" || !main.apiKey)
-          throw userFacing("Seerr liefert keinen API-Schlüssel.");
-        seerr = { url: `http://127.0.0.1:${plan.ports.Seerr}`, apiKey: main.apiKey };
+        seerr = { url: `http://127.0.0.1:${plan.ports.Seerr}` };
+        const { version } = await this.status();
+        const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(version || "");
+        const supportsPersonalSession = parts && (
+          Number(parts[1]) > 0 || Number(parts[2]) > 2 ||
+          (Number(parts[2]) === 2 && Number(parts[3]) >= 3)
+        );
+        if (supportsPersonalSession) seerr.personalSession = true;
+        else {
+          const main = await s.additional.seerr("/settings/main");
+          if (typeof main?.apiKey !== "string" || !main.apiKey)
+            throw userFacing("Seerr liefert keinen API-Schlüssel.");
+          seerr.apiKey = main.apiKey;
+        }
       }
       // 4. Übergabedatei: nur für die Gruppe couchdeck-link lesbar
       const pings = {

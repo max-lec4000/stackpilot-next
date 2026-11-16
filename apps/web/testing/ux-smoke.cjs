@@ -27,6 +27,8 @@ const torrent = (id, state, progress, name) => ({
 const initialTorrents = [
   torrent("a".repeat(40), "downloading", 0.46, "Testfilm – aktiver Download"),
   torrent("b".repeat(40), "uploading", 1, "Testfilm – vollständig"),
+  torrent("d".repeat(40), "queuedUP", 1, "Testfilm – Upload wartet"),
+  torrent("e".repeat(40), "stalledUP", 1, "Testfilm – zum Teilen bereit"),
   torrent("c".repeat(40), "pausedDL", 0.23, "Testfilm – pausiert"),
   ...Array.from({ length: 22 }, (_, i) =>
     torrent(String(i + 1).padStart(40, "0"), "queuedDL", 0.05, "Warteschlange " + (i + 1)),
@@ -66,6 +68,7 @@ function fixture() {
     torrents: initialTorrents.map((t) => ({ ...t })),
     requests: initialRequests.map((r) => ({ ...r })),
     archived: [],
+    seriesLimits: { episodeGiB: 0, packageGiB: 0 },
     requested: new Set(),
     consent: false,
     vpnState: "connected",
@@ -78,6 +81,9 @@ function fixture() {
     stackStatus: "completed",
     funnelBlocked: true,
     funnelActive: false,
+    viewerSetup: false,
+    viewer: { username: "constructor", active: true, mfa: true, profileId: null, passkeyPending: false },
+    viewerProfiles: [],
   };
 }
 
@@ -129,7 +135,17 @@ async function mockAPI(page, f) {
     let json;
     switch (endpoint) {
       case "/api/couchdeck": json = { installed: true, state: "running", version: "0.2.0", outdated: true, controllable: true, linked: { user: "wohnzimmer", seerr: true }, helper: { available: true, running: null, failed: null } }; break;
-      case "/api/remote-setup": json = { status: "idle", running: false, steps: [], error: null, result: null }; break;
+      case "/api/remote-setup": json = { status: f.viewerSetup ? "completed" : "idle", running: false, steps: [], error: null, result: null }; break;
+      case "/api/viewers/action":
+      case "/api/viewers":
+        if (body) f.viewer.passkeyPending = body.action === "add-passkey";
+        json = { viewers: [f.viewer], addPasskeyReady: true, loginImproved: true, passwordChoice: true, recoveryEnabled: true };
+        break;
+      case "/api/viewer-profiles":
+        if (body?.action === "create") f.viewerProfiles.push({ id: "series", name: body.name, folders: body.folders });
+        if (body?.action === "assign") f.viewer.profileId = body.profileId;
+        json = { ready: true, pending: null, profiles: f.viewerProfiles, libraries: [{ id: "series-folder", name: "Serien", available: true }] };
+        break;
       case "/api/notifications": json = { results: [], unread: 0, checkedAt: now, error: null }; break;
       case "/api/auth/status": json = { configured: true, authenticated: true, username: "fixture" }; break;
       case "/api/session": json = { token: "fixture-csrf" }; break;
@@ -142,6 +158,16 @@ async function mockAPI(page, f) {
       case "/api/media/size-settings": json = { rate: 3, rates: [1, 2, 3, 4, 6, 8], scope: "Größenstandard für neue Filme." }; break;
       case "/api/safety": json = { operations: [] }; break;
       case "/api/audit": json = { page: 1, pages: 1, total: 0, events: [] }; break;
+      case "/api/container-maintenance": json = { services: [{ name: "Seerr", from: "ghcr.io/example@sha256:0123456789abcdef",
+        to: "ghcr.io/example@sha256:123456789abcdef0", review: "fixture-maintenance", update: true, rollback: false, phase: null }] }; break;
+      case "/api/vault-backup":
+        if (method === "GET") json = { local: true };
+        else {
+          assert.equal(body.passphrase, "fixture-local-backup-phrase");
+          await route.fulfill({ contentType: "application/octet-stream", body: "fixture-encrypted-vault" });
+          return;
+        }
+        break;
       case "/api/managed": json = { services: f.empty.has(endpoint) ? [] : services }; break;
       case "/api/operations/overview":
         json = {
@@ -188,6 +214,14 @@ async function mockAPI(page, f) {
         break;
       }
       case "/api/media/request": f.requested.add(body.id); json = {}; break;
+      case "/api/media/episode-seasons": json = { seasons: [1], limits: f.seriesLimits }; break;
+      case "/api/media/series-limits":
+        assert.equal(body.requestId, 4);
+        assert.equal(body.confirmation, "OK");
+        f.seriesLimits = { episodeGiB: body.episodeGiB, packageGiB: body.packageGiB,
+          ...(body.automatic ? { automatic: true, previousProfile: "Testprofil" } : {}) };
+        json = { limits: f.seriesLimits };
+        break;
       case "/api/media/requests": {
         let list = f.empty.has(endpoint) ? [] : f.requests;
         const filter = url.searchParams.get("filter");
@@ -365,6 +399,9 @@ async function run() {
     await page.locator(".downloads-view").waitFor();
     await page.getByLabel("Downloadfilter", { exact: true }).selectOption("completed");
     const completed = await onlyRow(page, "Testfilm – vollständig");
+    await completed.getByText("Lädt hoch", { exact: true }).waitFor();
+    await (await onlyRow(page, "Testfilm – Upload wartet")).getByText("Upload in Warteschlange", { exact: true }).waitFor();
+    await (await onlyRow(page, "Testfilm – zum Teilen bereit")).getByText("Bereit zum Teilen", { exact: true }).waitFor();
     assert.equal(await completed.getByRole("progressbar").count(), 0);
     assert.equal(await completed.getByRole("button", { name: "Geschützt fortsetzen", exact: true }).count(), 0);
     await completed.getByText("Weitere Aktionen", { exact: true }).click();
@@ -457,6 +494,23 @@ async function run() {
     await activeRequest.getByRole("button", { name: /Downloads/ }).click();
     assert.match(page.url(), /#\/downloads/);
     await navigate(page, "Meine Anfragen");
+    await page.getByRole("button", { name: "Details zu Serienwunsch", exact: true }).click();
+    const seriesDialog = page.getByRole("dialog", { name: "Serienwunsch" });
+    await seriesDialog.getByText("Größenlimits für diese Serie", { exact: true }).click();
+    const automatic = seriesDialog.getByRole("checkbox", { name: "Auch automatische Downloads in Sonarr begrenzen" });
+    assert.equal(await automatic.isChecked(), false);
+    await seriesDialog.getByLabel("Folgenrelease (GiB)").fill("2");
+    await seriesDialog.getByLabel("Je Staffelpaket (GiB)").fill("10");
+    await automatic.check();
+    const saveLimits = () => seriesDialog.getByRole("button", { name: "Größenlimits speichern", exact: true }).click();
+    await post(page, "/api/media/series-limits", saveLimits);
+    assert.deepEqual(f.mutations.at(-1).body, { requestId: 4, automatic: true, episodeGiB: 2, packageGiB: 10, confirmation: "OK" });
+    await seriesDialog.getByText(/Für die Rückkehr zu „Testprofil“/).waitFor();
+    await automatic.uncheck();
+    await post(page, "/api/media/series-limits", saveLimits);
+    await seriesDialog.getByText(/Bisheriges Sonarr-Profil wieder aktiv/).waitFor();
+    assert.deepEqual(f.seriesLimits, { episodeGiB: 2, packageGiB: 10 });
+    await page.keyboard.press("Escape");
     const waitingRequest = page.locator(".request-compact").filter({ hasText: "Wartender Medienwunsch" });
     await waitingRequest.getByRole("button", { name: "Details zu Wartender Medienwunsch", exact: true }).click();
     await page.getByRole("button", { name: "Qualität ändern", exact: true }).click();
@@ -554,6 +608,23 @@ async function run() {
     }
     assert.equal(f.mutations.length, before);
 
+    await page.locator(".admin-area").getByText("Sicherungen & Updates", { exact: true }).click();
+    await page.getByText("Container-Updates und Rückkehr", { exact: true }).click();
+    await page.getByRole("button", { name: "Update vorbereiten", exact: true }).click();
+    await page.getByRole("button", { name: "Update bestätigen", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Abbrechen", exact: true }).click();
+    assert.equal(f.mutations.length, before);
+    await page.locator("summary").getByText("StackPilot-Tresor sichern", { exact: true }).click();
+    await page.getByLabel("StackPilot-Administratorpasswort", { exact: true }).fill("fixture-password");
+    await page.getByLabel("Sicherungspassphrase (mindestens 16 Zeichen)").fill("fixture-local-backup-phrase");
+    await page.getByLabel("Sicherungspassphrase wiederholen").fill("fixture-local-backup-phrase");
+    const [vaultFile] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Verschlüsselte Tresor-Sicherung laden" }).click(),
+    ]);
+    assert.match(vaultFile.suggestedFilename(), /\.spvault$/);
+    await navigate(page, "Verwaltung");
+
     // Direct wizard links resume unfinished real jobs; fresh stacks start at Server.
     for (const status of [null, "running"]) {
       const wizard = await context.newPage();
@@ -648,6 +719,24 @@ async function run() {
     await page.getByLabel("Downloadfilter", { exact: true }).selectOption("paused");
     const protectedRow = await onlyRow(page, "Testfilm – aktiver Download");
     assert.equal(await protectedRow.getByRole("button", { name: "Geschützt fortsetzen", exact: true }).isDisabled(), true);
+    f.viewerSetup = true;
+    await page.goto(baseURL + "/#/verwaltung/remote");
+    await page.getByText("Zuschauerprofile", { exact: true }).click();
+    await page.getByLabel("Profilname").fill("Nur Serien");
+    await page.getByRole("checkbox", { name: "Serien", exact: true }).check();
+    await post(page, "/api/viewer-profiles", () => page.getByRole("button", { name: "Profil erstellen" }).click());
+    const profileSelect = page.getByRole("combobox", { name: "constructor" });
+    assert.equal(await profileSelect.inputValue(), "");
+    await profileSelect.selectOption("series");
+    await post(page, "/api/viewer-profiles", () => page.getByRole("button", { name: "Profil zuweisen" }).click());
+    await page.getByText("Zuschauerprofil gespeichert.", { exact: false }).waitFor();
+    assert.equal(f.viewer.profileId, "series");
+    await post(page, "/api/viewers/action", () => page.getByRole("button", { name: "Passkey hinzufügen" }).click());
+    assert.equal(f.viewer.passkeyPending, true);
+    await post(page, "/api/viewers/action", () => page.getByRole("button", { name: "Passkey-Einrichtung abbrechen" }).click());
+    await page.getByRole("button", { name: "Passkey hinzufügen" }).waitFor();
+    assert.equal(f.viewer.passkeyPending, false);
+
     assert.equal(f.mutations.filter((m) => m.endpoint.includes("funnel/")).length, 2);
     assert.equal(f.mutations.filter((m) => m.endpoint.includes("private-serve/apply")).length, 0);
     assert.deepEqual(f.unexpected, [], "All frontend API requests must have explicit fixtures");

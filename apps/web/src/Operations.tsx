@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { get } from "./ServerCheck";
 import { StatusBadge } from "./ui";
+type StorageUsage = {
+  state: string;
+  freeBytes: number | null;
+  totalBytes: number | null;
+  usedBytes?: number | null;
+};
 export type OperationOverview = {
   observedAt: string;
   phase: string;
@@ -12,12 +18,9 @@ export type OperationOverview = {
     action: string;
     target: string;
   }[];
-  storage: {
-    state: string;
-    freeBytes: number | null;
-    totalBytes: number | null;
-    usedBytes?: number | null;
-  };
+  storage: StorageUsage;
+  systemStorage?: StorageUsage | null;
+  sharedStorage?: boolean;
   applications: { name: string; state: string }[];
 };
 export function useOperations() {

@@ -6,6 +6,7 @@ import {
 } from "./quality-policy.js";
 import { randomUUID } from "node:crypto";
 import { positiveId } from "./media-hub.js";
+import { isSeriesLimitProfile, seriesLimitsKey } from "./series-limits.js";
 export const compactProfileName = "StackPilot 1080p (ohne Remux)";
 function flat(items) {
   return (Array.isArray(items) ? items : []).flatMap((v) =>
@@ -43,10 +44,9 @@ export class QualitySettings {
     this.hub = hub;
     this.diagnostics = diagnostics;
   }
-  async read(id, owner) {
+  async read(id) {
     const { s, plan } = await this.hub.context(["Seerr"]);
     const target = await this.diagnostics.target(s, id);
-    if (owner) await this.diagnostics.requireQualityOwner(s, target, owner);
     if (!target.item)
       throw Object.assign(
         Error("Das Medium ist noch nicht in der ARR-App angekommen."),
@@ -77,7 +77,7 @@ export class QualitySettings {
       fileSize: Number.isFinite(target.item.movieFile?.size)
         ? target.item.movieFile.size
         : null,
-      profiles: profiles.map((p) => ({
+      profiles: profiles.filter((p) => !isSeriesLimitProfile(p) || p.id === target.item.qualityProfileId).map((p) => ({
         id: p.id,
         name: p.name,
         allowed: allowedQualities(p.items),
@@ -85,20 +85,19 @@ export class QualitySettings {
       canCreateCompact: !profiles.some((p) => p.name === compactProfileName),
     };
   }
-  async apply(body, owner) {
+  async apply(body) {
     if (body.confirmation !== "OK") throw Error("Profiländerung bestätigen.");
     return this.hub.mutate(["Seerr"], async ({ s, plan }) => {
       const target = await this.diagnostics.target(
         s,
         positiveId(body.requestId),
       );
-      if (owner) {
-        await this.diagnostics.requireQualityOwner(s, target, owner);
-        if (body.alsoFuture) throw Error("Das globale Profil wird in StackPilot verwaltet.");
-      }
       const { item, service, kind, server } = target;
       if (!item)
         throw Error("Das Medium ist noch nicht in der ARR-App angekommen.");
+      const series = kind === "tv" ? this.hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId)) : null;
+      if (series?.automatic || series?.pending)
+        throw Error("Schalte unter Größenlimits zuerst die automatischen Sonarr-Limits aus. Danach kannst du die Qualität ändern.");
       if (item.qualityProfileId !== positiveId(body.previousProfileId))
         throw Error("Das Profil wurde inzwischen geändert. Neu laden.");
       const sizeRate = Number(body.sizeGiBPerHour ?? 0);
@@ -130,7 +129,7 @@ export class QualitySettings {
           body: compactProfile(schema),
         });
       } else {
-        profile = profiles.find((p) => p.id === positiveId(body.profile));
+        profile = profiles.find((p) => p.id === positiveId(body.profile) && !isSeriesLimitProfile(p));
         if (!profile)
           throw Error("Gewähltes Qualitätsprofil existiert nicht mehr.");
       }

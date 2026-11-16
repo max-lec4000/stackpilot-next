@@ -1,4 +1,9 @@
 import { validateIdentityInput } from "./config.js";
+import { viewerRecovery } from "./viewer-recovery.js";
+import { baseViewerClaims } from "./viewer-library-roles.js";
+import { passkeyEnrollmentEntries } from "./viewer-passkey-enrollment.js";
+import { viewerMfa, viewerPasskey } from "./viewer-mfa.js";
+import { viewerPasswordEntries } from "./viewer-password.js";
 export function identityBlueprint(input) {
   const { hostname } = validateIdentityInput(input);
   return `version: 1
@@ -51,6 +56,10 @@ entries:
     totp_otp_throttling_factor: 1
     static_otp_throttling_factor: 1
   id: required-mfa
+- model: authentik_stages_authenticator_webauthn.authenticatorwebauthnstage
+  identifiers: {name: ${viewerPasskey}}
+  attrs: {friendly_name: Passkey, user_verification: required, resident_key_requirement: preferred, max_attempts: 3}
+  id: viewer-passkey
 - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
   identifiers: {name: stackpilot-viewer-mfa}
   attrs:
@@ -58,6 +67,7 @@ entries:
     not_configured_action: configure
     configuration_stages:
     - !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]
+    - !KeyOf viewer-passkey
     last_auth_threshold: seconds=0
     webauthn_user_verification: required
     totp_otp_throttling_factor: 1
@@ -103,12 +113,64 @@ ${["public-login", "admin-login"]
       .join(""),
   )
   .join("")}
+${viewerPasswordEntries("!KeyOf authorization")}
+${passkeyEnrollmentEntries()}
+- model: authentik_stages_dummy.dummystage
+  identifiers: {name: ${viewerMfa.stage}}
+  id: viewer-login-proof
+- model: authentik_flows.flowstagebinding
+  identifiers:
+    target: !KeyOf public-login
+    stage: !KeyOf viewer-login-proof
+    order: ${viewerMfa.order}
+  attrs: {re_evaluate_policies: true, evaluate_on_plan: false}
+  id: viewer-login-proof-binding
 - model: authentik_flows.flowstagebinding
   identifiers:
     target: !KeyOf authorization
     stage: !KeyOf required-mfa
     order: 10
-  attrs: {re_evaluate_policies: true}
+  attrs: {re_evaluate_policies: true, evaluate_on_plan: false}
+  id: required-mfa-binding
+${[
+  [viewerMfa.record, viewerMfa.recordExpression, "viewer-login-proof-binding", false],
+  [viewerMfa.require, viewerMfa.requireExpression, "required-mfa-binding", true],
+].map(([name, expression, binding, fallback]) => `- model: authentik_policies_expression.expressionpolicy
+  identifiers: {name: ${name}}
+  attrs:
+    expression: |-
+      ${expression.replaceAll("\n", "\n      ")}
+  id: ${name}
+- model: authentik_policies.policybinding
+  identifiers:
+    target: !KeyOf ${binding}
+    policy: !KeyOf ${name}
+    order: 0
+  attrs: {enabled: true, failure_result: ${fallback}}
+`).join("")}
+- model: authentik_stages_authenticator_static.authenticatorstaticstage
+  identifiers: {name: ${viewerRecovery.name}}
+  attrs: {token_count: ${viewerRecovery.count}, token_length: ${viewerRecovery.length}}
+  id: viewer-recovery
+- model: authentik_flows.flowstagebinding
+  identifiers:
+    target: !KeyOf authorization
+    stage: !KeyOf viewer-recovery
+    order: ${viewerRecovery.order}
+  attrs: {re_evaluate_policies: true, evaluate_on_plan: false}
+  id: viewer-recovery-binding
+- model: authentik_policies_expression.expressionpolicy
+  identifiers: {name: ${viewerRecovery.name}}
+  attrs:
+    expression: |-
+      ${viewerRecovery.expression.replaceAll("\n", "\n      ")}
+  id: viewer-recovery-policy
+- model: authentik_policies.policybinding
+  identifiers:
+    target: !KeyOf viewer-recovery-binding
+    policy: !KeyOf viewer-recovery-policy
+    order: 0
+  attrs: {enabled: true, failure_result: false}
 - model: authentik_flows.flowstagebinding
   identifiers:
     target: !KeyOf authorization
@@ -125,7 +187,7 @@ ${["public-login", "admin-login"]
     name: StackPilot minimal Jellyfin profile
     scope_name: profile
     expression: |
-      return {"preferred_username": "spv_" + request.user.username, "name": request.user.username, "groups": ["stackpilot-viewers"] if request.user.groups.filter(name="stackpilot-viewers").exists() else []}
+      ${baseViewerClaims}
   id: profile-scope
 - model: authentik_providers_oauth2.oauth2provider
   identifiers: {name: StackPilot Jellyfin}

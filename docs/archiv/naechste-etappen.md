@@ -129,7 +129,7 @@ Es wird deshalb keine geraten pauschale Firewall-/DNS-Reparatur ausgeführt.
 Die gezielte Reparatur ergänzt inzwischen bei Host-Erfolg/Container-Ablehnung
 einen internen HTTPS-OIDC-Dienst ohne Hostport, mit Tailscale-Zertifikat und
 automatischer Erneuerung. Echte Container-/TLS-/Wiederaufnahmetests sind vorhanden.
-Die Zertifikatsberechtigung und der erfolgreiche SSO-Einstieg auf reatest müssen
+Die Zertifikatsberechtigung und der erfolgreiche SSO-Einstieg auf medienserver müssen
 nach Aktualisierung bestätigt werden; es wurde nichts direkt am Zielserver geändert.
 
 ### Reparatur des Zertifikatsablaufs

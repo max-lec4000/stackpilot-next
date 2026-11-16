@@ -24,15 +24,52 @@ class Seerr {
   get settings() {
     // Zugang von StackPilot (integration.json) hat Vorrang; seerr.json bleibt der Weg ohne StackPilot.
     const link = config.integration()?.seerr;
-    const k = link?.apiKey ? link : readKeyFile();
-    return { url: (k?.url || 'http://127.0.0.1:5055').replace(/\/$/, ''), apiKey: k?.apiKey || null };
+    const k = link?.url ? link : readKeyFile();
+    return { url: (k?.url || 'http://127.0.0.1:5055').replace(/\/$/, ''), apiKey: k?.apiKey || null, personal: k?.personalSession === true };
   }
 
-  get configured() { return !!this.settings.apiKey; }
+  get configured() { return this.settings.personal || !!this.settings.apiKey; }
 
-  async request(method, p, { query, body } = {}) {
-    const { url, apiKey } = this.settings;
-    if (!apiKey) throw new Error('Seerr ist noch nicht verbunden (API-Key fehlt)');
+  async personalSession(url) {
+    const token = this.jf.token;
+    if (!token || !this.jf.userId) throw new Error('Zuerst bei Jellyfin anmelden');
+    if (this.session?.token === token && this.session?.url === url) return this.session;
+    if (this.sessionLogin?.token === token && this.sessionLogin?.url === url) return this.sessionLogin.promise;
+    const login = { token, url };
+    login.promise = (async () => {
+      const state = { token, url, cookies: new Map() };
+      await this.send(url, 'GET', '/status', {}, state);
+      const { code, secret } = await this.send(url, 'POST', '/auth/jellyfin/quickconnect/initiate', {}, state);
+      if (!/^\d{6}$/.test(code) || typeof secret !== 'string' || !secret)
+        throw new Error('Seerr hat keinen Quick-Connect-Code geliefert');
+      if (this.jf.token !== token) throw new Error('Jellyfin-Konto wurde gewechselt');
+      await this.jf.post('/QuickConnect/Authorize', undefined, { code });
+      await this.send(url, 'POST', '/auth/jellyfin/quickconnect/authenticate', { body: { secret } }, state);
+      const me = await this.send(url, 'GET', '/auth/me', {}, state);
+      const norm = (value) => String(value || '').toLowerCase().replaceAll('-', '');
+      if (this.jf.token !== token || !me.jellyfinUserId ||
+          norm(me.jellyfinUserId) !== norm(this.jf.userId) || (me.permissions & 3) !== 0)
+        throw new Error('Seerr-Konto stimmt nicht mit dem Wohnzimmer-Konto überein');
+      this.session = state;
+      return state;
+    })();
+    this.sessionLogin = login;
+    try { return await login.promise; }
+    finally { if (this.sessionLogin === login) this.sessionLogin = null; }
+  }
+
+  async request(method, p, options = {}) {
+    const { url, apiKey, personal } = this.settings;
+    if (!personal && !apiKey) throw new Error('Seerr ist noch nicht verbunden');
+    const session = personal ? await this.personalSession(url) : null;
+    try { return await this.send(url, method, p, options, session, apiKey); }
+    catch (error) {
+      if (error.status === 401 && this.session === session) this.session = null;
+      throw error;
+    }
+  }
+
+  async send(url, method, p, { query, body }, session, apiKey) {
     // Wie die Seerr-Weboberfläche: Werte mit encodeURIComponent (Leerzeichen = %20).
     // URLSearchParams würde Leerzeichen als "+" schicken – Seerr antwortet darauf mit einer HTML-Fehlerseite.
     const qs = Object.entries(query || {}).filter(([, v]) => v != null && v !== '')
@@ -40,14 +77,27 @@ class Seerr {
     const u = url + '/api/v1' + p + (qs ? `?${qs}` : '');
     const res = await fetch(u, {
       method,
-      headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json', Accept: 'application/json',
+        ...(session ? {
+          Cookie: [...session.cookies].map(([key, value]) => `${key}=${value}`).join('; '),
+          ...(session.cookies.has('XSRF-TOKEN') ? {
+            'XSRF-TOKEN': decodeURIComponent(session.cookies.get('XSRF-TOKEN')),
+          } : {}),
+        } : apiKey ? { 'X-Api-Key': apiKey } : {}),
+      },
+      redirect: 'error',
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(20000),
     });
+    if (session) for (const header of res.headers.getSetCookie()) {
+      const pair = header.split(';')[0], index = pair.indexOf('=');
+      if (index > 0) session.cookies.set(pair.slice(0, index), pair.slice(index + 1));
+    }
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = null; }
-    if (!res.ok) throw new Error(data?.message || `Seerr: HTTP ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(data?.message || `Seerr: HTTP ${res.status}`), { status: res.status });
     return data;
   }
 
@@ -56,6 +106,7 @@ class Seerr {
     const jfId = this.jf.userId;
     const jfName = this.jf.cfg.auth?.userName;
     if (!jfId) throw new Error('Nicht bei Jellyfin angemeldet');
+    if (this.settings.personal) return this.request('GET', '/auth/me');
     if (this.userCache?.jellyfinUserId === jfId) return this.userCache.seerrUser;
     const norm = (s) => String(s || '').toLowerCase().replace(/-/g, '');
     let found = null;
@@ -175,7 +226,10 @@ class Seerr {
     const me = await this.currentUser();
     const req = await this.request('GET', `/request/${Number(requestId)}`);
     if (req?.requestedBy?.id !== me.id) throw new Error('Nur eigene Anfragen können zurückgezogen werden');
-    await this.request('DELETE', `/request/${Number(requestId)}`);
+    if (this.settings.personal && req.status !== REQ_PENDING) {
+      const result = await this.managedMedia({ action: 'request-cancel', requestId, confirmation: 'OK' });
+      if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
+    } else await this.request('DELETE', `/request/${Number(requestId)}`);
     return { ok: true, wasApproved: req.status !== REQ_PENDING };
   }
 
@@ -218,7 +272,7 @@ class Seerr {
       query: { language: 'de' },
     });
     if (!Array.isArray(data?.episodes)) throw new Error('Seerr meldet keine Folgenliste');
-    return data.episodes.map((episode) => ({ number: episode.episodeNumber, title: episode.name || '' }));
+    return data.episodes.map((episode) => ({ number: episode.episodeNumber, title: episode.name || '', searchBlocker: 'Für den Einzelfolgen-Download braucht diese Serie eine genehmigte eigene Anfrage im verwalteten Stack.' }));
   }
 
   async cancelSeason({ requestId, season }) {
@@ -256,7 +310,7 @@ class Seerr {
       if (!result) throw new Error('StackPilot konnte die Größenobergrenze nicht anwenden');
       return result;
     }
-    const body = { mediaType, mediaId: Number(mediaId), userId: me.id, is4k: false };
+    const body = { mediaType, mediaId: Number(mediaId), ...(this.settings.personal ? {} : { userId: me.id }), is4k: false };
     if (mediaType === 'tv') body.seasons = seasons?.length ? seasons.map(Number) : 'all';
     const r = await this.request('POST', '/request', { body });
     return { id: r?.id, status: r?.status };

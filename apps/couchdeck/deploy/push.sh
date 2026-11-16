@@ -1,8 +1,8 @@
 #!/bin/bash
 # Kopiert App + Electron-Laufzeit nach <host>:~/couchdeck-staging (ohne sudo).
-# Aufruf: ./deploy/push.sh [host]   (Standard: reatest)
+# Aufruf: ./deploy/push.sh medienserver
 set -euo pipefail
-HOST="${1:-reatest}"
+HOST="${1:?SSH-Ziel angeben, z. B. ./deploy/push.sh medienserver}"
 cd "$(dirname "$0")/.."
 [ -x node_modules/electron/dist/electron ] || { echo "Erst 'npm install' ausführen"; exit 1; }
 ssh "$HOST" 'rm -rf ~/couchdeck-staging.new && mkdir -p ~/couchdeck-staging.new'

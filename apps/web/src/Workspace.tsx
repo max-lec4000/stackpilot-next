@@ -5,6 +5,8 @@ import { ManagedServices } from "./ManagedServices";
 import { IdentityBackups } from "./IdentityBackups";
 import { Disclosure } from "./ui";
 import { ServiceUpdates } from "./ServiceUpdates";
+import { ContainerMaintenance } from "./ContainerMaintenance";
+import { VaultBackup } from "./VaultBackup";
 import { type Inventory, type Storage } from "./ServerCheck";
 export function Workspace({
   view,
@@ -72,33 +74,17 @@ export function Workspace({
   if (view === "Sicherungen & Updates")
     return (
       <>
-        <h2>Deine Daten bleiben deine Daten.</h2>
-        <p>
-          StackPilot selbst lässt sich hier von GitHub aktualisieren. Authentik
-          wird verschlüsselt gesichert und isoliert wiederhergestellt.
-          Updates der Mediencontainer und eine Sicherung des StackPilot-Tresors
-          per Knopf sind noch nicht eingebaut (Tresor: siehe docs/ablaeufe.md).
-        </p>
+        <h2>Sicherungen &amp; Updates</h2>
         <ServiceUpdates />
+        <Disclosure title="Container-Updates und Rückkehr">
+          <ContainerMaintenance />
+        </Disclosure>
+        <Disclosure title="StackPilot-Tresor sichern">
+          <VaultBackup />
+        </Disclosure>
         <Disclosure title="Authentik sichern und Wiederherstellung prüfen">
           <IdentityBackups />
         </Disclosure>
-        <div className="workspace-info">
-          <details>
-            <summary>Geplanter sicherer Ablauf</summary>
-            <ol>
-              <li>Änderungen und Zielversionen prüfen.</li>
-              <li>Konfiguration und Datenbanken konsistent sichern.</li>
-              <li>Sicherung prüfen und erst dann aktualisieren.</li>
-              <li>Funktion und Verbindungen erneut testen.</li>
-            </ol>
-          </details>
-        </div>
-        <p>
-          Die gesonderte Altstack-Ablösung kann bereits Container gezielt
-          stoppen und entfernen. Die Authentik-Sicherung umfasst nicht
-          automatisch Jellyfin, ARR, Medien und den StackPilot-Zustand.
-        </p>
       </>
     );
   return (

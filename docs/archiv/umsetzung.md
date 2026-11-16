@@ -159,7 +159,7 @@ Ein eigener Docker-Integrationstest durchläuft Erstinstallation und Erweiterung
 auf neun Dienste einschließlich abschließender Prüfung und räumt den Teststack auf.
 Ein Browserdurchlauf hat Erstregistrierung, Mehrfachauswahl, echte Bestätigung,
 Auftragsfortschritt, geschützte Passwortanzeige, Cookie-Isolation und Logout geprüft.
-Diese Cloud-Tests ersetzen keine direkte Validierung auf `reatest` oder TrueNAS.
+Diese Cloud-Tests ersetzen keine direkte Validierung auf `medienserver` oder TrueNAS.
 
 Offen bleiben die übrigen Dienste, GPU, externe Indexer und vollständige
 Sicherungen/Wiederherstellung und Updates. Der folgende Abschnitt beschreibt

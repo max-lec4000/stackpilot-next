@@ -1,3 +1,5 @@
+import { seriesLimitsKey, verifySeriesLimitProfile } from "./series-limits.js";
+
 export const qualityPolicyKey = (plan, kind, id) =>
   `quality-policy:${plan.rootId || plan.id}:${kind}:${id}`;
 export const qualityDefaultKey = (plan, service) =>
@@ -21,6 +23,8 @@ export function compactValid(profile) {
 }
 export async function requestQualityOptions(hub, s, plan, kind, id) {
   const service = kind === "movie" ? "Radarr" : "Sonarr";
+  const series = kind === "tv" ? hub.engine.vault.get(seriesLimitsKey(plan, id)) : null;
+  if (series?.pending) throw Error("Schließe zuerst den Profilwechsel unter Größenlimits ab.");
   const specific = hub.engine.vault.get(qualityPolicyKey(plan, kind, id)),
     global = hub.engine.vault.get(qualityDefaultKey(plan, service)),
     policy = specific || global;
@@ -72,8 +76,19 @@ export async function verifyCurrentQuality(hub, s, plan, target) {
   const policy = hub.engine.vault.get(
     qualityPolicyKey(plan, target.kind, target.mediaId),
   );
+  const series = target.kind === "tv" ? hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId)) : null;
+  if (series?.pending) throw Error("Schließe zuerst den Profilwechsel unter Größenlimits ab.");
+  const managed = series?.automatic;
+  if (managed) {
+    if (target.item?.id !== managed.seriesId || target.item.tvdbId !== managed.tvdbId ||
+        target.item.qualityProfileId !== managed.profileId ||
+        (policy && managed.baseProfileId !== policy.profileId))
+      throw Error("Das Sonarr-Profil dieser Serie hat sich geändert. Größenlimits prüfen.");
+    await verifySeriesLimitProfile(s, managed);
+  }
   if (!policy) return;
-  if (target.item?.qualityProfileId !== policy.profileId)
+  const profileId = managed?.profileId ?? policy.profileId;
+  if (target.item?.qualityProfileId !== profileId)
     throw Error(
       "Das Dienstprofil weicht von deiner bestätigten Auswahl ab. Vor der Suche unter Qualität ändern erneut speichern.",
     );
@@ -82,7 +97,7 @@ export async function verifyCurrentQuality(hub, s, plan, target) {
   if (policy.compact) {
     const actual = await s.arr(
       target.service,
-      `/qualityprofile/${policy.profileId}`,
+      `/qualityprofile/${profileId}`,
     );
     if (!compactValid(actual))
       throw Error(

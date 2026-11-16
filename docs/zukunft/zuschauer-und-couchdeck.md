@@ -3,7 +3,7 @@
 Stand: 12. November 2026, Entwurf. Ein Eintrag hier ist noch keine Freigabe für
 Änderungen am persönlichen Server oder für öffentliche Zugänge.
 
-## 1. Ausgangslage auf reatest
+## 1. Ausgangslage auf medienserver
 
 Lesend geprüft am 12.11.2026; dabei wurden keine Geheimnisse ausgelesen.
 
@@ -22,7 +22,7 @@ Lesend geprüft am 12.11.2026; dabei wurden keine Geheimnisse ausgelesen.
 3. **MFA einrichten:** Der öffentliche Login-Flow verweigert Konten ohne zweiten Faktor (`not_configured_action: deny`). Einrichten kann man ihn nur über den privaten Admin-Flow auf `127.0.0.1:19000`. Dafür muss der Zuschauer an den Rechner des Admins, oder der Admin richtet TOTP für ihn ein und gibt das Geheimnis weiter.
 4. Wiederherstellungscodes erzeugen. Beim bestehenden Zuschauer ist das unterblieben.
 5. **Netzwerkzugang:** Der Zuschauer braucht ein eigenes Tailscale-Konto und die App, muss ins Tailnet eingeladen werden (oder den Server geteilt bekommen), und der Admin trägt seine Geräte-IPs in eine ACL-Vorlage ein. Diese Vorlage überträgt er von Hand in die Tailscale-Policy.
-6. Im Browser `https://reatest…ts.net/sso/OID/start/stackpilot` öffnen → Passwort → TOTP → Zustimmung (bei **jedem** Login, `consent: always_require`) → Jellyfin legt `spv_<name>` mit den global gewählten Bibliotheken an.
+6. Im Browser `https://medienserver.tailnet.ts.net/sso/OID/start/stackpilot` öffnen → Passwort → TOTP → Zustimmung (bei **jedem** Login, `consent: always_require`) → Jellyfin legt `spv_<name>` mit den global gewählten Bibliotheken an.
 7. TV und Handy per Quick Connect: Den Code am Gerät ablesen und in der Browsersitzung unter Profil → Quick Connect eingeben.
 8. Seerr: Das Konto wird von Hand importiert. Anfragen gehen nur über Couchdeck oder den Admin.
 
@@ -198,7 +198,7 @@ als DRM-Master wäre fragil (logind-Seat, VT-Wechsel) und wird nicht verfolgt.
 
 | Phase | Inhalt | Braucht vom Nutzer |
 | --- | --- | --- |
-| 0 | StackPilot als systemd-Nutzerdienst (`npm run service:install`). Sonst laufen Wächter und Hintergrundprüfungen nur, solange die Shell offen ist. | OK für den Eingriff auf reatest |
+| 0 | StackPilot als systemd-Nutzerdienst (`npm run service:install`). Sonst laufen Wächter und Hintergrundprüfungen nur, solange die Shell offen ist. | OK für den Eingriff auf medienserver |
 | 1 | Blueprint v3 + Gateway-Allowlist + `invite.py` + Zuschauerliste mit Einladen/Entfernen; Tailnet-Anleitung und Gruppen-Regelvorlage | Migration v2 → v3 bestätigen; Gruppe einmal in die Tailnet-Policy einfügen; einen Testzuschauer einladen |
 | 2 | Profile (Gruppen, Bibliotheken, Altersfreigabe), Seerr-Abgleich, Gast-Ablauf | Profilinhalte festlegen |
 | 3 (später) | Nur Jellyfin über Funnel: Login unter Pfad am Jellyfin-Gateway prüfen, dann vorhandene Funnel-Abnahme. Einladungen funktionieren danach ohne Tailscale. | Funnel-Recht in der Tailnet-Policy, Test über Mobilfunk |
@@ -209,7 +209,7 @@ als DRM-Master wäre fragil (logind-Seat, VT-Wechsel) und wird nicht verfolgt.
 
 - **Migration v2 → v3:** Die vorhandenen Konfigurationsdateien sind über Prüfsummen geschützt und werden nicht still überschrieben. v3 braucht deshalb einen eigenen, vorab angezeigten Migrationsschritt mit Authentik-Sicherung davor (vorhandene Funktion).
 - **Einladungslink = Zugang:** Einmal verwendbar, kurz gültig, fester Benutzername, nur über HTTPS. Der Link wird nicht in Logs oder Berichten gespeichert.
-- **Passkeys über Funnel:** WebAuthn braucht eine stabile RP-ID (`reatest…ts.net`). Ein späterer Domainwechsel macht Passkeys ungültig. Darauf hinweisen.
+- **Passkeys über Funnel:** WebAuthn braucht eine stabile RP-ID (`medienserver.tailnet.ts.net`). Ein späterer Domainwechsel macht Passkeys ungültig. Darauf hinweisen.
 - **Seerr-Import:** Den Endpunkt und das Verhalten bei `spv_`-Konten mit gesperrtem Passwort gegen die gepinnte Seerr-Version testen.
 - **SSO-Plugin `EnableFolderRoles`:** Mit 4.0.0.4 und Jellyfin 12.4 zuerst isoliert testen.
 - **Couchdeck und StackPilot-Neustart:** Couchdeck darf nicht von laufendem StackPilot abhängen. `integration.json` bleibt gültig. Ohne Brücke fällt nur die Anfragefunktion aus.

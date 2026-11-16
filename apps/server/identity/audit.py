@@ -4,6 +4,7 @@ from pathlib import Path
 from authentik.flows.models import Flow, FlowStageBinding
 from authentik.stages.user_logout.models import UserLogoutStage
 from authentik.stages.authenticator_validate.models import AuthenticatorValidateStage
+from authentik.stages.authenticator_webauthn.models import AuthenticatorWebAuthnStage
 from authentik.providers.oauth2.models import OAuth2Provider
 from authentik.core.models import Application
 from authentik.brands.models import Brand
@@ -16,8 +17,7 @@ with connection.cursor() as cursor:
 mfa = AuthenticatorValidateStage.objects.get(name="stackpilot-required-mfa")
 assert mfa.not_configured_action == "deny"
 assert set(mfa.device_classes) == {"totp", "webauthn", "static"}
-# The login flow always asks for the factor (viewer stage, seconds=0); the authorization step
-# right after it accepts that proof for a few minutes instead of asking for a second code.
+# Authorization keeps a native MFA fallback for sessions without a fresh login proof.
 assert mfa.last_auth_threshold == "minutes=5"
 assert mfa.webauthn_user_verification == "required"
 assert FlowStageBinding.objects.filter(target__slug="stackpilot-authorization", stage=mfa).exists()
@@ -26,8 +26,19 @@ viewer_mfa = AuthenticatorValidateStage.objects.get(name="stackpilot-viewer-mfa"
 assert viewer_mfa.not_configured_action == "configure"
 assert set(viewer_mfa.device_classes) == {"totp", "webauthn", "static"}
 assert viewer_mfa.last_auth_threshold == "seconds=0"
-assert [s.name for s in viewer_mfa.configuration_stages.all()] == ["default-authenticator-totp-setup"]
+assert set(s.name for s in viewer_mfa.configuration_stages.all()) == {"default-authenticator-totp-setup", "stackpilot-viewer-passkey"}
+passkey = AuthenticatorWebAuthnStage.objects.get(name="stackpilot-viewer-passkey")
+assert passkey.user_verification == "required"
 assert FlowStageBinding.objects.filter(target__slug="stackpilot-authentication", stage=viewer_mfa).exists()
+for slug, stage, name, order, fallback in (
+    ("stackpilot-authentication", "stackpilot-viewer-login-proof", "stackpilot-record-viewer-mfa", 110, False),
+    ("stackpilot-authorization", "stackpilot-required-mfa", "stackpilot-require-viewer-mfa", 10, True),
+):
+    binding = FlowStageBinding.objects.get(target__slug=slug, stage__name=stage, order=order)
+    assert binding.re_evaluate_policies and not binding.evaluate_on_plan
+    policies = PolicyBinding.objects.filter(target=binding)
+    assert policies.count() == 1
+    assert policies.filter(policy__name=name, enabled=True, failure_result=fallback).exists()
 provider = OAuth2Provider.objects.get(name="StackPilot Jellyfin")
 assert provider.client_type == "confidential"
 assert provider.grant_types == ["authorization_code"]

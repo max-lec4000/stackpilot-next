@@ -68,3 +68,20 @@ test("Unbekannte Dienstaktivität wird bei laufenden Containern nicht als gesund
     result.tasks.some((t) => t.id === "activity" && t.state === "unknown"),
   );
 });
+
+test("System- und Medienspeicher werden auf demselben Dateisystem nur einmal ausgegeben", async () => {
+  const gib = 1024 ** 3;
+  const root = { device: 2, freeBytes: gib, usedBytes: 99 * gib, totalBytes: 100 * gib };
+  let device = 2;
+  const ops = new Operations({}, {}, {
+    storage: async () => ({ device, freeBytes: 3 * gib, usedBytes: 97 * gib, totalBytes: 100 * gib }),
+    systemStorage: async () => root,
+  });
+  const plan = { spec: { path: "/media" } };
+  assert.equal((await ops.storageSummary(plan)).system, null);
+  device = 3;
+  const disks = await ops.storageSummary(plan);
+  assert.equal(disks.shared, false);
+  assert.equal(disks.system.state, "warning");
+  assert.equal(disks.media.usedBytes, 97 * gib);
+});

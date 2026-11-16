@@ -30,6 +30,11 @@ export class StateStore {
       .run(plan.id, JSON.stringify(plan));
     return plan;
   }
+  replacePlan(plan) {
+    if (this.db.prepare("UPDATE plans SET data=? WHERE id=?")
+      .run(JSON.stringify(plan), plan.id).changes !== 1)
+      throw Error("Der gespeicherte Installationsplan fehlt.");
+  }
   plan(id) {
     const row = this.db.prepare("SELECT data FROM plans WHERE id=?").get(id);
     return row ? JSON.parse(row.data) : null;

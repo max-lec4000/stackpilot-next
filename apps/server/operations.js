@@ -1,17 +1,42 @@
+import { stat, statfs } from "node:fs/promises";
 import { inspectPath } from "./inventory.js";
 import { managedServices } from "./managed.js";
 import { LiveCache } from "./request-index.js";
 import { storageHealth } from "../../packages/domain/storage-health.js";
+async function rootStorage() {
+  const [fs, root] = await Promise.all([statfs("/"), stat("/")]);
+  return {
+    device: root.dev, totalBytes: fs.blocks * fs.bsize,
+    freeBytes: fs.bavail * fs.bsize, usedBytes: (fs.blocks - fs.bfree) * fs.bsize,
+  };
+}
+const usage = (measurement) => ({
+  ...storageHealth(measurement),
+  usedBytes: measurement?.usedBytes ?? null,
+});
 export class Operations {
   constructor(hub, activity, options = {}) {
     Object.assign(this, { hub, activity });
     this.storage = options.storage || inspectPath;
+    this.systemStorage = options.systemStorage || rootStorage;
     this.managed = options.managed || managedServices;
     this.cache = new LiveCache(15000);
   }
   inspect(force = false) {
     if (force) this.cache.clear();
     return this.cache.read("overview", () => this.collect());
+  }
+  async storageSummary(plan) {
+    const [media, system] = await Promise.all([
+      this.storage(plan.spec.path).catch(() => null),
+      this.systemStorage().catch(() => null),
+    ]);
+    const shared = media?.device != null && media.device === system?.device;
+    return {
+      media: usage(media?.exists === false ? null : media),
+      system: shared ? null : usage(system),
+      shared,
+    };
   }
   async collect() {
     const current = this.hub.engine.current(),
@@ -74,10 +99,16 @@ export class Operations {
         target: "manage",
       });
     }
-    try {
-      const measured = await this.storage(current.plan.spec.path);
-      base.storage = { ...storageHealth(measured), usedBytes: measured.usedBytes ?? null };
-    } catch {}
+    const disks = await this.storageSummary(current.plan);
+    base.storage = disks.media;
+    base.systemStorage = disks.system;
+    base.sharedStorage = disks.shared;
+    if (["warning", "critical"].includes(disks.system?.state))
+      tasks.push({
+        id: "system-storage", state: "attention", title: "Systemspeicher wird knapp",
+        reason: "Freien Platz für System und Container prüfen.",
+        action: "Verwaltung öffnen", target: "manage",
+      });
     if (base.storage.state === "unknown")
       tasks.push({
         id: "storage",

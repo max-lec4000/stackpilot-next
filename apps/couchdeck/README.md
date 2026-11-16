@@ -32,7 +32,7 @@ einzelne/alle fehlenden Staffeln lassen sich anfragen; Anfragen laufen im Namen 
 Seerr-Benutzers, der zum angemeldeten Jellyfin-Benutzer gehört. Einmalig verbinden:
 
 ```bash
-ssh -t reatest 'sudo bash /opt/couchdeck/app/deploy/set-seerr-key.sh'
+ssh -t medienserver 'sudo bash /opt/couchdeck/app/deploy/set-seerr-key.sh'
 ```
 
 Der API-Key steht in Seerr unter Einstellungen → Allgemein. Er wird nur in
@@ -93,7 +93,7 @@ Log: `/var/log/couchdeck/session.log` (lesbar für Gruppe adm)
 
 ```bash
 npm install
-ssh -f -N -L 18096:127.0.0.1:8096 reatest       # Jellyfin des Servers lokal erreichbar machen
+ssh -f -N -L 18096:127.0.0.1:8096 medienserver       # Jellyfin des Servers lokal erreichbar machen
 COUCHDECK_CONFIG_DIR=/tmp/cdcfg npm run dev      # Fenster-Modus; config.json dort mit jellyfinUrl http://127.0.0.1:18096
 ```
 
@@ -123,8 +123,8 @@ cd couchdeck && git pull && sudo bash deploy/install.sh
 **Vom Entwicklungsrechner** (bringt Electron aus `node_modules` gleich mit):
 
 ```bash
-./deploy/push.sh                                       # kopiert nach reatest:~/couchdeck-staging
-ssh -t reatest 'sudo bash ~/couchdeck-staging/deploy/install.sh'
+./deploy/push.sh medienserver                          # kopiert nach medienserver:~/couchdeck-staging
+ssh -t medienserver 'sudo bash ~/couchdeck-staging/deploy/install.sh'
 ```
 
 Läuft Couchdeck schon, startet das Skript es am Ende mit der neuen Version neu.

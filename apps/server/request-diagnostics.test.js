@@ -336,23 +336,33 @@ test("Neue Suche schützt den vorhandenen Transfer und verlangt eine vollständi
 });
 
 
-test("Folgensuche bleibt auf genau eine fehlende Folge der angefragten Staffel begrenzt", async () => {
+test("Nur bestätigte Einzelfolge aus einer anderen Staffel einer abgeschlossenen Anfrage laden", async () => {
   const f = fixture();
   f.request.media.mediaType = "tv";
-  const episode = { id: 14, seriesId: 11, seasonNumber: 1, episodeNumber: 2,
-    title: "Testfolge", airDateUtc: "2020-01-01T00:00:00Z", monitored: true, hasFile: false };
+  f.request.status = 5;
+  f.item.seasons = [{ seasonNumber: 2, monitored: false }];
+  const episode = { id: 14, seriesId: 11, seasonNumber: 2, episodeNumber: 1,
+    title: "Testfolge", airDateUtc: "2020-01-01T00:00:00Z", monitored: false, hasFile: false };
   f.setEpisodes([episode, { ...episode, id: 15, seriesId: 99 }]);
-  f.item.seasons = [{ seasonNumber: 1, monitored: false }];
-  assert.equal((await f.diagnosis.episodes(7, 1)).episodes[0].canSearch, false);
-  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 }), /wird nicht überwacht/);
-  f.item.seasons[0].monitored = true;
-  assert.deepEqual((await f.diagnosis.episodes(7, 1)).episodes.map((row) => row.id), [14]);
-  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, episodeId: 15 }), /nicht als fehlende/);
-  await f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 });
-  assert.deepEqual(f.commands[0].body, { name: "EpisodeSearch", episodeIds: [14] });
-  f.values.get("request-search:root:7").startedAt = "2020-01-01T00:00:00Z";
-  assert.equal((await f.diagnosis.search({ requestId: 7, season: 1, episodeId: 14 })).alreadyRunning, true);
-  assert.equal(f.commands.length, 1);
+  assert.deepEqual(await f.diagnosis.episodeSeasons(7), { seasons: [2], limits: null });
+  assert.equal((await f.diagnosis.episodes(7, 2)).episodes[0].canSearch, true);
+  const arr = f.s.arr, posts = [];
+  const single = { guid: "single", indexerId: 1, protocol: "torrent", fullSeason: false, approved: true,
+    downloadAllowed: true, mappedSeriesId: 11, mappedEpisodeInfo: [{ id: 14 }] };
+  f.s.arr = async (service, route, options) => {
+    if (route === "/release?episodeId=14") return [
+      { ...single, guid: "pack", fullSeason: true },
+      { ...single, guid: "multi", mappedEpisodeInfo: [{ id: 14 }, { id: 15 }] },
+      single,
+    ];
+    if (route === "/release") { posts.push(options.body); return {}; }
+    return arr(service, route, options);
+  };
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 2, episodeId: 15 }), /nicht zugeordnet/);
+  assert.equal((await f.diagnosis.search({ requestId: 7, season: 2, episodeId: 14 })).grabbed, true);
+  assert.deepEqual(posts, [{ guid: "single", indexerId: 1 }]);
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 2, episodeId: 14 }), /gerade beauftragt/);
+  assert.equal(f.commands.length, 0);
 });
 
 test("Dateilöschung prüft Zuordnung über alle Staffeln und löscht genau die bestätigte Datei", async () => {
@@ -483,18 +493,97 @@ test("Staffelpaket nur bei vollständiger eindeutiger Zuordnung pausieren", asyn
   assert.deepEqual(writes, [{ route: "/torrents/stop", args: { hashes: hash } }]);
 });
 
-test("Couchdeck-Qualitätsänderungen bleiben auf eigene genehmigte Einzelanfragen begrenzt", async () => {
+test("Staffelpaket-Größenobergrenze verwirft größere und fremde Treffer", async () => {
   const f = fixture();
-  const owner = "0123456789abcdef0123456789abcdef";
-  f.request.requestedBy = { id: 4 };
-  let otherRequests = [];
-  f.s.additional.seerr = async (route) => route === "/user/4"
-    ? { jellyfinUserId: owner }
-    : { mediaInfo: { requests: [f.request, ...otherRequests] } };
-  const target = { request: f.request, kind: "movie", mediaId: 42 };
-  await assert.rejects(f.diagnosis.requireQualityOwner(f.s, target, "other"), /Nur eigene/);
-  otherRequests = [{ id: 88, status: 2 }];
-  await assert.rejects(f.diagnosis.requireQualityOwner(f.s, target, owner), /weitere Anfragen/);
-  otherRequests = [];
-  await f.diagnosis.requireQualityOwner(f.s, target, owner);
+  f.request.media.mediaType = "tv";
+  f.setEpisodes([{ id: 14, seriesId: 11, seasonNumber: 1 }]);
+  const release = { guid: "preferred", indexerId: 1, protocol: "torrent", fullSeason: true,
+    approved: true, downloadAllowed: true, mappedSeriesId: 11, size: 2 * 1024 ** 3,
+    mappedEpisodeInfo: [{ id: 14, seasonNumber: 1 }, { id: 15, seasonNumber: 1 }] };
+  const arr = f.s.arr, writes = [];
+  f.s.arr = async (service, route, options) => {
+    if (route === "/release?seriesId=11&seasonNumber=1") return [
+      { ...release, guid: "big", size: 4 * 1024 ** 3 },
+      { ...release, guid: "other-season", mappedEpisodeInfo: [{ id: 14, seasonNumber: 1 }, { id: 18, seasonNumber: 2 }] },
+      release,
+    ];
+    if (route === "/release") { writes.push(options.body); return {}; }
+    return arr(service, route, options);
+  };
+  await assert.rejects(f.diagnosis.search({ requestId: 7, season: 1, capGiB: 1 }), /Größenobergrenze gefunden/);
+  await f.diagnosis.saveSeriesLimits({ requestId: 7, episodeGiB: 1, packageGiB: 2, confirmation: "OK" });
+  assert.deepEqual((await f.diagnosis.episodeSeasons(7)).limits, { episodeGiB: 1, packageGiB: 2 });
+  await assert.rejects(f.diagnosis.search({ requestId: 7 }), /Staffel einzeln/);
+  await f.diagnosis.search({ requestId: 7, season: 1 });
+  assert.deepEqual(writes, [{ guid: "preferred", indexerId: 1 }]);
+  assert.equal(f.commands.length, 0);
+});
+
+test("Pausiertes Staffelpaket wird nur nach eigener Vorschau ohne Dateien entfernt", async () => {
+  const f = fixture(), hash = "c".repeat(40);
+  f.request.media.mediaType = "tv";
+  const rows = [14, 15].map((episodeId) => ({ seriesId: 11, seasonNumber: 1, episodeId, downloadId: hash }));
+  f.setQueue({ records: rows, totalRecords: 2 });
+  let torrent = { hash, category: "stackpilot-tv", state: "downloading", progress: 0.5 };
+  const calls = [];
+  f.s.qbit = async (route, args) => {
+    if (route === "/torrents/info") return torrent ? [torrent] : [];
+    calls.push([route, args]);
+    torrent = null;
+  };
+  await assert.rejects(f.diagnosis.seasonTransferPreview({ requestId: 7, season: 1, remove: true }), /Pausiere zuerst/);
+  torrent.state = "stoppedDL";
+  const preview = await f.diagnosis.seasonTransferPreview({ requestId: 7, season: 1, remove: true });
+  const body = { requestId: 7, season: 1, review: preview.review, confirmation: "OK" };
+  await assert.rejects(f.diagnosis.pauseSeasonTransfer({ ...body, review: "alt" }, undefined, true), /Neu prüfen/);
+  await f.diagnosis.pauseSeasonTransfer(body, undefined, true);
+  assert.deepEqual(calls, [["/torrents/delete", { hashes: hash, deleteFiles: "false" }]]);
+});
+
+test("Staffelpaket wird erst entfernt, wenn der bestätigte alternative Hash in qBittorrent steht", async () => {
+  const f = fixture(), old = "d".repeat(40), next = "e".repeat(40);
+  f.request.media.mediaType = "tv";
+  const episodeIds = [14, 15];
+  const rows = episodeIds.map((episodeId) => ({ seriesId: 11, seasonNumber: 1, episodeId, downloadId: old }));
+  f.setQueue({ records: rows, totalRecords: rows.length });
+  f.setClients([{ name: "StackPilot qBittorrent", implementation: "QBittorrent", enable: true, protocol: "torrent" }]);
+  const source = f.s.additional.seerr;
+  f.s.additional.seerr = async (route) => route.startsWith("/tv/42?")
+    ? { mediaInfo: { requests: [f.request] } }
+    : source(route);
+  const torrent = { hash: old, category: "stackpilot-tv", progress: 0.5, state: "stoppedDL" };
+  let torrents = [torrent], offerAlternate = false;
+  const calls = [];
+  const arr = f.s.arr;
+  const release = { guid: "alternate", infoHash: next, indexerId: 1, protocol: "torrent",
+    fullSeason: true, approved: false, rejected: true, rejections: ["Release in queue already meets cutoff: WEBDL-1080p v1"], downloadAllowed: true, mappedSeriesId: 11, size: 1024 ** 3,
+    mappedEpisodeInfo: episodeIds.map((id) => ({ id, seasonNumber: 1 })) };
+  f.s.arr = async (service, route, options) => {
+    if (route.startsWith("/release?")) return [
+      { ...release, guid: "old", infoHash: old },
+      { ...release, guid: "blocked", rejections: [...release.rejections, "Qualität nicht erlaubt"] },
+      ...(offerAlternate ? [release] : []),
+    ];
+    if (route === "/release") {
+      calls.push(options.body);
+      torrents.push({ hash: next, category: "stackpilot-tv" });
+      return {};
+    }
+    return arr(service, route, options);
+  };
+  f.s.qbit = async (route, args) => {
+    if (route === "/torrents/info") return torrents;
+    calls.push([route, args]);
+    torrents = torrents.filter((entry) => entry.hash !== args.hashes);
+  };
+  const preview = await f.diagnosis.seasonTransferPreview({ requestId: 7, season: 1, remove: true });
+  const body = { requestId: 7, season: 1, review: preview.review, confirmation: "OK" };
+  await assert.rejects(f.diagnosis.replaceSeasonPackage(body), /Kein passendes Staffelpaket/);
+  assert.deepEqual(calls, []);
+  offerAlternate = true;
+  await f.diagnosis.replaceSeasonPackage(body);
+  assert.deepEqual(calls, [
+    { guid: "alternate", indexerId: 1 },
+    ["/torrents/delete", { hashes: old, deleteFiles: "false" }],
+  ]);
 });

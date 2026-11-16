@@ -131,3 +131,129 @@ StackPilot speichert den neuen Schlüssel im Tresor. Externe Anwendungen
 bekommen ihn bei Bedarf aus den Einstellungen von Bazarr. Bazarrs eigene
 Anmeldung und seine Verbindungen zu Sonarr und Radarr bleiben erhalten.
 Nach einem unterbrochenen Wechsel kannst du dieselbe Aktion erneut ausführen.
+
+## Automatische Größenlimits für eine Serie
+
+Öffne unter **Meine Anfragen** die Details der Serie und klappe
+**Größenlimits für diese Serie** auf. Gib das gewünschte Limit pro
+Folgenrelease, pro Staffelpaket oder für beides ein. Aktiviere **Auch
+automatische Downloads in Sonarr begrenzen** und speichere. Sonarr nutzt
+für diese Serie eine Kopie ihres bisherigen Profils mit den zusätzlichen
+Größenregeln. Die bisherige Qualitätsreihenfolge und die Bewertung
+zulässiger Treffer bleiben erhalten.
+
+Die Grenzen betreffen die von Sonarr gemeldete Größe des gesamten
+Releases. Bei einer Doppelfolge zählt die gemeinsame Größe. Laufende
+Transfers werden nicht neu bewertet.
+
+Entferne das Häkchen und speichere, um zum bisherigen Sonarr-Profil
+zurückzukehren. Die Größenlimits für gezielte Downloads aus StackPilot
+und Couchdeck bleiben dabei gespeichert. Leere beide Felder und
+speichere, wenn du auch diese Limits entfernen möchtest. Wenn du für
+die Serie ein anderes Qualitätsprofil auswählen willst, schalte das
+automatische Limit zuerst aus. Danach kannst du es mit dem neuen
+Profil wieder aktivieren.
+
+## Mediencontainer aktualisieren und zurückwechseln
+
+Unter **Verwaltung → Sicherungen & Updates → Container-Updates und
+Rückkehr** zeigt StackPilot für Sonarr, Radarr, Lidarr, Prowlarr, Bazarr
+und Seerr abweichende, per Digest festgelegte Versionen aus dem
+Dienstkatalog. **Update vorbereiten** und mit dem Administratorpasswort
+bestätigen. StackPilot lädt bei Bedarf das Ziel-Image, stoppt den Dienst,
+sichert dessen Konfigurationsordner und prüft den gestarteten Dienst.
+
+Bei einem Prüffehler versucht StackPilot automatisch, zur bisherigen
+Version samt Konfiguration zurückzukehren. Nach einem erfolgreichen
+Update geht das auch per **Vorherige Version wiederherstellen**. Der
+vor der Rückkehr aktuelle Konfigurationsordner bleibt als `after-update`
+in der privaten Sicherung unter `<Appdata>/.stackpilot-container-backups/`
+erhalten. Änderungen seit dem Update werden im laufenden Dienst durch
+den vorherigen Stand ersetzt. Die Rückkehr ist an den aktuellen
+Installationsplan gebunden und benötigt das bisherige lokale Docker-Image.
+Bei einem abgebrochenen Wartungsvorgang lässt sich die Rückkehr hier erneut
+anstoßen.
+
+## StackPilot-Tresor verschlüsselt herunterladen
+
+Öffne StackPilot direkt am Server oder über SSH. Beispielsweise leitet
+`ssh -N -L 5174:127.0.0.1:5173 benutzer@server` den Browserzugriff über
+`http://stackpilot.localhost:5174` an den Server. Im StackPilot-Menü
+**Verwaltung → Sicherungen & Updates → StackPilot-Tresor sichern**
+das Administratorpasswort und eine eigene Sicherungspassphrase eingeben.
+Die Datei endet auf `.spvault` und enthält eine konsistente Kopie von
+`state.sqlite` und den dazugehörigen `master.key`. Medien und die
+Konfigurationsordner der Dienste werden separat gesichert.
+
+Die Passphrase getrennt aufbewahren. Auf dem Server oder einem anderen
+Rechner mit Node.js 24 und einer StackPilot-Quellkopie lässt sich das
+Archiv in einen neuen, privaten Ordner entpacken und prüfen. Im
+StackPilot-Quellordner ausführen:
+
+```bash
+read -r -s -p 'Sicherungspassphrase: ' backup_phrase
+printf '\n'
+printf '%s\n' "$backup_phrase" | node scripts/verify-vault-backup.mjs ~/stackpilot-tresor-DATUM.spvault ~/tresor-wiederhergestellt
+unset backup_phrase
+```
+
+Der Zielordner muss neu sein. Er enthält nach der Prüfung den
+unverschlüsselten Hauptschlüssel und die Datenbank. Entschlüsselte
+Prüfkopien privat behandeln und nach Gebrauch entfernen.
+
+## Wiederherstellungscodes für Zuschauer
+
+Bei neu eingerichtetem Authentik werden Wiederherstellungscodes automatisch
+angeboten. Für eine bestehende Installation öffne **Verwaltung → Externer
+Zugriff → Zuschauer → Wiederherstellungscodes für Zuschauer
+aktivieren** und bestätige mit dem StackPilot-Administratorpasswort.
+Zuschauer ohne eingerichteten Wiederherstellungsfaktor bekommen nach
+erfolgreicher Anmeldung mit zweitem Faktor acht einmal verwendbare Codes
+angezeigt. Sie sollten die Codes privat und getrennt vom Gerät mit ihrer
+Authenticator-App aufbewahren. Bestehende Codes bleiben gültig.
+
+## Zuschauer anmelden und eigenes Passwort wählen
+
+In einer bestehenden Installation öffnest du unter **Verwaltung → Externer
+Zugriff → Zuschauer** einmalig **Zuschauer-Anmeldung aktualisieren**.
+Neue Authentik-Installationen verwenden den Ablauf automatisch.
+
+1. Beim Einladen gibt StackPilot einen Benutzernamen und ein Startpasswort aus.
+2. Der Zuschauer öffnet den Jellyfin-Anmeldelink und richtet bei Bedarf einen
+   Passkey oder eine Authenticator-App ein. Passkeys verwenden die HTTPS-Adresse
+   von Authentik und sind ein zweiter Faktor zusätzlich zum Passwort.
+3. Nach bestätigter MFA wählt der Zuschauer beim ersten Login ein eigenes
+   Passwort mit 12 bis 128 Zeichen. Bei einem späteren Login verwendet er
+   dieses Passwort. Ein von StackPilot zurückgesetztes Konto durchläuft die
+   Einrichtung erneut.
+
+Ein frisch bestätigter zweiter Faktor gilt auch für die anschließende
+Jellyfin-Freigabe derselben Anmeldung. Fehlt dieser Nachweis, fordert Authentik
+MFA an. Bestehende Konten behalten ihr Passwort, bis sie ausdrücklich
+zurückgesetzt werden.
+
+### Bibliotheken pro Zuschauer freigeben
+
+1. Öffne **Verwaltung → Externer Zugriff → Zuschauer → Zuschauerprofile**.
+2. Erstelle ein Profil mit einem Namen und den erlaubten Jellyfin-Bibliotheken.
+   Zur Auswahl stehen die Bibliotheken, die beim Einrichten von SSO freigegeben wurden.
+3. Wähle beim Konto das Profil aus und klicke auf **Profil zuweisen**.
+   Mit **Standardfreigabe** erhält das Konto wieder die ursprüngliche Bibliotheksauswahl.
+
+StackPilot übernimmt die Freigabe für das gesamte Zuschauerkonto. Bereits
+angemeldete Geräte können die Bibliotheken neu laden und weiter angemeldet
+bleiben. Falls gerade eine Jellyfin-Anmeldung läuft, schließe sie vor dem
+Profilwechsel ab und versuche die Zuweisung erneut. Unterbrochene
+Zuweisungen lassen sich mit derselben Profilauswahl fortsetzen.
+
+### Einem bestehenden Konto einen Passkey hinzufügen
+
+1. Bei einer bestehenden Installation bei Bedarf einmal **Zuschauer-Anmeldung aktualisieren**.
+2. Beim aktiven Zuschauerkonto mit eingerichtetem zweiten Faktor auf **Passkey hinzufügen** klicken.
+3. Die Person öffnet ihren üblichen Jellyfin-Anmeldelink im Browser und
+   meldet sich mit ihrem bisherigen Passwort und zweiten Faktor an. Authentik
+   bietet anschließend an, einen Passkey auf dem Gerät anzulegen.
+
+Das Passwort, die bisherigen Faktoren und angemeldete Jellyfin-Geräte
+bleiben erhalten. Die einmalige Aufforderung lässt sich bei Bedarf über
+**Passkey-Einrichtung abbrechen** zurücknehmen.

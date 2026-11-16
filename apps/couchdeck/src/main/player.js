@@ -255,7 +255,7 @@ class Player extends EventEmitter {
       return;
     }
     // YouTube-HLS: keine Verbindungs-Wiederverwendung – YouTube verteilt Segmente auf wechselnde
-    // Server; mit Keepalive scheiterten auf reatest 71 Segmente pro Minute (kein Ton bzw.
+    // Server; mit Keepalive scheiterten auf medienserver 71 Segmente pro Minute (kein Ton bzw.
     // "no audio or video data played"), ohne: 0.
     cur.titleOpts = `force-media-title=%${Buffer.byteLength(t)}%${t},demuxer-lavf-o=%17%http_persistent=0`;
     if (direct?.video) {
@@ -387,7 +387,7 @@ class Player extends EventEmitter {
 
   /**
    * YouTube-Spulen. ffmpeg bleibt bei YouTube-HLS hängen, wenn während der Wiedergabe
-   * außerhalb des bereits geladenen Bereichs gesprungen wird (auf reatest: > 150 s ohne
+   * außerhalb des bereits geladenen Bereichs gesprungen wird (auf medienserver: > 150 s ohne
    * Ergebnis), startet aber direkt an einer Stelle in ~2–3 s. Daher: innerhalb des Puffers
    * normal springen, sonst den Stream an der Zielposition neu laden. Mehrere Spulschritte
    * hintereinander werden zusammengefasst.

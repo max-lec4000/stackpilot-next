@@ -1,6 +1,7 @@
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { Couchdeck } from "./couchdeck.js";
 import { RemoteSetup } from "./remote-setup.js";
+import { ViewerProfiles } from "./identity/viewer-profiles.js";
 import { Viewers } from "./identity/viewers.js";
 import { RemoteJourney } from "./remote-journey.js";
 import { Notifications } from "./notifications.js";
@@ -8,6 +9,8 @@ import { globalSearch } from "./global-search.js";
 import { musicInventory, withMusicTrack } from "./music-library.js";
 import { inspectMusicTags } from "./music-tags.js";
 import { ServiceUpdates } from "./service-updates.js";
+import { ContainerMaintenance } from "./container-maintenance.js";
+import { createVaultBackup } from "./vault-backup.js";
 import { setReportConsent } from "./dev-report-consent.js";
 import { OidcBackchannel } from "./identity/oidc-backchannel.js";
 import {
@@ -79,6 +82,7 @@ export function inventoryMiddleware(options = {}) {
   installer().couchdeck = couchdeck;
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
+  const containerMaintenance = new ContainerMaintenance(hub);
   const notifications = new Notifications(state, operations, hub);
   if (options.background !== false) notifications.start();
   const remoteAccess = new RemoteAccess(hub);
@@ -118,6 +122,7 @@ export function inventoryMiddleware(options = {}) {
     oidcBackchannel,
   );
   const viewers = new Viewers(identity);
+  const viewerProfiles = new ViewerProfiles(hub, ssoConnection, viewers);
   const remoteSetup = new RemoteSetup(hub, {
     identity,
     protection: jellyfinProtection,
@@ -209,6 +214,8 @@ export function inventoryMiddleware(options = {}) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     const url = new URL(req.url, `http://${host}`);
+    const vaultBackupLocal = ["127.0.0.1", "::ffff:127.0.0.1", "::1"].includes(remoteAddress) &&
+      /^(?:localhost|127\.0\.0\.1|stackpilot\.localhost|\[::1\]):\d+$/.test(host);
     if (url.pathname === "/api/couchdeck/media") {
       if (!["127.0.0.1", "::ffff:127.0.0.1"].includes(remoteAddress) ||
           !isPlainLoopback(host) || req.headers.origin || req.method !== "POST" ||
@@ -230,18 +237,17 @@ export function inventoryMiddleware(options = {}) {
         const body = JSON.parse(text);
         const { requestId, season, episodeId, fileId } = body;
         let result;
-        if (body.action === "episodes") result = await requestDiagnostics.episodes(requestId, season, owner);
+        if (body.action === "storage") {
+          const current = installer().current();
+          if (!current || current.job.status !== "completed") throw Error("Der Stack ist noch nicht eingerichtet.");
+          result = await operations.storageSummary(current.plan);
+        } else if (body.action === "episodes") result = await requestDiagnostics.episodes(requestId, season, owner);
+        else if (body.action === "request-cancel")
+          result = await requestDiagnostics.cancelOwnRequest({ requestId, confirmation: body.confirmation }, owner);
         else if (body.action === "search" && episodeId !== undefined)
-          result = await requestDiagnostics.search({ requestId, season, episodeId }, owner);
+          result = await requestDiagnostics.search({ requestId, season, episodeId, capGiB: body.capGiB }, owner);
         else if (body.action === "search-season" && season !== undefined)
-          result = await requestDiagnostics.search({ requestId, season }, owner);
-        else if (body.action === "quality")
-          result = await qualitySettings.read(requestId, owner);
-        else if (body.action === "quality-save")
-          result = await qualitySettings.apply({
-            requestId, profile: body.profile, previousProfileId: body.previousProfileId,
-            confirmation: body.confirmation,
-          }, owner);
+          result = await requestDiagnostics.search({ requestId, season, capGiB: body.capGiB }, owner);
         else if (body.action === "film-request") {
           if (!Number.isFinite(body.capGiB) || body.capGiB < 0.5 ||
               body.capGiB > 200 || !Number.isInteger(body.capGiB * 2))
@@ -250,9 +256,11 @@ export function inventoryMiddleware(options = {}) {
             owner, userId: Number(body.userId), capGiB: body.capGiB,
           });
         } else if (body.action === "season-transfer")
-          result = await requestDiagnostics.seasonTransferPreview({ requestId, season }, owner);
+          result = await requestDiagnostics.seasonTransferPreview({ requestId, season, remove: body.remove === true }, owner);
         else if (body.action === "season-pause")
           result = await requestDiagnostics.pauseSeasonTransfer({ requestId, season, review: body.review, confirmation: body.confirmation }, owner);
+        else if (body.action === "season-remove")
+          result = await requestDiagnostics.pauseSeasonTransfer({ requestId, season, review: body.review, confirmation: body.confirmation }, owner, true);
         else if (body.action === "delete")
           result = await requestDiagnostics.deleteEpisodeFile({ requestId, season, episodeId, fileId, confirmation: body.confirmation }, owner);
         else throw Error("Unbekannte Couchdeck-Aktion.");
@@ -305,6 +313,10 @@ export function inventoryMiddleware(options = {}) {
       let result;
       if (url.pathname === "/api/updates/job" && req.method === "GET") {
         result = await serviceUpdates.job();
+      } else if (url.pathname === "/api/container-maintenance" && req.method === "GET") {
+        result = containerMaintenance.list();
+      } else if (url.pathname === "/api/vault-backup" && req.method === "GET") {
+        result = { local: vaultBackupLocal };
       } else if (url.pathname === "/api/music/tags" && req.method === "GET") {
         const current = installer().current();
         if (!current || current.job.status !== "completed") throw Object.assign(Error("Zuerst die Einrichtung abschließen."), { userFacing: true });
@@ -370,7 +382,10 @@ export function inventoryMiddleware(options = {}) {
       } else if (url.pathname === "/api/media/season-transfer" && req.method === "GET") {
         result = await requestDiagnostics.seasonTransferPreview({
           requestId: url.searchParams.get("requestId"), season: url.searchParams.get("season"),
+          remove: url.searchParams.get("remove") === "1",
         });
+      } else if (url.pathname === "/api/media/episode-seasons" && req.method === "GET") {
+        result = await requestDiagnostics.episodeSeasons(url.searchParams.get("requestId"));
       } else if (url.pathname === "/api/media/episodes" && req.method === "GET") {
         result = await requestDiagnostics.episodes(
           url.searchParams.get("requestId"), url.searchParams.get("season"),
@@ -537,6 +552,8 @@ export function inventoryMiddleware(options = {}) {
         );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
         result = await managedServices(installer(), host);
+      } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
+        result = await viewerProfiles.list();
       } else if (url.pathname === "/api/viewers" && req.method === "GET") {
         result = await viewers.list();
       } else if (url.pathname === "/api/remote-setup" && req.method === "GET") {
@@ -592,6 +609,18 @@ export function inventoryMiddleware(options = {}) {
         } else if (url.pathname === "/api/updates/start") {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await serviceUpdates.start(body);
+        } else if (["/api/container-maintenance/update", "/api/container-maintenance/rollback"].includes(url.pathname)) {
+          await manager.reauthenticate(body.password, remoteAddress);
+          result = await containerMaintenance.apply(body, url.pathname.endsWith("/rollback"));
+        } else if (url.pathname === "/api/vault-backup") {
+          if (!vaultBackupLocal) throw Error("Öffne StackPilot am Server oder über einen SSH-Tunnel.");
+          if (body.password === body.passphrase) throw Error("Verwende eine eigene Sicherungspassphrase.");
+          await manager.reauthenticate(body.password, remoteAddress);
+          const bytes = await hub.mutate([], () => createVaultBackup(state, installer().vault, body.passphrase));
+          audit.finish(auditId, true);
+          res.setHeader("Content-Type", "application/octet-stream");
+          res.setHeader("Content-Disposition", `attachment; filename="stackpilot-tresor-${new Date().toISOString().slice(0, 10)}.spvault"`);
+          return res.end(bytes);
         } else if (url.pathname === "/api/notifications/read") {
           result = notifications.mark(body.ids);
         } else if (url.pathname === "/api/development/consent") {
@@ -696,10 +725,16 @@ export function inventoryMiddleware(options = {}) {
           result = await sizeLimits.save(body);
         else if (url.pathname === "/api/media/quality")
           result = await qualitySettings.apply(body);
+        else if (url.pathname === "/api/media/season-transfer/replace")
+          result = await requestDiagnostics.replaceSeasonPackage(body);
+        else if (url.pathname === "/api/media/season-transfer/remove")
+          result = await requestDiagnostics.pauseSeasonTransfer(body, undefined, true);
         else if (url.pathname === "/api/media/season-transfer/pause")
           result = await requestDiagnostics.pauseSeasonTransfer(body);
         else if (url.pathname === "/api/media/episodes/delete-file")
           result = await requestDiagnostics.deleteEpisodeFile(body);
+        else if (url.pathname === "/api/media/series-limits")
+          result = await requestDiagnostics.saveSeriesLimits(body);
         else if (url.pathname === "/api/media/research")
           result = await requestDiagnostics.search(body);
         else if (url.pathname === "/api/media/releases")
@@ -739,10 +774,18 @@ export function inventoryMiddleware(options = {}) {
           });
         } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);
+        else if (url.pathname === "/api/viewer-profiles")
+          result = await viewerProfiles.change(body);
         else if (url.pathname === "/api/viewers/action") {
           if (body.action === "invite") result = await viewers.invite(body.name, body.displayName);
           else if (body.action === "reset") result = await viewers.reset(body.name);
           else if (body.action === "remove") result = await viewers.remove(body.name);
+          else if (["add-passkey", "cancel-passkey"].includes(body.action))
+            result = await viewers.passkey(body.action, body.name);
+          else if (["enable-recovery", "improve-login"].includes(body.action)) {
+            await manager.reauthenticate(body.password, remoteAddress);
+            result = await viewers.updateLogin(body.action);
+          }
           else throw new Error("Unbekannte Zuschauer-Aktion.");
         } else if (url.pathname === "/api/remote-setup/start")
           result = await remoteSetup.start({ viewer: typeof body.viewer === "string" ? body.viewer : "" });

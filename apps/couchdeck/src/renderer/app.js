@@ -1236,10 +1236,6 @@ function seerrDetailScreen(stub) {
       actions.append(h('button', { class: 'action danger focusable', 'data-req': rq.id, oncdselect: () =>
         cancelSeerrRequest({ id: rq.id, title: d.title, requestStatus: rq.status }, load) }, label));
     }
-    if (d.managed) for (const rq of (d.requests || []).filter((entry) => entry.mine && entry.status === 2)) {
-      actions.append(h('button', { class: 'action focusable', oncdselect: () => editRequestQuality(rq.id, load) },
-        'Qualitätsprofil ändern'));
-    }
     const state = SEERR_STATUS[d.status];
     scroll.append(h('div', { class: 'detail' },
       h('div', { class: 'poster', style: d.poster ? { backgroundImage: `url("${d.poster}")` } : {} }),
@@ -1259,53 +1255,58 @@ function seerrDetailScreen(stub) {
       const list = h('div', { class: 'episodes' });
       for (const sn of d.seasons) {
         const can = requestable(sn.status);
-        const row = h('button', { class: 'list-item focusable season-item', oncdselect: () => {
-          if (!can) return;
-          if (chosen.has(sn.number)) chosen.delete(sn.number); else chosen.add(sn.number);
-          mark();
-        } });
-        const mark = () => {
-          row.textContent = '';
-          row.append(h('span', { class: 'check' }, can ? (chosen.has(sn.number) ? '☑' : '☐') : '✓'),
-            h('div', {}, h('h3', {}, sn.name || `Staffel ${sn.number}`),
-              h('p', {}, [`${sn.episodes} Folgen`, SEERR_STATUS[sn.status]].filter(Boolean).join(' · '))));
-        };
-        mark();
+        const row = h('button', { class: 'list-item focusable season-item',
+          'aria-expanded': 'false', oncdselect: () => void toggleEpisodes() },
+          h('span', { class: 'check', 'aria-hidden': 'true' }, '▸'),
+          h('div', {}, h('h3', {}, sn.name || `Staffel ${sn.number}`),
+            h('p', {}, [`${sn.episodes} Folgen`, SEERR_STATUS[sn.status]].filter(Boolean).join(' · '))));
         const pendingRequest = (d.requests || []).find((r) =>
           r.mine && r.status === 1 && r.seasons.length > 1 && r.seasons.includes(sn.number));
         const approvedRequest = (d.requests || []).find((r) =>
           r.mine && r.status === 2 && r.seasons.includes(sn.number));
-        list.append(row);
+        const ownSeriesRequest = approvedRequest || (d.requests || []).find((r) =>
+          r.mine && [2, 5].includes(r.status));
+        const seasonContent = h('div', { class: 'seerr-season-content' });
+        seasonContent.hidden = true;
         const episodeList = h('div', {});
-        episodeList.hidden = true;
-        let loaded = false;
-        const showEpisodes = h('button', { class: 'action focusable', 'aria-expanded': 'false',
-          oncdselect: async () => {
-            const show = episodeList.hidden;
-            episodeList.hidden = !show;
-            showEpisodes.setAttribute('aria-expanded', String(show));
-            showEpisodes.textContent = show ? `Folgen von Staffel ${sn.number} ausblenden` : `Folgen von Staffel ${sn.number} anzeigen`;
-            if (!show || loaded) return;
+        let loaded = false, loadingEpisodes = false, capGiB = 0;
+        async function toggleEpisodes() {
+          const show = seasonContent.hidden;
+          seasonContent.hidden = !show;
+          row.setAttribute('aria-expanded', String(show));
+          row.firstElementChild.textContent = show ? '▾' : '▸';
+          if (!show) { setFocus(row, { scroll: false }); return; }
+          if (loaded || loadingEpisodes) return;
+          loadingEpisodes = true;
             episodeList.textContent = 'Folgen werden geladen …';
             try {
               const episodes = await cd.call('seerr:season-episodes', {
-                seriesId: d.id, season: sn.number, requestId: approvedRequest?.id,
+                seriesId: d.id, season: sn.number, requestId: ownSeriesRequest?.id,
               });
               episodeList.textContent = '';
-              if (episodes.some((episode) => episode.canSearch)) episodeList.append(h('button', {
+              if (episodes.some((episode) => episode.canSearch)) {
+                const limitButton = h('button', { class: 'action focusable', oncdselect: () =>
+                  editSizeLimit(capGiB, 'Größenlimit für Folge oder Staffelpaket', (value) => {
+                    capGiB = value;
+                    limitButton.textContent = capGiB ? `Größenlimit: ${capGiB} GiB` : 'Größenlimit festlegen';
+                  }),
+                }, 'Größenlimit festlegen');
+                episodeList.append(limitButton);
+              }
+              if (approvedRequest && episodes.some((episode) => episode.canSearchSeason && episode.canSearch)) episodeList.append(h('button', {
                 class: 'action focusable',
                 oncdselect: async () => {
                   if (busy) return;
                   busy = true;
                   try {
-                    const result = await cd.call('seerr:season-search', { requestId: approvedRequest.id, season: sn.number });
+                    const result = await cd.call('seerr:season-search', { requestId: approvedRequest.id, season: sn.number, capGiB });
                     if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
-                    toast(result.alreadyRunning ? 'Suche läuft bereits' : `Suche für Staffel ${sn.number} gestartet`);
+                    toast(result.grabbed ? 'Staffelpaket an qBittorrent übergeben' : result.alreadyRunning ? 'Suche läuft bereits' : `Suche für Staffel ${sn.number} gestartet`);
                   } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
                 },
               }, `Nur Staffel ${sn.number} suchen`));
               for (const episode of episodes) {
-                const selection = { requestId: approvedRequest?.id, season: sn.number, episodeId: episode.id };
+                const selection = { requestId: ownSeriesRequest?.id, season: sn.number, episodeId: episode.id };
                 const info = h('div', {}, h('p', {},
                   `Folge ${episode.number}${episode.title ? ' · ' + episode.title : ''}`));
                 if (episode.canSearch) info.append(h('button', { class: 'action focusable',
@@ -1313,12 +1314,13 @@ function seerrDetailScreen(stub) {
                     if (busy) return;
                     busy = true;
                     try {
-                      const result = await cd.call('seerr:episode-search', selection);
+                      const result = await cd.call('seerr:episode-search', { ...selection, capGiB });
                       if (!result) throw new Error('StackPilot ist für dieses Konto nicht verbunden');
-                      toast(result.alreadyRunning ? 'Suche läuft bereits' : 'Folgensuche gestartet');
+                      toast('Einzelfolge an den Downloadclient übergeben');
                     } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
                   },
-                }, `Folge ${episode.number} suchen`));
+                }, `Folge ${episode.number} herunterladen`));
+                if (!episode.canSearch && !episode.hasFile && episode.searchBlocker) info.append(h('p', {}, episode.searchBlocker));
                 if (episode.removableFileId) info.append(h('button', { class: 'action danger focusable',
                   oncdselect: () => confirmDialog(`Datei von Folge ${episode.number} löschen?`,
                     'Die Datei wird aus der Mediathek entfernt. Sonarr kann eine überwachte Folge erneut laden.',
@@ -1338,26 +1340,45 @@ function seerrDetailScreen(stub) {
               if (!episodes.length) episodeList.textContent = 'Keine Folgen gemeldet.';
               loaded = true;
             } catch (e) { episodeList.textContent = e.message; }
-          },
-        }, `Folgen von Staffel ${sn.number} anzeigen`);
-        if (approvedRequest && d.managed) list.append(h('button', {
-          class: 'action focusable', oncdselect: async () => {
+            finally { loadingEpisodes = false; }
+        }
+        list.append(row, seasonContent);
+        if (can) {
+          const selectSeason = h('button', { class: 'action focusable', oncdselect: () => {
+            if (chosen.has(sn.number)) chosen.delete(sn.number); else chosen.add(sn.number);
+            selectSeason.textContent = chosen.has(sn.number)
+              ? `Staffel ${sn.number} aus Auswahl nehmen` : `Staffel ${sn.number} auswählen`;
+          } }, chosen.has(sn.number) ? `Staffel ${sn.number} aus Auswahl nehmen` : `Staffel ${sn.number} auswählen`);
+          seasonContent.append(selectSeason);
+        }
+        if (approvedRequest && d.managed) {
+          const changePackage = async (remove) => {
+            if (busy) return;
             try {
               const requestId = approvedRequest.id, season = sn.number;
-              const transfer = await cd.call('seerr:season-transfer', { requestId, season });
+              const transfer = await cd.call('seerr:season-transfer', { requestId, season, remove });
               if (!transfer) return;
-              confirmDialog('Staffelpaket pausieren?', `„${transfer.name}“ wird pausiert. Bisher geladene Dateien bleiben erhalten.`, 'Pausieren',
-                async () => {
+              const verb = remove ? 'entfernen' : 'pausieren';
+              const consequence = remove ? 'Sonarr kann das Paket erneut finden.' : '';
+              confirmDialog(`Staffelpaket ${verb}?`,
+                `„${transfer.name}“: Geladene Dateien bleiben erhalten. ${consequence}`.trim(),
+                remove ? 'Entfernen' : 'Pausieren', async () => {
+                  if (busy) return;
+                  busy = true;
                   try {
-                    await cd.call('seerr:season-pause', { requestId, season, review: transfer.review });
-                    toast('Staffelpaket pausiert');
-                  } catch (e) { toast(e.message, 'error'); }
+                    await cd.call('seerr:season-change', { requestId, season, review: transfer.review, remove });
+                    toast(remove ? 'Staffelpaket aus qBittorrent entfernt' : 'Staffelpaket pausiert');
+                  } catch (e) { toast(e.message, 'error'); } finally { busy = false; }
                 });
             } catch (e) { toast(e.message, 'error'); }
-          },
-        }, `Laufendes Paket für Staffel ${sn.number} pausieren …`));
-        list.append(showEpisodes, episodeList);
-        if (pendingRequest) list.append(h('button', {
+          };
+          seasonContent.append(
+            h('button', { class: 'action focusable', oncdselect: () => changePackage(false) }, 'Staffelpaket pausieren …'),
+            h('button', { class: 'action focusable', oncdselect: () => changePackage(true) }, 'Pausiertes Staffelpaket entfernen …'),
+          );
+        }
+        seasonContent.append(episodeList);
+        if (pendingRequest) seasonContent.append(h('button', {
           class: 'action danger focusable',
           oncdselect: () => confirmDialog(`Staffel ${sn.number} entfernen?`,
             'Die übrigen Staffeln bleiben in der Anfrage.', 'Staffel entfernen', async () => {
@@ -1383,42 +1404,28 @@ function seerrDetailScreen(stub) {
 }
 
 function editFilmLimit(current, after) {
+  editSizeLimit(current, 'Standard für neue Couchdeck-Filmanfragen', async (value) => {
+    await cd.call('seerr:film-limit', value);
+    await after();
+  });
+}
+
+function editSizeLimit(current, title, save) {
   let value = current || 0;
   const label = h('p', {});
-  const display = () => { label.textContent = value ? `Höchstens ${value} GiB je Film` : 'Kein zusätzliches Limit'; };
+  const display = () => { label.textContent = value ? `Höchstens ${value} GiB` : 'Kein zusätzliches Limit'; };
   display();
   const adjust = (delta) => { value = Math.max(0, Math.min(200, value + delta)); display(); };
-  showOverlay(h('div', { class: 'dialog' }, h('h2', {}, 'Standard für neue Couchdeck-Filmanfragen'), label,
+  showOverlay(h('div', { class: 'dialog' }, h('h2', {}, title), label,
     h('div', { class: 'actions' },
       ...[-5, -0.5, 0.5, 5].map((delta) => h('button', {
         class: 'action focusable', oncdselect: () => adjust(delta),
       }, `${delta > 0 ? '+' : ''}${delta} GiB`))),
     h('button', { class: 'action primary focusable', oncdselect: async () => {
-      try { await cd.call('seerr:film-limit', value); closeOverlay(); await after(); }
+      try { await save(value); closeOverlay(); }
       catch (e) { toast(e.message, 'error'); }
-    } }, 'Standard speichern'),
+    } }, 'Speichern'),
     h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Abbrechen')));
-}
-
-async function editRequestQuality(requestId, after) {
-  try {
-    const data = await cd.call('seerr:quality', requestId);
-    if (!data) return;
-    const list = h('div', { class: 'actions' });
-    for (const profile of data.profiles) list.append(h('button', { class: 'action focusable',
-      oncdselect: () => confirmDialog('Qualitätsprofil ändern?',
-        `Profil „${profile.name}“ übernehmen? Laufende Transfers und vorhandene Dateien bleiben erhalten.`,
-        'Übernehmen', async () => {
-          try {
-            await cd.call('seerr:quality-save', { requestId, profile: profile.id, previousProfileId: data.currentProfileId });
-            toast('Qualitätsprofil übernommen');
-            await after();
-          } catch (e) { toast(e.message, 'error'); }
-        }),
-    }, profile.id === data.currentProfileId ? `${profile.name} (aktuell)` : profile.name));
-    showOverlay(h('div', { class: 'panel' }, h('h2', {}, 'Qualitätsprofil'), list,
-      h('button', { class: 'action focusable', oncdselect: closeOverlay }, 'Schließen')));
-  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ---------- Kurzinfo (X auf einer Kachel) ----------
@@ -1964,7 +1971,7 @@ function ytMissing() {
   return h('div', { class: 'empty yt-missing' },
     h('h2', {}, 'YouTube ist noch nicht eingerichtet'),
     h('p', {}, 'Dafür wird das Programm yt-dlp gebraucht. Das Installationsskript fragt beim nächsten Durchlauf, ob es installiert werden soll:'),
-    h('code', { class: 'cmd' }, "ssh -t reatest 'sudo bash ~/couchdeck-staging/deploy/install.sh'"));
+    h('code', { class: 'cmd' }, "ssh -t medienserver 'sudo bash ~/couchdeck-staging/deploy/install.sh'"));
 }
 
 /** Kompakter Bereichskopf: Symbol-Plakette, Titel und Untertitel in einer Zeile. */
@@ -2419,12 +2426,20 @@ async function openMenu() {
       const st = await cd.call('sys:status');
       statBox.textContent = '';
       const memUsed = st.memory.total - st.memory.free;
+      const disks = st.storage ? [
+        [st.storage.shared ? 'System- und Medienspeicher' : 'Medienspeicher', st.storage.media],
+        ['Systemspeicher', st.storage.system],
+      ].filter(([, usage]) => usage) : [];
       statBox.append(
         h('div', { class: 'stat' }, h('b', {}, `${Math.round((st.load.l1 / st.load.cores) * 100)} %`), h('span', {}, 'CPU-Last')),
         h('div', { class: 'stat' }, h('b', {}, st.temp != null ? `${Math.round(st.temp)} °C` : '–'), h('span', {}, 'Temperatur')),
         h('div', { class: 'stat' }, h('b', {}, bytes(memUsed)), h('span', {}, `von ${bytes(st.memory.total)} RAM`)),
-        ...(st.disks?.length ? st.disks : [{ mount: '/', ...st.disk }]).map((d) => h('div', { class: 'stat' },
-          h('b', {}, d.free != null ? bytes(d.free) : '–'), h('span', {}, `frei auf ${d.mount} (${d.total ? Math.round((1 - d.free / d.total) * 100) : '–'} % belegt)`))));
+        ...(disks.length ? disks.map(([name, usage]) => h('div', { class: 'stat' },
+          h('b', {}, usage.usedBytes != null && usage.totalBytes != null
+            ? `${bytes(usage.usedBytes)} von ${bytes(usage.totalBytes)} belegt` : 'Belegung unbekannt'),
+          h('span', {}, name, ['warning', 'critical'].includes(usage.state) ? ' · Platz wird knapp' : ''))) :
+          (st.disks?.length ? st.disks : [{ mount: '/', ...st.disk }]).map((d) => h('div', { class: 'stat' },
+          h('b', {}, d.free != null ? bytes(d.free) : '–'), h('span', {}, `frei auf ${d.mount} (${d.total ? Math.round((1 - d.free / d.total) * 100) : '–'} % belegt)`)))));
       const svcs = await cd.call('sys:services');
       svcBox.textContent = '';
       for (const s of svcs) {
@@ -2454,10 +2469,10 @@ async function openMenu() {
       h('span', {}, '⎋ Abmelden'), h('span', { class: 'val' }, S.auth.userName || '')),
     h('button', { class: 'setting focusable', oncdselect: () => cd.call('app:restart') }, h('span', {}, '↻ Couchdeck neu starten')),
     h('button', { class: 'setting danger focusable', oncdselect: () => confirmDialog('Server neu starten?',
-      'reatest startet neu. Jellyfin und alle anderen Dienste sind für ein paar Minuten nicht erreichbar.', 'Neu starten', () => cd.call('sys:power', 'reboot')) },
+      'Der Server startet neu. Jellyfin und alle anderen Dienste sind für ein paar Minuten nicht erreichbar.', 'Neu starten', () => cd.call('sys:power', 'reboot')) },
     h('span', {}, '⟲ Server neu starten')),
     h('button', { class: 'setting danger focusable', oncdselect: () => confirmDialog('Server herunterfahren?',
-      'reatest wird ausgeschaltet. Jellyfin und alle anderen Dienste sind dann nicht mehr erreichbar.', 'Herunterfahren', () => cd.call('sys:power', 'poweroff')) },
+      'Der Server wird ausgeschaltet. Jellyfin und alle anderen Dienste sind dann nicht mehr erreichbar.', 'Herunterfahren', () => cd.call('sys:power', 'poweroff')) },
     h('span', {}, '⏻ Server herunterfahren')),
     h('button', { class: 'setting focusable', oncdselect: () => confirmDialog('Couchdeck ausschalten?',
       'Die Oberfläche wird beendet, der Server läuft weiter. Wieder einschalten: Controller aus- und wieder einschalten oder Bildschirm aus und wieder an.',

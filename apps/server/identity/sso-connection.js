@@ -1,8 +1,10 @@
 import { ownFunnel } from "./own-funnel.js";
 import { setupError } from "./setup-error.js";
+import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import { secureSsoProfile } from "./sso-profile.js";
 import { ssoPluginState, ssoCompatibility } from "./sso-release.js";
+import { baseViewerClaims, viewerClaims } from "./viewer-library-roles.js";
 // Felder, die das Plugin von sich aus ergänzt, ohne dass sich etwas ändert: Ein leeres
 // "FolderRoleMapping" taucht nach einem Neustart von Jellyfin auf. Es darf den
 // gespeicherten Fingerabdruck nicht ungültig machen (sonst gilt die eigene Konfiguration
@@ -202,6 +204,53 @@ export class SsoConnection {
   }
   async plan() {
     return this.project(await this.context());
+  }
+  async openLogins(c) {
+    const states = await c.request("/sso/OID/States");
+    if (!states || typeof states !== "object" || Array.isArray(states))
+      throw setupError("Offene Jellyfin-Anmeldungen konnten nicht geprüft werden.");
+    return Object.values(states);
+  }
+  async ensureLibraryRoles(c, viewers) {
+    const baseline = c.existing?.EnabledFolders;
+    if (!Array.isArray(baseline) || !baseline.length || baseline.length > 64 ||
+        baseline.some((id) => typeof id !== "string" || !/^[a-f0-9-]{32,36}$/i.test(id)) ||
+        c.existing.EnableAllFolders !== false || c.existing.EnableAuthorization !== true ||
+        !c.privateReady || !ssoCompatibility(c.version).loginVerified || !c.plugin.releaseMatches || c.otherProviders ||
+        !isDeepStrictEqual(c.existing.Roles, ["stackpilot-viewers"]) ||
+        c.existing.DefaultProvider !== "Jellyfin.Server.Implementations.Users.InvalidAuthProvider")
+      throw setupError("Zuerst das verwaltete Jellyfin-SSO und seine Bibliotheksfreigabe prüfen.");
+    const key = this.key(c.record);
+    const existingHash = hash(staticConfig(c.existing));
+    const mapping = baseline.map((id) => ({ Role: "stackpilot-library-" + id, Folders: [id] }));
+    const equal = isDeepStrictEqual;
+    const expected = { ...c.existing, EnableFolderRoles: true, FolderRoleMapping: mapping };
+    const { stored } = c;
+    if (stored?.status !== "configured" ||
+        (existingHash !== stored.configurationHash &&
+          !(stored.libraryMigration && equal(staticConfig(c.existing), staticConfig(stored.libraryMigration)))))
+      throw setupError("Die Jellyfin-SSO-Konfiguration wurde außerhalb von StackPilot geändert.");
+    if (c.existing.EnableFolderRoles && !equal(c.existing.FolderRoleMapping, mapping))
+      throw setupError("Die vorhandenen Bibliotheksrollen stimmen nicht überein.");
+    await viewers.call({ action: "library-claims", previous: baseViewerClaims, expression: viewerClaims(baseline) });
+    if (!c.existing.EnableFolderRoles) {
+      const fresh = (await c.request("/sso/OID/Get")).stackpilot;
+      if (!fresh || existingHash !== hash(staticConfig(fresh)))
+        throw setupError("Jellyfin-SSO wurde während der Prüfung geändert. Erneut versuchen.");
+      if ((await this.openLogins(c)).length)
+        throw setupError("Eine Jellyfin-Anmeldung läuft. Bitte abschließen und die Zuweisung erneut versuchen.");
+      this.hub.engine.vault.set(key, { ...stored, libraryMigration: expected });
+      await c.request("/sso/OID/Add/stackpilot", { method: "POST",
+        body: { ...fresh, EnableFolderRoles: true, FolderRoleMapping: mapping } });
+    }
+    const after = (await c.request("/sso/OID/Get")).stackpilot;
+    if (!after || !equal(staticConfig(after), staticConfig(expected)))
+      throw setupError("Jellyfin hat die Profilkonfiguration nicht bestätigt. Erneut versuchen.");
+    if (stored.libraryMigration || existingHash !== hash(staticConfig(after))) {
+      const { libraryMigration, ...rest } = stored;
+      this.hub.engine.vault.set(key, { ...rest, configurationHash: hash(staticConfig(after)) });
+    }
+    return baseline;
   }
   async apply(body) {
     if (body.confirmation !== "OK")

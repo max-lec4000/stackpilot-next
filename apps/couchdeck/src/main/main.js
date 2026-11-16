@@ -447,20 +447,17 @@ const handlers = {
   'seerr:mine': () => seerr.myRequests(),
   'seerr:cancel': (id) => seerr.cancelRequest(id),
   'seerr:season-episodes': (selection) => seerr.seasonEpisodes(selection),
-  'seerr:episode-search': ({ requestId, season, episodeId }) =>
-    seerr.managedMedia({ action: 'search', requestId, season, episodeId }),
-  'seerr:season-search': ({ requestId, season }) =>
-    seerr.managedMedia({ action: 'search-season', requestId, season }),
+  'seerr:episode-search': ({ requestId, season, episodeId, capGiB }) =>
+    seerr.managedMedia({ action: 'search', requestId, season, episodeId, capGiB }),
+  'seerr:season-search': ({ requestId, season, capGiB }) =>
+    seerr.managedMedia({ action: 'search-season', requestId, season, capGiB }),
   'seerr:episode-delete': ({ requestId, season, episodeId, fileId }) =>
     seerr.managedMedia({ action: 'delete', requestId, season, episodeId, fileId, confirmation: 'OK' }),
   'seerr:cancel-season': (selection) => seerr.cancelSeason(selection),
   'seerr:film-limit': (value) => seerr.filmLimit(value),
-  'seerr:quality': (requestId) => seerr.managedMedia({ action: 'quality', requestId }),
-  'seerr:quality-save': ({ requestId, profile, previousProfileId }) =>
-    seerr.managedMedia({ action: 'quality-save', requestId, profile, previousProfileId, confirmation: 'OK' }),
-  'seerr:season-transfer': ({ requestId, season }) => seerr.managedMedia({ action: 'season-transfer', requestId, season }),
-  'seerr:season-pause': ({ requestId, season, review }) =>
-    seerr.managedMedia({ action: 'season-pause', requestId, season, review, confirmation: 'OK' }),
+  'seerr:season-transfer': ({ requestId, season, remove }) => seerr.managedMedia({ action: 'season-transfer', requestId, season, remove: remove === true }),
+  'seerr:season-change': ({ requestId, season, review, remove }) =>
+    seerr.managedMedia({ action: remove === true ? 'season-remove' : 'season-pause', requestId, season, review, confirmation: 'OK' }),
   'seerr:activity': () => lastActivity || refreshActivity(),
   // Nachtmodus + Regler Sprache ↔ Rest
   'sound:state': () => ({ night: sound.isNight(), balance: sound.balance() }),
@@ -477,7 +474,13 @@ const handlers = {
   'sound:create': (baseId) => sound.create(baseId),
   'sound:remove': (id) => { const r = sound.remove(id); if (player.active) player.applySound(sound.activeProfile()); return r; },
   'sound:reset': (id) => { const p = sound.reset(id); if (player.active && sound.activeProfile().id === id) player.applySound(p); return p; },
-  'sys:status': () => system.serverStatus(),
+  'sys:status': async () => {
+    const [status, storage] = await Promise.all([
+      system.serverStatus(),
+      seerr.managedMedia({ action: 'storage' }).catch(() => null),
+    ]);
+    return { ...status, storage };
+  },
   'sys:services': () => system.serviceStatus(),
   'sys:power': (action) => system.power(action),
   'sys:setting': ({ section, key, value }) => {

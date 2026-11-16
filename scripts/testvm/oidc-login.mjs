@@ -5,7 +5,7 @@
 //   node oidc-login.mjs <benutzername>
 // Mit TEST_SEERR_QUICK_CONNECT=1 zusätzlich eine Seerr-Zuschauersitzung prüfen.
 import { readFile } from "node:fs/promises";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -102,9 +102,20 @@ async function runFlow(pageUrl) {
       secret = new URL(c.config_url).searchParams.get("secret");
       lastCodeWindow = Math.floor(Date.now() / 30000);
       answer = { code: totp(secret) };
+    } else if (c.component === "ak-stage-authenticator-validate" && c.configuration_stages?.length) {
+      const totpSetup = c.configuration_stages.find((stage) => stage.meta_model_name.endsWith(".authenticatortotpstage"));
+      if (!totpSetup) throw Error("TOTP-Einrichtung fehlt.");
+      answer = { selected_stage: totpSetup.pk };
     } else if (c.component === "ak-stage-authenticator-validate") {
       codePrompts++;
       answer = { code: await freshCode() };
+    } else if (c.component === "ak-stage-prompt") {
+      const password = randomBytes(24).toString("base64url");
+      answer = { password, password_repeat: password };
+    } else if (c.component === "ak-stage-authenticator-static") {
+      if (!Array.isArray(c.codes) || !c.codes.length)
+        throw Error("Keine Wiederherstellungscodes erhalten.");
+      answer = {};
     } else if (c.component === "ak-stage-consent") answer = { token: c.token };
     else throw Error("Unerwarteter Schritt: " + c.component + " " + (c.error_message || ""));
     r = await request(executor, { method: "POST", body: { component: c.component, ...answer } });

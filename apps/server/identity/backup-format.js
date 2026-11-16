@@ -10,7 +10,7 @@ import { gzip, gunzip } from "node:zlib";
 const scrypt = promisify(derive),
   zip = promisify(gzip),
   unzip = promisify(gunzip);
-const magic = Buffer.from("STACKPILOT_IDENTITY_BACKUP_V1\n");
+const identityMagic = Buffer.from("STACKPILOT_IDENTITY_BACKUP_V1\n");
 export const backupLimit = 128 * 1024 * 1024;
 export const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 export function requirePassphrase(p) {
@@ -19,7 +19,7 @@ export function requirePassphrase(p) {
       "Eine eigene Sicherungspassphrase mit mindestens 16 Zeichen ist erforderlich. Sicher getrennt vom Server aufbewahren.",
     );
 }
-export async function encryptBackup(value, passphrase) {
+export async function encryptBackup(value, passphrase, magic = identityMagic) {
   requirePassphrase(passphrase);
   const plain = Buffer.from(JSON.stringify(value));
   if (plain.length > backupLimit)
@@ -46,9 +46,10 @@ export async function encryptBackup(value, passphrase) {
     ]);
   } finally {
     key.fill(0);
+    plain.fill(0);
   }
 }
-export async function decryptBackup(bytes, passphrase) {
+export async function decryptBackup(bytes, passphrase, magic = identityMagic) {
   requirePassphrase(passphrase);
   if (
     bytes.length > backupLimit ||

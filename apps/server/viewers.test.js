@@ -25,7 +25,8 @@ test("Einladen erzeugt ein zufälliges Startpasswort und zeigt es genau in diese
   assert.equal(a.invitation.loginUrl, "https://host.example.ts.net/sso/OID/start/stackpilot");
   assert.ok(a.invitation.password.length >= 20);
   assert.equal(f.sent[0].request.password, a.invitation.password);
-  assert.deepEqual(a.viewers, [{ username: "eltern", name: "Eltern", active: true, mfa: false, lastLogin: null }]);
+  assert.deepEqual(a.viewers, [{ username: "eltern", name: "Eltern", active: true, mfa: false,
+    hasPasskey: false, passkeyPending: false, profileId: null, lastLogin: null }]);
   const b = await f.viewers.invite("eltern2");
   assert.notEqual(a.invitation.password, b.invitation.password);
   // Die Liste selbst enthält nie ein Passwort.

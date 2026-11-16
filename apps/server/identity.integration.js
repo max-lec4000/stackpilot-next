@@ -1,3 +1,4 @@
+import { Viewers } from "./identity/viewers.js";
 import { IdentityBackups } from "./identity/backups.js";
 import { localIdentityRequest } from "./identity/local-request.js";
 // Explicit opt-in. Isolated local identity realm; no real users, no Tailscale changes.
@@ -51,6 +52,8 @@ test(
         JSON.stringify(setup.summary()),
       );
       assert.equal(setup.summary().publicReady, false);
+      const viewers = await new Viewers(setup).list();
+      assert.equal(viewers.addPasskeyReady, true, "Neuinstallation enthält die Passkey-Stufen");
       assert.equal(setup.summary().pluginCompatible, true);
       const rows = await setup.containers(record, true),
         worker = rows.find(
@@ -105,7 +108,7 @@ test(
         `${record.input.hostname}:${record.input.adminPort}`,
       );
       console.log(
-        "Authentik-Anmeldeflow: kein Gerät abgewiesen, falscher Code abgewiesen, gültiger TOTP-Code angenommen; Zuschauer-/Administratorrichtlinien geprüft.",
+        "Authentik-Anmeldeflow: Konto ohne Faktor bleibt bis zur Einrichtung abgemeldet, falscher Code abgewiesen, gültiger TOTP-Code angenommen; Zuschauer-/Administratorrichtlinien geprüft.",
       );
       await localDocker([
         "network",

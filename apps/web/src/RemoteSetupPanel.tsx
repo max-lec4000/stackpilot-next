@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
+import { ViewerProfiles } from "./ViewerProfiles";
 import { SectionHeading, StatusBadge, type StatusTone } from "./ui";
 
 type Setup = {
@@ -14,9 +15,9 @@ type Setup = {
     invitation?: { username: string; password?: string; loginUrl: string };
   } | null;
 };
-type Viewer = { username: string; name: string; active: boolean; mfa: boolean; lastLogin: string | null };
+type Viewer = { username: string; name: string; active: boolean; mfa: boolean; lastLogin: string | null; profileId: string | null; hasPasskey: boolean; passkeyPending: boolean };
 type Invitation = { username: string; password: string; loginUrl: string };
-type ViewerList = { loginUrl: string; viewers: Viewer[]; invitation?: Invitation };
+type ViewerList = { loginUrl: string; viewers: Viewer[]; invitation?: Invitation; recoveryEnabled?: boolean; loginImproved?: boolean; passwordChoice?: boolean; addPasskeyReady?: boolean };
 const stepMark: Record<string, string> = { completed: "✓", running: "…", failed: "✕", pending: "·" };
 const setupText: Record<Setup["status"], [string, StatusTone]> = {
   idle: ["Noch nicht eingerichtet", "neutral"],
@@ -34,6 +35,8 @@ export function RemoteSetupPanel({ auto = false }: { auto?: boolean }) {
     [name, setName] = useState(""),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
   const alive = useRef(true);
   const loadViewers = useCallback(async () => {
     try {
@@ -79,7 +82,7 @@ export function RemoteSetupPanel({ auto = false }: { auto?: boolean }) {
       setBusy("");
     }
   }
-  async function viewer(act: "invite" | "reset" | "remove", username: string) {
+  async function viewer(act: "invite" | "reset" | "remove" | "add-passkey" | "cancel-passkey", username: string) {
     setBusy(act + ":" + username);
     setError("");
     setInvitation(null);
@@ -153,6 +156,50 @@ export function RemoteSetupPanel({ auto = false }: { auto?: boolean }) {
       {ready && (
         <>
           <h3>Zuschauer</h3>
+          {list && <ViewerProfiles viewers={list.viewers} onChange={loadViewers} />}
+          {(list?.loginImproved === false || list?.passwordChoice === false || list?.addPasskeyReady === false) && <details>
+            <summary>Zuschauer-Anmeldung aktualisieren</summary>
+            <p>Übernimmt den frisch bestätigten zweiten Faktor für die Jellyfin-Freigabe. Neue Zuschauer können ein eigenes Passwort wählen. Zuschauer mit bestehendem Konto können einen Passkey zusätzlich einrichten.</p>
+            <form onSubmit={async (event) => {
+              event.preventDefault();
+              setError("");
+              setBusy("login");
+              try {
+                setList(await action<ViewerList>("/api/viewers/action", { action: "improve-login", password: loginPassword }));
+              } catch (error) {
+                setError((error as Error).message);
+              } finally {
+                setLoginPassword("");
+                setBusy("");
+              }
+            }}>
+              <label>StackPilot-Administratorpasswort<input type="password" autoComplete="current-password" required
+                value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} disabled={!!busy} /></label>
+              <button disabled={!!busy}>Zuschauer-Anmeldung aktualisieren</button>
+            </form>
+          </details>}
+          {list?.recoveryEnabled === false && <details>
+            <summary>Wiederherstellungscodes für Zuschauer aktivieren</summary>
+            <p>Nach der Anmeldung mit zweitem Faktor zeigt Authentik Zuschauern ohne Wiederherstellungscodes einmalig acht Codes an.</p>
+            <form onSubmit={async (event) => {
+              event.preventDefault();
+              setError("");
+              setBusy("recovery");
+              try {
+                setList(await action<ViewerList>("/api/viewers/action", { action: "enable-recovery", password: recoveryPassword }));
+              } catch (error) {
+                setError((error as Error).message);
+              } finally {
+                setRecoveryPassword("");
+                setBusy("");
+              }
+            }}>
+              <label>StackPilot-Administratorpasswort<input type="password" autoComplete="current-password" required
+                value={recoveryPassword} onChange={(event) => setRecoveryPassword(event.target.value)} disabled={!!busy} /></label>
+              <button disabled={!!busy}>Wiederherstellungscodes aktivieren</button>
+            </form>
+          </details>}
+          {list?.recoveryEnabled === true && <p>Zuschauer erhalten Wiederherstellungscodes nach erfolgreicher Anmeldung mit zweitem Faktor.</p>}
           <form
             className="couchdeck-actions"
             onSubmit={(event) => {
@@ -176,7 +223,7 @@ export function RemoteSetupPanel({ auto = false }: { auto?: boolean }) {
           {invitation && (
             <div className="remote-setup-invitation" role="status">
               <b>Einladung für „{invitation.username}“ – wird nur jetzt angezeigt.</b>
-              <p>Schick der Person diese drei Angaben. Beim ersten Anmelden richtet sie ihren zweiten Faktor (Authenticator-App) selbst ein.</p>
+              <p>Schick der Person diese drei Angaben. Beim ersten Anmelden richtet sie ihren zweiten Faktor selbst ein.{list?.passwordChoice ? " Danach wählt sie ein eigenes Passwort." : ""}{list?.recoveryEnabled ? " Die Wiederherstellungscodes sollte sie an einem sicheren Ort aufbewahren." : ""}</p>
               <dl>
                 <dt>Adresse</dt>
                 <dd>
@@ -221,6 +268,13 @@ export function RemoteSetupPanel({ auto = false }: { auto?: boolean }) {
                   </StatusBadge>
                   {v.active && (
                     <span className="couchdeck-actions">
+                      {v.hasPasskey && <span>Passkey eingerichtet</span>}
+                      {list.addPasskeyReady && v.mfa && <>
+                        {v.passkeyPending && <span>Passkey-Einrichtung beim nächsten Login im Browser</span>}
+                        <button disabled={!!busy} onClick={() => void viewer(v.passkeyPending ? "cancel-passkey" : "add-passkey", v.username)}>
+                          {v.passkeyPending ? "Passkey-Einrichtung abbrechen" : "Passkey hinzufügen"}
+                        </button>
+                      </>}
                       <button disabled={!!busy} onClick={() => void viewer("reset", v.username)}>
                         Neu einladen
                       </button>

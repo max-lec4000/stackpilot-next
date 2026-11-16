@@ -65,7 +65,7 @@ const areas = [
     group: "Betrieb",
     icon: "↺",
     title: "Sicherungen & Updates",
-    description: "Verfügbarer Stand und nächste Wartungsschritte.",
+    description: "StackPilot und Container aktualisieren, Tresor sichern.",
     color: "lilac",
   },
   {

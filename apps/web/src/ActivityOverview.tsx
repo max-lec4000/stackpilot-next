@@ -170,13 +170,23 @@ export function ActivityOverview({
               {data && <details><summary>Schutzdetails</summary><p>{data.vpn.reason}</p>{data.vpn.checkedAt && <small>Geprüft: {new Date(data.vpn.checkedAt).toLocaleTimeString("de-AT")}</small>}</details>}
             </article>
             <article className="dashboard-metric">
-              <h3>Speicher am Medienpfad</h3>
+              <h3>{ops?.sharedStorage ? "System- und Medienspeicher" : "Speicher am Medienpfad"}</h3>
               <strong>{ops?.storage.usedBytes != null && ops.storage.totalBytes != null
                 ? `${formatBytes(ops.storage.usedBytes)} von ${formatBytes(ops.storage.totalBytes)} belegt`
                 : "Belegung nicht bestätigt"}</strong>
               <small>{ops?.storage.freeBytes != null ? `${formatBytes(ops.storage.freeBytes)} verfügbar` : "Freier Speicher nicht bestätigt"}</small>
               {ops && ["warning", "critical"].includes(ops.storage.state) && <StatusBadge tone="warning">Speicher prüfen</StatusBadge>}
             </article>
+            {ops?.systemStorage && (
+              <article className="dashboard-metric">
+                <h3>Systemspeicher</h3>
+                <strong>{ops.systemStorage.usedBytes != null && ops.systemStorage.totalBytes != null
+                  ? `${formatBytes(ops.systemStorage.usedBytes)} von ${formatBytes(ops.systemStorage.totalBytes)} belegt`
+                  : "Belegung nicht bestätigt"}</strong>
+                <small>{ops.systemStorage.freeBytes != null ? `${formatBytes(ops.systemStorage.freeBytes)} verfügbar` : "Freier Speicher nicht bestätigt"}</small>
+                {["warning", "critical"].includes(ops.systemStorage.state) && <StatusBadge tone="warning">Speicher prüfen</StatusBadge>}
+              </article>
+            )}
             <article className="dashboard-metric" hidden={!panels.includes("transfers")}>
               <h3>Transfers</h3>
               <strong>{data?.downloads.state === "ready" ? `${rate(data.downloads.downloadRate)} ↓` : "—"}</strong>
@@ -250,13 +260,19 @@ function useDownloadPage(page: number, filter: string, query: string) {
 }
 const downloadStates: Record<string, string> = {
   downloading: "Lädt herunter", forcedDL: "Lädt herunter", forcedMetaDL: "Metadaten werden geladen",
-  forcedUP: "Teilt · ohne Warteschlange", checkingResumeData: "Prüft gespeicherte Daten", moving: "Verschiebt Dateien",
+  forcedUP: "Upload bereit · ohne Warteschlange", checkingResumeData: "Prüft gespeicherte Daten", moving: "Verschiebt Dateien",
   allocating: "Bereitet Speicher vor", unknown: "Status unbekannt", stalledDL: "Wartet auf Daten",
   metaDL: "Metadaten werden geladen", queuedDL: "In Warteschlange", stoppedDL: "Angehalten",
-  pausedDL: "Pausiert", uploading: "Teilt", stalledUP: "Bereit zum Teilen", stoppedUP: "Angehalten",
+  pausedDL: "Pausiert", uploading: "Upload bereit", stalledUP: "Bereit zum Teilen", stoppedUP: "Angehalten",
   pausedUP: "Pausiert", queuedUP: "Upload in Warteschlange", checkingDL: "Wird geprüft", checkingUP: "Wird geprüft",
   error: "Fehler", missingFiles: "Dateien fehlen",
 };
+const uploadStates = new Set(["uploading", "forcedUP", "stalledUP", "queuedUP"]);
+function transferLabel(t: Torrent) {
+  if (uploadStates.has(t.state) && t.uploadRate > 0)
+    return t.state === "forcedUP" ? "Lädt hoch · ohne Warteschlange" : "Lädt hoch";
+  return downloadStates[t.state] || "Status unbekannt";
+}
 const stopped = (state: string) => /^(stopped|paused)(DL|UP)$/.test(state);
 const pausable = (state: string) => /^(downloading|forcedDL|forcedMetaDL|metaDL|stalledDL|queuedDL|uploading|forcedUP|stalledUP|queuedUP)$/.test(state);
 export function DownloadsView() {
@@ -328,9 +344,9 @@ export function DownloadsView() {
               const paused = stopped(t.state), canPause = pausable(t.state);
               return <article className="download-row" data-download-state={t.state} key={t.id} aria-label={t.name}>
                 <div className="download-row-main">
-                  <div className="download-row-title"><h3>{t.name}</h3><StatusBadge tone={issue ? "danger" : paused ? "neutral" : complete ? "success" : "info"}>{downloadStates[t.state] || "Status unbekannt"}</StatusBadge></div>
+                  <div className="download-row-title"><h3>{t.name}</h3><StatusBadge tone={issue ? "danger" : paused ? "neutral" : complete ? "success" : "info"}>{transferLabel(t)}</StatusBadge></div>
                   <p className="download-row-metrics">
-                    {issue ? <span>{t.size > 0 ? `Dateigröße ${formatBytes(t.size)}` : "Größe nicht gemeldet"} · Dateizustand prüfen</span> : complete ? <span>{t.size > 0 ? formatBytes(t.size) : "Größe nicht gemeldet"} · Download vollständig · Bibliotheksimport hier ungeprüft</span> : <><span>{Math.round(t.progress * 100)} %</span><span>{t.size > 0 ? `${formatBytes(Math.min(t.downloaded, t.size))} / ${formatBytes(t.size)}` : "Größe wird ermittelt"}</span><span>{rate(t.downloadRate)} ↓</span>{t.etaSeconds !== null && t.etaSeconds > 0 && !paused && <span>noch etwa {Math.ceil(t.etaSeconds / 60)} Min.</span>}</>}
+                    {issue ? <span>{t.size > 0 ? `Dateigröße ${formatBytes(t.size)}` : "Größe nicht gemeldet"} · Dateizustand prüfen</span> : complete ? <span>{t.size > 0 ? formatBytes(t.size) : "Größe nicht gemeldet"} · Download abgeschlossen</span> : <><span>{Math.round(t.progress * 100)} %</span><span>{t.size > 0 ? `${formatBytes(Math.min(t.downloaded, t.size))} / ${formatBytes(t.size)}` : "Größe wird ermittelt"}</span><span>{rate(t.downloadRate)} ↓</span>{t.etaSeconds !== null && t.etaSeconds > 0 && !paused && <span>noch etwa {Math.ceil(t.etaSeconds / 60)} Min.</span>}</>}
                     {complete && t.uploadRate > 0 && <span>{rate(t.uploadRate)} ↑</span>}
                   </p>
                   {!fullyTransferred && !issue && <progress max={1} value={t.progress} aria-label={`Downloadfortschritt ${t.name}`} />}

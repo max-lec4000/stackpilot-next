@@ -6,6 +6,10 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dockerInput } from "../docker-io.js";
 import { setupError } from "./setup-error.js";
+import { passkeyEnrollment } from "./viewer-passkey-enrollment.js";
+import { viewerRecovery } from "./viewer-recovery.js";
+import { viewerMfa, viewerPasskey } from "./viewer-mfa.js";
+import { viewerPassword, viewerPasswordUpgrade } from "./viewer-password.js";
 
 const wrapper = `import io,json,sys\nv=json.loads(sys.stdin.read())\nsys.stdin=io.StringIO(json.dumps(v["request"]))\nexec(v["program"])`;
 export const viewerName = /^[a-z][a-z0-9_-]{2,31}$/;
@@ -14,6 +18,11 @@ const messages = {
   missing: "Diesen Zuschauer gibt es nicht.",
   invalid: "Benutzername: 3–32 Zeichen, Kleinbuchstaben, Ziffern, - und _, beginnend mit einem Buchstaben.",
   action: "Unbekannte Aktion.",
+  recovery: "Die Authentik-Stufen weichen von der geprüften StackPilot-Anmeldung ab. Die Wiederherstellungsstufe wurde nicht geändert.",
+  passkey: "Die Passkey-Einrichtung braucht ein aktives Zuschauerkonto mit bestätigtem zweiten Faktor und die aktualisierte Zuschauer-Anmeldung.",
+  "library-pending": "Zuerst die offene Profilzuweisung für dieses Konto abschließen.",
+  library: "Die verwaltete Zuschauer-Bibliotheksfreigabe konnte nicht bestätigt werden.",
+  login: "Die Authentik-Stufen weichen von der geprüften StackPilot-Anmeldung ab. Prüfe zuerst die Zuschauer-Anmeldung.",
 };
 
 export class Viewers {
@@ -35,7 +44,8 @@ export class Viewers {
     try {
       out = await this.input(
         ["exec", "-i", workers[0].Id, "ak", "shell", "-c", wrapper],
-        JSON.stringify({ program, request }),
+        JSON.stringify({ program, request: { ...request, viewerRecovery, viewerMfa, viewerPasskey, viewerPassword, passkeyEnrollment,
+          ...(request.action === "improve-login" ? { passwordUpgrade: viewerPasswordUpgrade() } : {}) } }),
         { timeout: 60000 },
       );
     } catch (e) {
@@ -54,6 +64,9 @@ export class Viewers {
       name: String(v.name || v.username),
       active: v.active === true,
       mfa: v.mfa === true,
+      hasPasskey: v.hasPasskey === true,
+      passkeyPending: v.passkeyPending === true,
+      profileId: typeof v.profileId === "string" ? v.profileId : null,
       lastLogin: typeof v.lastLogin === "string" ? v.lastLogin : null,
     }));
   }
@@ -62,7 +75,18 @@ export class Viewers {
   }
   async list() {
     const { record, result } = await this.call({ action: "list" });
-    return { loginUrl: this.loginUrl(record), viewers: this.project(result) };
+    return this.viewerList(record, result);
+  }
+  viewerList(record, result) {
+    return { loginUrl: this.loginUrl(record), viewers: this.project(result), recoveryEnabled: result.recoveryEnabled === true,
+      loginImproved: result.loginImproved === true, passwordChoice: result.passwordChoice === true,
+      addPasskeyReady: result.addPasskeyReady === true };
+  }
+  async updateLogin(action) {
+    return this.identity.hub.mutate(["Jellyfin"], async () => {
+      const { record, result } = await this.call({ action });
+      return this.viewerList(record, result);
+    });
   }
   normalize(name) {
     const username = String(name || "").trim().toLowerCase();
@@ -81,8 +105,7 @@ export class Viewers {
     return {
       // Einmalige Anzeige: Link, Benutzername und Startpasswort für genau diese Person.
       invitation: { username, password, loginUrl: this.loginUrl(record) },
-      loginUrl: this.loginUrl(record),
-      viewers: this.project(result),
+      ...this.viewerList(record, result),
     };
   }
   invite(name, displayName) {
@@ -91,8 +114,14 @@ export class Viewers {
   reset(name) {
     return this.withPassword("reset", name);
   }
+  async passkey(action, name) {
+    return this.identity.hub.mutate(["Jellyfin"], async () => {
+      const { record, result } = await this.call({ action, username: this.normalize(name) });
+      return this.viewerList(record, result);
+    });
+  }
   async remove(name) {
     const { record, result } = await this.call({ action: "remove", username: this.normalize(name) });
-    return { loginUrl: this.loginUrl(record), viewers: this.project(result) };
+    return this.viewerList(record, result);
   }
 }

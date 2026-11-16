@@ -7,6 +7,7 @@ import {
   searchTargets,
 } from "../../packages/domain/search-status.js";
 import { positiveId, mediaType } from "./media-hub.js";
+import { saveAutomaticSeriesLimits, seriesLimitsKey } from "./series-limits.js";
 const text = (v, n = 180) => (typeof v === "string" ? v.slice(0, n) : "");
 
 function rejection(value) {
@@ -336,13 +337,16 @@ export class RequestDiagnostics {
     if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(owner))
       throw Error("Nur eigene Anfragen können bearbeitet werden.");
   }
-  async requireQualityOwner(s, target, owner) {
-    await this.requireOwner(s, target, owner);
-    const detail = await s.additional.seerr(`/${target.kind}/${target.mediaId}?language=de`);
-    const requests = detail?.mediaInfo?.requests;
-    if (target.request.status !== 2 || !Array.isArray(requests) ||
-        requests.some((request) => request.id !== target.request.id && ![3, 4].includes(request.status)))
-      throw Error("Qualitätsänderung nur für eigene genehmigte Anfragen ohne weitere Anfragen zum selben Medium.");
+  async cancelOwnRequest(body, owner) {
+    if (!owner || body.confirmation !== "OK") throw Error("Anfrageabbruch bestätigen.");
+    const id = positiveId(body.requestId);
+    return this.hub.mutate(["Seerr"], async ({ s }) => {
+      const route = `/request/${id}`;
+      const request = await s.additional.seerr(route);
+      await this.requireOwner(s, { request }, owner);
+      await s.additional.seerr(route, { method: "DELETE" });
+      return { ok: true };
+    });
   }
   async requireExclusiveSeason(s, target, season) {
     const detail = await s.additional.seerr(`/tv/${target.mediaId}?language=de`);
@@ -352,9 +356,9 @@ export class RequestDiagnostics {
       (!Array.isArray(request.seasons) || request.seasons.some((entry) => entry.seasonNumber === season))))
       throw Error("Die Staffel ist einer weiteren Anfrage zugeordnet. Änderung in StackPilot prüfen.");
   }
-  async seriesEpisodes(s, target, season, onlySeason = true) {
+  async seriesEpisodes(s, target, season, onlySeason = true, allowUnrequested = false) {
     if (target.kind !== "tv" || !target.item ||
-        !target.request.seasons?.some((entry) => entry.seasonNumber === season))
+        (!allowUnrequested && !target.request.seasons?.some((entry) => entry.seasonNumber === season)))
       throw Error("Diese Staffel ist der Sonarr-Anfrage nicht zugeordnet.");
     const episodes = await s.arr("Sonarr", `/episode?seriesId=${target.item.id}`);
     if (!Array.isArray(episodes)) throw Error("Folgen konnten nicht gelesen werden.");
@@ -366,12 +370,60 @@ export class RequestDiagnostics {
       entry.seasonNumber === season && entry.monitored === false,
     );
   }
+  episodeBlocker(target, episode) {
+    if (episode.hasFile) return "Datei vorhanden.";
+    if (![2, 5].includes(target.request.status)) return "Die Serienanfrage muss zuerst genehmigt werden.";
+    if (!(Date.parse(episode.airDateUtc) <= Date.now()))
+      return "Die Folge ist noch nicht ausgestrahlt oder Sonarr hat kein Ausstrahlungsdatum.";
+    return null;
+  }
+  async saveSeriesLimits(body) {
+    if (body.confirmation !== "OK") throw Error("Größenlimits bestätigen.");
+    const { episodeGiB, packageGiB } = body;
+    if (![episodeGiB, packageGiB].every((size) => size === 0 ||
+        (Number.isFinite(size) && size >= 0.5 && size <= 200 && Number.isInteger(size * 2))))
+      throw Error("Größenlimits müssen zwischen 0,5 und 200 GiB liegen.");
+    return this.hub.mutate(["Seerr", "Sonarr"], async ({ s, plan }) => {
+      const target = await this.target(s, positiveId(body.requestId));
+      if (target.kind !== "tv" || !target.item) throw Error("Die Serie muss bereits in Sonarr vorhanden sein.");
+      const vault = this.hub.engine.vault;
+      const key = seriesLimitsKey(plan, target.mediaId);
+      const saved = vault.get(key);
+      const limits = { episodeGiB, packageGiB };
+      const automatic = (body.automatic ?? Boolean(saved?.automatic || saved?.pending?.next.automatic)) === true &&
+        Boolean(episodeGiB || packageGiB);
+      if (automatic || saved?.automatic || saved?.pending) {
+        const result = await saveAutomaticSeriesLimits(s, vault, key, target, limits, automatic);
+        return { limits: this.publicSeriesLimits(result) };
+      }
+      vault.set(key, limits);
+      return { limits };
+    });
+  }
+  publicSeriesLimits(limits) {
+    if (!limits) return null;
+    const { episodeGiB, packageGiB, automatic, pending } = limits;
+    return {
+      episodeGiB: episodeGiB ?? 0, packageGiB: packageGiB ?? 0,
+      ...(automatic ? { automatic: true, previousProfile: automatic.baseProfileName } : {}),
+      ...(pending ? { pending: true } : {}),
+    };
+  }
+  async episodeSeasons(id) {
+    const { s, plan } = await this.hub.context(["Seerr", "Sonarr"]);
+    const target = await this.target(s, positiveId(id));
+    return {
+      seasons: (target.item?.seasons || []).map((row) => row.seasonNumber).filter((number) => number > 0),
+      limits: this.publicSeriesLimits(this.hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId))),
+    };
+  }
   async episodes(requestId, season, owner) {
     const { s } = await this.hub.context(["Seerr", "Sonarr"]);
     const target = await this.target(s, positiveId(requestId));
     await this.requireOwner(s, target, owner);
     const seasonNumber = positiveId(season);
-    const rows = await this.seriesEpisodes(s, target, seasonNumber, false);
+    const rows = await this.seriesEpisodes(s, target, seasonNumber, false, true);
+    const requested = target.request.seasons?.some((entry) => entry.seasonNumber === seasonNumber);
     const fileCounts = new Map();
     for (const row of rows) if (row.episodeFileId > 0)
       fileCounts.set(row.episodeFileId, (fileCounts.get(row.episodeFileId) || 0) + 1);
@@ -380,9 +432,10 @@ export class RequestDiagnostics {
       number: episode.episodeNumber,
       title: text(episode.title),
       hasFile: episode.hasFile === true,
-      removableFileId: (!owner || target.request.status === 2) && episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,
-      canSearch: target.request.status === 2 && target.item.monitored &&
-        this.seasonMonitored(target, seasonNumber) && episode.monitored && !episode.hasFile && Date.parse(episode.airDateUtc) <= Date.now(),
+      canSearchSeason: requested && target.request.status === 2 && target.item.monitored && this.seasonMonitored(target, seasonNumber),
+      removableFileId: requested && (!owner || target.request.status === 2) && episode.hasFile && fileCounts.get(episode.episodeFileId) === 1 ? episode.episodeFileId : null,
+      canSearch: !this.episodeBlocker(target, episode),
+      searchBlocker: this.episodeBlocker(target, episode),
     })) };
   }
   async deleteEpisodeFile(body, owner) {
@@ -435,7 +488,7 @@ export class RequestDiagnostics {
       ])).digest("hex"),
     };
   }
-  async seasonTransfer(s, target, season, owner) {
+  async seasonTransfer(s, target, season, owner, remove = false) {
     if (target.kind !== "tv" || target.request.status !== 2 || !target.item ||
         !target.request.seasons?.some((entry) => entry.seasonNumber === season))
       throw Error("Die Staffel ist keiner genehmigten Sonarr-Anfrage zugeordnet.");
@@ -457,33 +510,91 @@ export class RequestDiagnostics {
     const torrent = Array.isArray(torrents) && torrents.find((row) => row.hash === hash);
     if (!torrent || torrent.category !== "stackpilot-tv" ||
         !Number.isFinite(torrent.progress) || torrent.progress >= 1 ||
-        !/^(downloading|queuedDL|stalledDL|forcedDL)$/.test(torrent.state))
-      throw Error("Kein laufender, unvollständiger Transfer für diese Staffel.");
+        !(remove ? /^(stopped|paused)DL$/ : /^(downloading|queuedDL|stalledDL|forcedDL)$/).test(torrent.state))
+      throw Error(remove ? "Pausiere zuerst das unvollständige Staffelpaket." : "Kein laufender, unvollständiger Transfer für diese Staffel.");
     return {
-      hash, name: text(torrent.name),
+      hash, name: text(torrent.name), episodeIds: rows.map((row) => row.episodeId),
       review: createHash("sha256").update(JSON.stringify([
-        target.request.id, target.item.id, season, hash, rows.map((row) => row.episodeId).sort((a, b) => a - b),
+        target.request.id, target.item.id, season, hash, remove, rows.map((row) => row.episodeId).sort((a, b) => a - b),
       ])).digest("hex"),
     };
   }
   async seasonTransferPreview(body, owner) {
     const { s } = await this.hub.context(["Seerr", "Sonarr", "qBittorrent"]);
     const target = await this.target(s, positiveId(body.requestId));
-    const { name, review } = await this.seasonTransfer(s, target, positiveId(body.season), owner);
+    const { name, review } = await this.seasonTransfer(s, target, positiveId(body.season), owner, body.remove === true);
     return { name, review };
   }
-  async pauseSeasonTransfer(body, owner) {
-    if (body.confirmation !== "OK") throw Error("Pausieren bestätigen.");
+  async pauseSeasonTransfer(body, owner, remove = false) {
+    if (body.confirmation !== "OK") throw Error(remove ? "Entfernen bestätigen." : "Pausieren bestätigen.");
     return this.hub.mutate(["Seerr", "Sonarr", "qBittorrent"], async ({ s, plan }) => {
       const target = await this.target(s, positiveId(body.requestId));
-      const transfer = await this.seasonTransfer(s, target, positiveId(body.season), owner);
+      const transfer = await this.seasonTransfer(s, target, positiveId(body.season), owner, remove);
       if (transfer.review !== body.review) throw Error("Staffelpaket wurde geändert. Neu prüfen.");
-      await s.qbit("/torrents/stop", { hashes: transfer.hash });
-      if (!await this.waitForTorrent(s, transfer.hash, (torrent) => /^(stopped|paused)DL$/.test(torrent?.state)))
-        throw Error("qBittorrent hat das Pausieren noch nicht bestätigt.");
+      if (remove) {
+        await s.qbit("/torrents/delete", { hashes: transfer.hash, deleteFiles: "false" });
+        if (!await this.waitForTorrent(s, transfer.hash, (torrent) => torrent === undefined))
+          throw Error("qBittorrent hat die Entfernung noch nicht bestätigt.");
+      } else {
+        await s.qbit("/torrents/stop", { hashes: transfer.hash });
+        if (!await this.waitForTorrent(s, transfer.hash, (torrent) => /^(stopped|paused)DL$/.test(torrent?.state)))
+          throw Error("qBittorrent hat das Pausieren noch nicht bestätigt.");
+      }
       const key = `download-policy:${plan.rootId || plan.id}:paused`;
       const paused = this.hub.engine.vault.get(key) || [];
       this.hub.engine.vault.set(key, paused.filter((v) => v.toLowerCase() !== transfer.hash));
+      return { ok: true };
+    });
+  }
+  async replaceSeasonPackage(body) {
+    if (body.confirmation !== "OK") throw Error("Austausch zuerst bestätigen.");
+    const season = positiveId(body.season);
+    await this.hub.requireVpn();
+    return this.hub.mutate(["Seerr", "Sonarr", "qBittorrent"], async ({ s, plan }) => {
+      if (!plan.spec.vpn || plan.id !== this.hub.guard.checkedPlanId)
+        throw Error("VPN-Zustand hat sich geändert.");
+      const target = await this.target(s, positiveId(body.requestId));
+      await this.requireExclusiveSeason(s, target, season);
+      await verifyCurrentQuality(this.hub, s, plan, target);
+      const old = await this.seasonTransfer(s, target, season, undefined, true);
+      if (old.review !== body.review) throw Error("Staffelpaket wurde geändert. Neu prüfen.");
+      const clients = await s.arr("Sonarr", "/downloadclient");
+      const enabledTorrent = Array.isArray(clients) && clients.filter((client) =>
+        client.enable && (client.protocol === "torrent" || client.implementation === "QBittorrent"));
+      if (enabledTorrent?.length !== 1 || enabledTorrent[0].implementation !== "QBittorrent" ||
+          enabledTorrent[0].name !== "StackPilot qBittorrent")
+        throw Error("Nur der verwaltete qBittorrent darf für Sonarr aktiv sein.");
+      const capGiB = this.hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId))?.packageGiB || 0;
+      const replacement = await this.selectSeriesRelease(s, { seriesId: target.item.id, season, capGiB, alternateTo: old });
+      const newHash = replacement.infoHash.toLowerCase();
+      const torrents = await s.qbit("/torrents/info");
+      if (!Array.isArray(torrents) || torrents.some((torrent) => torrent.hash === newHash))
+        throw Error("Der Ersatztransfer ist bereits im Downloadclient vorhanden.");
+      const fresh = await this.target(s, positiveId(body.requestId));
+      await this.requireExclusiveSeason(s, fresh, season);
+      await verifyCurrentQuality(this.hub, s, plan, fresh);
+      if (fresh.item?.qualityProfileId !== target.item.qualityProfileId ||
+          (await this.seasonTransfer(s, fresh, season, undefined, true)).review !== old.review)
+        throw Error("Staffelpaket oder Qualitätsprofil wurde während der Suche geändert.");
+      try {
+        await s.arr("Sonarr", "/release", {
+          method: "POST", body: { guid: replacement.guid, indexerId: replacement.indexerId },
+        });
+        if (!await this.waitForTorrent(s, newHash, (torrent) => torrent?.category === "stackpilot-tv"))
+          throw Error("Ersatztransfer nicht bestätigt.");
+      } catch {
+        throw Error("Ersatz nicht bestätigt. Das alte Paket bleibt pausiert. Prüfe qBittorrent vor einem weiteren Versuch.");
+      }
+      try {
+        const previous = (await s.qbit("/torrents/info")).find((torrent) => torrent.hash === old.hash);
+        if (previous && (!/^(stopped|paused)DL$/.test(previous.state) || previous.progress >= 1))
+          throw Error("Altes Paket hat den Zustand geändert.");
+        if (previous) await s.qbit("/torrents/delete", { hashes: old.hash, deleteFiles: "false" });
+        if (!await this.waitForTorrent(s, old.hash, (torrent) => torrent === undefined))
+          throw Error("Entfernung noch nicht bestätigt.");
+      } catch {
+        throw Error("Neues Paket gestartet. Entfernung des alten Transfers nicht bestätigt. Beide Einträge in qBittorrent prüfen.");
+      }
       return { ok: true };
     });
   }
@@ -558,6 +669,40 @@ export class RequestDiagnostics {
       throw Error("Austausch nicht vollständig bestätigt. Der alte Transfer kann gestoppt sein. Warteschlange prüfen und bei Bedarf die normale Suche verwenden. StackPilot hat keine Dateilöschung angefordert.");
     }
   }
+  async selectSeriesRelease(s, { seriesId, episode, season, capGiB, alternateTo }) {
+    const route = episode ? `/release?episodeId=${episode.id}` : `/release?seriesId=${seriesId}&seasonNumber=${season}`;
+    const releases = await s.arr("Sonarr", route);
+    if (!Array.isArray(releases)) throw Error("Sonarr konnte die Treffer nicht bestätigen.");
+    const release = releases.find((row) => {
+      // Keep the old package queued until qBittorrent confirms its replacement.
+      const onlyExistingCutoff = alternateTo && row.rejected === true &&
+        Array.isArray(row.rejections) && row.rejections.length === 1 &&
+        /^Release in queue already meets cutoff: .+$/.test(row.rejections[0]);
+      return row.fullSeason === !episode && (row.approved === true || onlyExistingCutoff) && row.downloadAllowed === true &&
+        row.protocol === "torrent" && row.mappedSeriesId === seriesId &&
+        (episode
+          ? row.mappedEpisodeInfo?.length === 1 && row.mappedEpisodeInfo[0].id === episode.id
+          : row.mappedEpisodeInfo?.length > 1 && row.mappedEpisodeInfo.every((entry) => entry.seasonNumber === season)) &&
+        (!capGiB || (Number.isFinite(row.size) && row.size > 0 && row.size <= capGiB * 1024 ** 3)) &&
+        (!alternateTo || (/^[a-f0-9]{40}$/i.test(row.infoHash || "") &&
+          row.infoHash.toLowerCase() !== alternateTo.hash &&
+          alternateTo.episodeIds.every((id) => row.mappedEpisodeInfo.some((entry) => entry.id === id)))) &&
+        typeof row.guid === "string" && row.guid.length > 0 &&
+        Number.isSafeInteger(row.indexerId) && row.indexerId > 0;
+    });
+    if (!release) throw Error(episode
+      ? "Kein passender Download für genau diese Folge innerhalb der Vorgaben gefunden."
+      : "Kein passendes Staffelpaket innerhalb der Größenobergrenze gefunden.");
+    return release;
+  }
+  async grabSeriesRelease(s, criteria, beforeGrab) {
+    const release = await this.selectSeriesRelease(s, criteria);
+    beforeGrab();
+    await s.arr("Sonarr", "/release", {
+      method: "POST", body: { guid: release.guid, indexerId: release.indexerId },
+    });
+    return { ok: true, grabbed: true };
+  }
   async search(body, owner) {
     const id = positiveId(body.requestId);
     await this.hub.requireVpn();
@@ -567,10 +712,18 @@ export class RequestDiagnostics {
       const target = await this.target(s, id);
       await this.requireOwner(s, target, owner);
       const { request, kind, service, item } = target;
+      const singleEpisode = body.episodeId !== undefined;
+      const savedLimits = kind === "tv" ? this.hub.engine.vault.get(seriesLimitsKey(plan, target.mediaId)) : null;
+      const capGiB = body.capGiB || (singleEpisode ? savedLimits?.episodeGiB : savedLimits?.packageGiB) || 0;
+      if (savedLimits?.packageGiB && !singleEpisode && body.season === undefined)
+        throw Error("Für diese Serie gilt ein festes Größenlimit. Wähle die Staffel einzeln aus.");
+      if (capGiB !== 0 && (kind !== "tv" || body.season === undefined ||
+          !Number.isFinite(capGiB) || capGiB < 0.5 || capGiB > 200 || !Number.isInteger(capGiB * 2)))
+        throw Error("Die Größenobergrenze gilt für eine Folge oder ein Staffelpaket und muss zwischen 0,5 und 200 GiB liegen.");
       if (
-        request.status !== 2 ||
+        (request.status !== 2 && !(singleEpisode && request.status === 5)) ||
         !item ||
-        !item.monitored ||
+        (!singleEpisode && !item.monitored) ||
         (kind === "movie" && item.hasFile)
       )
         throw Error(
@@ -592,7 +745,7 @@ export class RequestDiagnostics {
         throw Error(
           "Quellen oder Downloadclient konnten nicht geprüft werden.",
         );
-      if (!indexers.some((v) => v.enableAutomaticSearch))
+      if (!indexers.some((v) => (singleEpisode || capGiB) ? v.enableInteractiveSearch : v.enableAutomaticSearch))
         throw Error(
           `Keine aktive Quelle für automatische Suchen in ${service}.`,
         );
@@ -610,14 +763,15 @@ export class RequestDiagnostics {
         );
       if (!clients.some((v) => v.enable && v.implementation === "QBittorrent"))
         throw Error("Aktivierter qBittorrent-Downloadclient fehlt.");
-      const key = `request-search:${plan.rootId || plan.id}:${id}`;
+      const key = `request-search:${plan.rootId || plan.id}:${id}` +
+        (singleEpisode ? `:episode:${positiveId(body.episodeId)}` : "");
       const previous = this.hub.engine.vault.get(key);
       if (commands.some((command) =>
         activeSearch(command, kind, item.id) ||
         (previous?.arrId === item.id && previous.commandIds?.includes(command.id) &&
           ["queued", "started"].includes(command.status))))
         return { ok: true, alreadyRunning: true };
-      const queue = await this.completeQueue(s, service);
+      const queue = await this.completeQueue(s, service, singleEpisode);
       let candidate;
       if (body.replaceReview !== undefined) {
         if (body.confirmation !== "OK" || body.episodeId !== undefined)
@@ -627,11 +781,13 @@ export class RequestDiagnostics {
           throw Error("Download oder Qualitätsprofil wurde geändert. Austausch erneut prüfen.");
       } else {
         const requestedSeason = body.season === undefined ? null : positiveId(body.season);
-        const matching = queue.records.filter((row) => matchesImportTarget(row, target));
+        const matching = queue.records.filter((row) => matchesImportTarget(row, target) ||
+          (singleEpisode && !Number.isSafeInteger(row.seriesId)));
         const busy = matching.some((row) => {
           const season = row.seasonNumber ?? row.episode?.seasonNumber;
           return kind !== "tv" || requestedSeason === null ||
-            !Number.isSafeInteger(season) || season === requestedSeason;
+            !Number.isSafeInteger(season) || (season === requestedSeason &&
+              (!singleEpisode || !Number.isSafeInteger(row.episodeId) || row.episodeId === positiveId(body.episodeId)));
         });
         if (busy)
           throw Error("Für dieses Medium läuft bereits ein Download oder Import. Prüfe zuerst die Warteschlange in Radarr oder Sonarr.");
@@ -654,21 +810,22 @@ export class RequestDiagnostics {
           "Eine Suche wurde gerade beauftragt. Bitte kurz warten und den Zustand erneut prüfen.",
         );
       const season = body.season === undefined ? null : positiveId(body.season);
-      if (season !== null && (kind !== "tv" ||
+      if (season !== null && !singleEpisode && (kind !== "tv" ||
           !request.seasons?.some((entry) => entry.seasonNumber === season) ||
           !this.seasonMonitored(target, season)))
         throw Error("Diese Staffel ist der Anfrage nicht zugeordnet oder wird nicht überwacht.");
-      let episodeSearch;
-      if (body.episodeId !== undefined) {
-        const rows = await this.seriesEpisodes(s, target, positiveId(body.season));
-        const episode = rows.find((row) => row.id === positiveId(body.episodeId));
-        if (!episode || !this.seasonMonitored(target, episode.seasonNumber) ||
-            !episode.monitored || episode.hasFile ||
-            !(Date.parse(episode.airDateUtc) <= Date.now()))
-          throw Error("Diese Folge ist nicht als fehlende, überwachte Folge bestätigt.");
-        episodeSearch = { name: "EpisodeSearch", episodeIds: [episode.id] };
+      if (singleEpisode || capGiB) {
+        const rows = await this.seriesEpisodes(s, target, positiveId(body.season), true, true);
+        const episode = singleEpisode ? rows.find((row) => row.id === positiveId(body.episodeId)) : null;
+        if (singleEpisode && !episode) throw Error("Die Folge ist dieser Staffel nicht zugeordnet.");
+        if (episode) {
+          const blocker = this.episodeBlocker(target, episode);
+          if (blocker) throw Error(blocker);
+        }
+        return this.grabSeriesRelease(s, { seriesId: item.id, episode, season, capGiB }, () =>
+          this.hub.engine.vault.set(key, { startedAt: new Date().toISOString(), arrId: item.id, kind, commandIds: [] }));
       }
-      const searches = episodeSearch ? [episodeSearch] :
+      const searches =
         kind === "movie"
           ? [{ name: "MoviesSearch", movieIds: [item.id] }]
           : (request.seasons || [])

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Unterbau für die Test-VM – einmalig auf dem Host (z. B. reatest) mit sudo ausführen.
+# Unterbau für die Test-VM – einmalig auf dem Host (z. B. medienserver) mit sudo ausführen.
 #
 #   sudo bash host-setup.sh
 #

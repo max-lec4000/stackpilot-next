@@ -62,7 +62,7 @@ Einen bereits laufenden Server vorher mit Strg+C beenden. StackPilot bindet nur
 an `127.0.0.1:5173`. Vom eigenen Rechner einen SSH-Tunnel aufbauen:
 
 ```sh
-ssh -L 5173:127.0.0.1:5173 max@reatest
+ssh -L 5173:127.0.0.1:5173 benutzer@medienserver
 ```
 
 Im Browser **http://stackpilot.localhost:5173** öffnen. Moderne Browser lösen
@@ -90,8 +90,8 @@ Administrator überschreiben.
    gesperrt; erkannte fremde Installationen müssen zunächst gezielt abgelöst werden. **Alle auswählen** nimmt den gesamten Katalog; nicht
    freigegebene Komponenten blockieren dann die echte Ausführung.
 2. Einen neuen direkten Unterordner eines vorhandenen beschreibbaren Pfads
-   wählen, beispielsweise `/home/max/stackpilot-data`. Daneben entsteht
-   `/home/max/stackpilot-data-appdata`. Keine vorhandenen Konfigurationen werden
+   wählen, beispielsweise `/home/benutzer/stackpilot-data`. Daneben entsteht
+   `/home/benutzer/stackpilot-data-appdata`. Keine vorhandenen Konfigurationen werden
    übernommen. Speicher, Rechte und echte Hardlinks werden geprüft.
 3. Gewünschten persönlichen Benutzernamen, Sprache und Optionen wählen. Der
    Benutzername darf überall gleich sein; Passwörter/API-Schlüssel werden pro
@@ -114,7 +114,7 @@ ssh -L 5173:127.0.0.1:5173 -L 8096:127.0.0.1:8096 \
   -L 8989:127.0.0.1:8989 -L 7878:127.0.0.1:7878 \
   -L 8686:127.0.0.1:8686 -L 9696:127.0.0.1:9696 \
   -L 8080:127.0.0.1:8080 -L 6767:127.0.0.1:6767 \
-  -L 5055:127.0.0.1:5055 -L 3000:127.0.0.1:3000 max@reatest
+  -L 5055:127.0.0.1:5055 -L 3000:127.0.0.1:3000 benutzer@medienserver
 ```
 
 Die App verlinkt separate lokale Namen, beispielsweise
@@ -355,7 +355,7 @@ Medien-Download. Echte Medien-Downloads und ein echter VPN-Tunnel sind nicht ent
 Der Dienstkatalog hält Images per Digest fest; es gibt keine stillen `latest`-
 Updates. `npm audit` prüft Node-Abhängigkeiten, keine Container-Betriebssysteme.
 
-Die Cloud-Tests laufen auf Linux/Docker, nicht direkt auf `reatest`. Für solche
+Die Cloud-Tests laufen auf Linux/Docker, nicht direkt auf `medienserver`. Für solche
 isolierten Entwicklungstests existiert ausdrücklich
 `STACKPILOT_ALLOW_UNQUALIFIED_LINUX=1`; standardmäßig sind echte Installationen
 außerhalb Ubuntu 24.04/x86-64 gesperrt. Das ersetzt keine Plattformqualifizierung.

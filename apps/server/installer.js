@@ -5,6 +5,7 @@ import { RetirementEngine, localDocker, readContainers } from "./retirement.js";
 import { inventory, inspectPath, command } from "./inventory.js";
 import { deploymentReadiness } from "./deployment.js";
 import { catalog } from "./catalog.js";
+import { pendingContainerMaintenance } from "./container-maintenance.js";
 import {
   composeFor,
   prepareFiles,
@@ -575,7 +576,10 @@ export class DeploymentEngine extends RetirementEngine {
       throw new Error(
         "Downloads ohne VPN sind gesperrt. Einen neuen Plan mit VPN prüfen.",
       );
-    if ((this.current()?.plan.id || null) !== (plan.basePlanId || null))
+    const currentPlan = this.current()?.plan;
+    if (pendingContainerMaintenance(currentPlan, this.vault))
+      throw Error("Zuerst die unterbrochene Container-Wartung abschließen.");
+    if ((currentPlan?.id || null) !== (plan.basePlanId || null))
       throw new Error(
         "Stack hat sich seit der Planung geändert. Erneut prüfen.",
       );

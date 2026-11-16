@@ -201,6 +201,21 @@ Der Zielordner muss neu sein. Er enthält nach der Prüfung den
 unverschlüsselten Hauptschlüssel und die Datenbank. Entschlüsselte
 Prüfkopien privat behandeln und nach Gebrauch entfernen.
 
+Für eine bestehende Installation in der Oberfläche **Tresor-Sicherung
+in einen neuen Ordner wiederherstellen** wählen. Nach erfolgreicher
+Prüfung den eingeblendeten `sudo bash /opt/stackpilot/app/deploy/restore-vault.sh
+apply …`-Befehl am Server ausführen. Er stoppt StackPilot, übernimmt die
+Datenbank und startet StackPilot wieder. Der bisherige Stand liegt in
+einem privaten Ordner. Am Ende erscheint der passende Befehl für die
+Rückkehr. StackPilot-Anmeldungen müssen anschließend erneuert werden.
+
+Für die Übernahme müssen der aktuelle Hauptschlüssel und die aktuelle
+Datenbank vorhanden sein. Die Sicherung muss zum abgeschlossenen
+Installationsplan passen. Die App-Konfigurationen, Medien und Viewer-
+Sitzungen in Jellyfin werden durch den Tresorwechsel nicht geändert.
+Wenn nach der Sicherung Dienstschlüssel erneuert wurden, müssen Tresor
+und betroffene Dienste aus zueinander passenden Sicherungen stammen.
+
 ## Wiederherstellungscodes für Zuschauer
 
 Bei neu eingerichtetem Authentik werden Wiederherstellungscodes automatisch

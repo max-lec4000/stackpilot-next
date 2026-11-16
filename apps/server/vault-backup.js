@@ -8,7 +8,7 @@ const magic = Buffer.from("STACKPILOT_VAULT_BACKUP_V1\n");
 const dbLimit = 64 * 1024 * 1024;
 const files = ["state.sqlite", "master.key"];
 
-function verifyDatabase(file, key) {
+export function verifyDatabase(file, key) {
   const db = new DatabaseSync(file, { readOnly: true, allowExtension: false });
   try {
     if (Object.values(db.prepare("PRAGMA integrity_check").get())[0] !== "ok")

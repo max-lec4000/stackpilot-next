@@ -71,16 +71,16 @@ function VaultRestore() {
   const [password, setPassword] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [restored, setRestored] = useState<{ entries: number; directory: string } | null>(null);
   const [error, setError] = useState("");
   return <details>
     <summary>Tresor-Sicherung in einen neuen Ordner wiederherstellen</summary>
-    <p>StackPilot prüft die Sicherung und legt die wiederhergestellten Dateien in einem privaten Ordner auf dem Server ab. Für die spätere Übernahme des Tresors muss StackPilot gestoppt werden.</p>
+    <p>StackPilot prüft die Sicherung und legt die Dateien in einem privaten Ordner ab. Die Übernahme am Server startet StackPilot kurz neu.</p>
     <form onSubmit={async (event) => {
       event.preventDefault();
       if (!file) return;
       setError("");
-      setMessage("");
+      setRestored(null);
       setBusy(true);
       try {
         if (file.size > 128 * 1024 * 1024) throw Error("Die Sicherung darf höchstens 128 MiB groß sein.");
@@ -93,7 +93,7 @@ function VaultRestore() {
         const result = await action<{ entries: number; directory: string }>("/api/vault-backup/restore", {
           archive: data, password, passphrase,
         });
-        setMessage(`${result.entries} Tresoreinträge geprüft. Dateien liegen auf dem Server unter ${result.directory}.`);
+        setRestored(result);
       } catch (error) {
         setError((error as Error).message);
       } finally {
@@ -110,7 +110,10 @@ function VaultRestore() {
         value={passphrase} disabled={busy} onChange={(event) => setPassphrase(event.target.value)} /></label>
       <button disabled={busy || !file}>Sicherung wiederherstellen</button>
     </form>
-    {message && <p role="status">{message}</p>}
+    {restored && <div role="status">
+      <p>{restored.entries} Tresoreinträge geprüft. Zur Übernahme diesen Befehl am Server ausführen.</p>
+      <p><code>sudo bash /opt/stackpilot/app/deploy/restore-vault.sh apply {restored.directory}</code></p>
+    </div>}
     {error && <p role="alert">{error}</p>}
   </details>;
 }

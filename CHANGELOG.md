@@ -2,6 +2,13 @@
 
 ## 0.5.0 – November 2026
 
+### Tresor-Wiederherstellung
+
+- Nach der Archivprüfung zeigt StackPilot den Serverbefehl für die
+  Übernahme an. Der Befehl startet StackPilot nach dem Tausch neu.
+  Die bisherige Datenbank bleibt für die manuelle Rückkehr erhalten.
+  Bei einer fehlgeschlagenen Startprüfung wird sie automatisch wieder aktiv.
+
 ### Update für Filmprofile und Wartung
 
 - Verbindliche Filmprofile erkennen die Seerr-Administratorberechtigung

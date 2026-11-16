@@ -16,11 +16,9 @@ Freigabe für Änderungen an einem laufenden Server.
   12.4.0 geprüft. Den Wechsel, die geschützte Authentik-Anmeldung und die
   Rückkehr mit einer neueren stabilen Version abnehmen, sobald sie verfügbar
   ist.
-- **Streamyfin-Abnahme mit gepatchtem Seerr.** Das private Gateway und die
-  Versionssperre sind geprüft. Nach Verfügbarkeit eines offiziellen
-  gepatchten Seerr-Images ab 3.5.3 privat in sp-test mit der nativen App
-  Anmeldung und Medienanfrage prüfen. Eine öffentliche Freigabe setzt diese
-  Abnahme voraus.
+- **Streamyfin öffentlich über HTTPS prüfen.** Für eine Freigabe über
+  Funnel stehen ein offizielles Seerr-Image mit den Sicherheitskorrekturen
+  und eine eigene Prüfung der öffentlichen Routen aus.
 
 ### Weitere Wartung
 
@@ -29,6 +27,11 @@ Freigabe für Änderungen an einem laufenden Server.
   ist dokumentiert.
 
 ## Umgesetzt oder entschieden
+
+- Streamyfin funktioniert mit Seerr 3.5.2 über das private HTTPS-Gateway
+  im Tailnet. Quick Connect verwendet das Jellyfin-Konto. Das Gateway
+  blockiert API-Schlüssel, Bildproxy, Passwort- und Rechteänderungen.
+  Aktivierung und Rollback sind in der Test-VM geprüft.
 
 - Schlüsselwechsel für Bazarr, Lidarr, Sonarr, Radarr, Prowlarr und
   Seerr. Unterstützte verwaltete Verbraucher übernehmen den neuen

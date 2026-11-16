@@ -70,16 +70,23 @@ export class StreamyfinDeployment {
     await this.protection.probe(record);
   }
   async probeSeerr(record, version) {
-    const request = (route) => localIdentityRequest(
-      `http://127.0.0.1:${this.port}/seerr/api/v1${route}`,
-      { headers: { Host: record.hostname } },
+    const request = (method, route) => localIdentityRequest(
+      `http://127.0.0.1:${this.port}/seerr${route}`,
+      { method, headers: { Host: record.hostname } },
     );
-    const response = await request("/status");
+    const response = await request("GET", "/api/v1/status");
     if (version) {
       if (response.status !== 200 || streamyfinSeerrVersion((await response.json()).version).version !== version)
         throw setupError("Das Gateway hat die freigegebene Seerr-Version nicht bestätigt.");
-      for (const [route, allowed] of [["/settings/main", [404]], ["/auth/me", [401, 403]]]) {
-        const result = await request(route);
+      for (const [method, route, allowed] of [
+        ["GET", "/api/v1/settings/main", [404]],
+        ["GET", "/api/v1/auth/me", [401, 403]],
+        ["GET", "/imageproxy/", [404]],
+        ["GET", "/api/v1/imageproxy/", [404]],
+        ["POST", "/api/v1/user/1/settings/password", [404]],
+        ["PUT", "/api/v1/user/1/settings/permissions", [404]],
+      ]) {
+        const result = await request(method, route);
         await result.arrayBuffer();
         if (!allowed.includes(result.status))
           throw setupError("Die Seerr-Zugriffssperren konnten nicht bestätigt werden.");

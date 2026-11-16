@@ -1,10 +1,12 @@
 import { setupError } from "./setup-error.js";
 
-export const minimumStreamyfinSeerrVersion = "3.5.3";
+export const minimumStreamyfinSeerrVersion = "3.5.2";
 const minimumParts = minimumStreamyfinSeerrVersion.split(".").map(Number);
-// Add an official image digest and its exact version after the release is
-// available and the gateway has passed acceptance with that image.
-const approvedImages = new Map();
+// Only for the private gateway. Its allowlist excludes image proxy, password
+// changes and permission changes, the routes affected by the 3.5.3 advisories.
+const approvedImages = new Map([
+  ["ghcr.io/seerr-team/seerr@sha256:aadee014b40e28cf9aa4928bc9d1183a6eb08f8c44d543cddc9efdcb16549be2", "3.5.2"],
+]);
 
 export function streamyfinSeerrVersion(value) {
   const match = typeof value === "string" &&
@@ -46,7 +48,7 @@ export async function inspectStreamyfinSeerr({ plan, s }, docker) {
       return {
         ...result, version,
         reason: version
-          ? `Seerr ${version} läuft. Für Streamyfin ist mindestens Seerr ${minimumStreamyfinSeerrVersion} erforderlich.`
+          ? `Seerr ${version} läuft. Für das private Streamyfin-Gateway ist mindestens Seerr ${minimumStreamyfinSeerrVersion} erforderlich.`
           : "Die laufende Seerr-Version konnte nicht als stabile Veröffentlichung bestätigt werden.",
       };
     if (!/^ghcr\.io\/seerr-team\/seerr@sha256:[a-f0-9]{64}$/.test(before.image) ||

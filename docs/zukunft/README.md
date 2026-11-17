@@ -5,26 +5,128 @@ Freigabe für Änderungen an einem laufenden Server.
 
 ## Offene Arbeiten
 
-### Phase 3 · Abnahmen mit offenen Voraussetzungen
+### Phase 1 · Profile und Löschen nachvollziehbar machen
 
-- **Direkte YouTube-Wiedergabe in Couchdeck.** In der Test-VM verlangte auch
-  der offizielle Webplayer ohne Anmeldung eine Bot-Bestätigung. Der
-  veröffentlichte QR-Code in Couchdeck öffnet das Video auf einem anderen
-  Gerät. Die direkte Wiedergabe steht weiter aus.
-- **Geschütztes Jellyfin mit einer neueren Version prüfen.** Der veröffentlichte
-  Rückweg wurde mit zwei offiziellen Image-Referenzen derselben Version
-  12.4.0 geprüft. Den Wechsel, die geschützte Authentik-Anmeldung und die
-  Rückkehr mit einer neueren stabilen Version abnehmen, sobald sie verfügbar
-  ist.
-- **Streamyfin öffentlich über HTTPS prüfen.** Für eine Freigabe über
-  Funnel stehen ein offizielles Seerr-Image mit den Sicherheitskorrekturen
-  und eine eigene Prüfung der öffentlichen Routen aus.
+Umsetzung vom 17.11.2026: gemeinsamer Filmstandard, automatisch geladene
+Medienprofile und Serienbestand mit bestätigter Datei-/Download-Löschung vorhanden.
+Native VM-Prüfungen und Einschränkungen siehe [Abläufe](../ablaeufe.md#gemeinsamer-filmstandard-freigaben-und-bibliotheksdateien).
+Die konkrete Zuordnung des gerundeten 15–20-GB-Films bleibt ohne Titel unbestätigt.
+Produktive Dateien werden bei diesem Update nicht automatisch gelöscht.
 
-### Weitere Wartung
+Ursprünglicher Umfang und Nachweise:
 
-- Sicherheitsprüfung nach Änderungen an Gateway, Tailscale, Sitzungen,
-  Containerrechten oder Images fortführen. Die erste vollständige Prüfung
-  ist dokumentiert.
+- **20-GB-Film aus einer Seerr-Anfrage untersuchen.** Auf reatest lesend
+  abgleichen, welches Profil und welche Größenobergrenze StackPilot
+  gespeichert hat, was Seerr beim Anfragen und Freigeben an Radarr
+  übergab und welchen Treffer Radarr geladen hat. Der feste bzw.
+  laufzeitabhängige StackPilot-Standard wurde bisher nur beim Anlegen durch
+  StackPilot ausgewertet. Direkte Seerr-Anfragen konnten dessen eigenes
+  Standardprofil verwenden; der gemeinsame Standard schließt diese Lücke. Am konkreten Download prüfen,
+  welcher Fall vorlag.
+- **Medienprofile verbindlich anwenden.** Den konfigurierten Standard für
+  Film-Anfragen aus StackPilot, Seerr, Streamyfin und Couchdeck abgleichen.
+  Bei automatischer Freigabe muss die Grenze vor der ersten Radarr-Suche
+  greifen. Feste GiB-Grenze und GiB/h mit berechneter absoluter Grenze im
+  Test nachweisen. Bei fehlender Laufzeit oder einer unbestätigten Regel
+  den tatsächlichen Status anzeigen und keinen Download mit einem stillen
+  Ersatzprofil starten.
+- **Medienprofile direkt anzeigen.** Unter „Verwaltung → Medienprofile“
+  das aktive Profil und die gespeicherte Größenregel beim Öffnen laden.
+  Der zusätzliche Knopf „Medienprofile laden“ entfällt. Klar anzeigen,
+  für welche Anfragen der jeweilige Standard gilt.
+- **Andor und mögliche Reste prüfen.** Auf reatest lesend ermitteln, aus
+  welcher Jellyfin-Bibliothek Couchdeck Andor abspielt und welche
+  Dateien Sonarr, qBittorrent und der Medienpfad noch führen. Weitere
+  Reste aus dokumentierten früheren Löschaktionen als Vorschau anzeigen.
+  Der Download-Knopf entfernt einen Torrent. Anfrage abbrechen oder
+  archivieren und importierte Mediatheksdateien löschen sind eigene
+  Aktionen. Eine weiterhin abspielbare Serie belegt daher für sich noch
+  keinen Fehler beim Löschen des Torrents.
+- **Medien eindeutig und vollständig löschen können.** StackPilot soll
+  für Film, ganze Serie, Staffel und Folge die betroffenen
+  Mediatheksdateien und zugeordneten Downloads vorab getrennt anzeigen.
+  Option zur Beendigung der Überwachung anbieten, wenn das Medium weg
+  bleiben soll. Nach Bestätigung tatsächliche Löschung und aktualisierte
+  Anzeige in Jellyfin, Couchdeck, Seerr und qBittorrent prüfen. Gemeinsame
+  Dateien, mehrdeutige Zuordnungen und verbleibende Hardlinks sichtbar
+  machen. Der Bestandsabgleich löscht erst nach ausdrücklicher Auswahl.
+
+### Phase 2 · Anfragen und Medienversionen
+
+Umsetzung vom 17.11.2026: Freigabe in StackPilot, automatische Freigaben je
+Zuschauer sowie expliziter Film-/Einzelfolgenersatz mit Sicherung und Rückimport.
+Noch offen: Couchdecks eigene feste Filmgrenze auch für freigabepflichtige
+Anfragen sicher unterstützen. Der besondere Dienstkonto-Anfrageweg wird für
+solche Konten gesperrt; persönliche Standardanfragen bleiben möglich.
+
+Ursprünglicher Umfang:
+
+- **Seerr-Anfragen in StackPilot freigeben.** Administratoren können unter
+  „Meine Anfragen“ ausstehende Anfragen genehmigen, auch wenn sie über
+  Streamyfin oder Couchdeck erstellt wurden. StackPilot übernimmt danach
+  den von Seerr bestätigten Status.
+- **Automatische Freigabe pro Zuschauer verwalten.** In der
+  Zuschauerverwaltung können StackPilot-Administratoren dem zugeordneten
+  Seerr-Konto das Recht für automatische Freigaben geben oder entziehen.
+  Die Einstellung gilt für künftige Anfragen und vergibt keine
+  Seerr-Adminrechte oder Rechte zur Freigabe fremder Anfragen.
+- **Importierte Version über „Qualität ändern“ ersetzen.** Bei einem
+  vorhandenen Film oder einer ausgewählten Folge nach einem Treffer
+  im Zielprofil mit der gewünschten Obergrenze suchen und eine Vorschau
+  zeigen. Die alte Datei bleibt während des Downloads verfügbar. Erst
+  eine geprüfte Ersatzdatei importieren und für den Fehlerfall einen
+  Rückweg bereithalten.
+
+### Phase 3 · Medienspeicher aufs NAS umziehen
+
+- **Speicherort auswählen und wechseln.** Lokale Pfade und auf reatest
+  eingebundene NAS-Freigaben als Medienziel unterstützen. Zuerst Filme,
+  Serien und Musik auf das NAS auslagern. Apps, Datenbanken und
+  Konfigurationen laufen weiter auf reatest. Ein späterer Umzug der
+  Apps aufs NAS bzw. den anderen Server ist ein eigener Schritt.
+- **Migration mit geprüftem Rückweg.** Quell- und Zielpfad, freien Platz,
+  Dateirechte, Mount nach Neustart und Hardlink-Fähigkeit prüfen. Wenn
+  Downloads lokal bleiben, den Import über Dateisystemgrenzen mit einer
+  vollständigen Kopie abnehmen. Wenn Downloads und Medien auf dem NAS
+  liegen, Hardlinks auf der gewählten Freigabe tatsächlich prüfen. Bei
+  einem unterbrochenen NAS-Mount dürfen Dienste nicht versehentlich auf
+  den leeren lokalen Mountpfad schreiben.
+- **Medien übernehmen und Dienste abgleichen.** Bestand kopieren,
+  Dateien am Ziel prüfen, danach die Dienste umstellen. Bibliotheken,
+  Wiedergabestatus, Download-Import und Speicheranzeige in StackPilot und
+  Couchdeck prüfen. Alte Dateien bis zur bestätigten Abnahme behalten.
+
+### Phase 4 · Direkte YouTube-Wiedergabe in Couchdeck
+
+- **YouTube-Bestätigung vom Sofa aus ermöglichen.** Wenn der offizielle
+  Player eine Anmeldung oder Bestätigung anzeigt, die Seite in Couchdeck
+  sichtbar machen und mit Controller oder Tastatur bedienbar machen.
+  Prüfen, ob Couchdeck eine regulär bestätigte Sitzung wiederverwenden
+  und danach automatisch zur Wiedergabe zurückkehren kann. Falls YouTube
+  erneut eine persönliche Bestätigung fordert, diese anzeigen. Der
+  veröffentlichte QR-Code bleibt als Ausweichweg. In der VM gezielt den
+  Übergang von Meldung zu Bestätigung und Wiedergabe prüfen.
+
+### Phase 5 · Abnahmen und Wartung
+
+- **StackPilot direkt im privaten Tailnet erreichen.** Zugriff über den
+  Tailscale-Gerätenamen bzw. die Tailnet-Adresse ermöglichen, ohne SSH-Tunnel.
+  Dienstbindung, MagicDNS, Tailnet-Zugriffsregeln und zulässige Host-/Origin-
+  Adressen zusammen prüfen. LAN-Zugriff bleibt erhalten. Die Verwaltungsoberfläche
+  bleibt privat und wird nicht über Funnel öffentlich freigegeben. Diagnose und
+  verständliche Hinweise für fehlende Freigaben ergänzen.
+
+- **Geschütztes Jellyfin mit einer neueren stabilen Version prüfen.**
+  Versionswechsel, Authentik-Anmeldung und Rollback abnehmen. Der
+  veröffentlichte Rückweg wurde mit zwei Image-Referenzen desselben
+  Releases 12.4.0 geprüft.
+- **Streamyfin öffentlich über HTTPS prüfen.** Auf ein offizielles
+  Seerr-Image mit den Sicherheitskorrekturen warten und die öffentlichen
+  Routen separat abnehmen. Die private Integration ist bereits bestätigt.
+  Funnel auf reatest bleibt bis zur ausdrücklichen Freigabe aus.
+- **Sicherheitsprüfungen fortführen.** Nach Änderungen an Gateway,
+  Tailscale, Sitzungen, Containerrechten oder Images gezielt nachprüfen.
+  Signierte StackPilot-Updates bleiben ein späteres Vorhaben.
 
 ## Umgesetzt oder entschieden
 
@@ -64,7 +166,7 @@ Freigabe für Änderungen an einem laufenden Server.
   Uploads und bereitstehende vollständige Torrents. Die Anzeige wurde gegen
   qBittorrents Zustand und Uploadrate geprüft.
 - Beide Oberflächen zeigen belegten und gesamten Platz am Medienpfad.
-  Couchdeck zeigt ihn derzeit im Servermenü. StackPilot verwendet
+  Couchdeck zeigt den freien Platz auch im Kino. StackPilot verwendet
   unterschiedliche Symbole für „Anwendungen“ und „Stack konfigurieren“.
 - Verwaltetes Couchdeck unterstützt ab 0.2.3 persönliche Seerr-Sitzungen
   ohne Admin-Schlüssel in der Übergabedatei nach erneuter Verknüpfung.
@@ -87,10 +189,16 @@ Freigabe für Änderungen an einem laufenden Server.
   oder Migrationspfaden eine Neuinstallation und ein Update mit vorhandenem
   Zustand prüfen.
 - YouTube-Video nur bei Änderungen an Anbindung, Wiedergabe oder Spulen und
-  zur gezielten Diagnose abrufen. Bei einer Bot-Meldung den Abruf beenden
-  und den Befund dokumentieren.
+  zur gezielten Diagnose abrufen. Bei einer Bot-Meldung den Befund
+  dokumentieren. Beim gezielten Bestätigungstest den regulären
+  YouTube-Dialog verwenden.
 
-## Später
+## Phase 6 · Für später geplant
+
+### Abnahme auf Fernseher und iPad
+
+Zuschaueranmeldung, Wiedergabe und Profilwechsel bei bestehenden Sitzungen
+prüfen. Am Fernseher auch eine echte Medienanfrage in Couchdeck prüfen.
 
 ### Zugang ohne Tailscale (eigene Domain)
 

@@ -8,6 +8,7 @@ import { Vault } from "./vault.js";
 import { DeploymentEngine } from "./installer.js";
 import { Services } from "./service-api.js";
 import { localDocker } from "./retirement.js";
+import { SharedFilmStandard } from "./shared-film-standard.js";
 import { SizeLimits } from "./size-limits.js";
 test(
   "Radarr erzwingt eigenes Größen-/1080p-Profil und erkennt manuell veränderte Grenzen",
@@ -21,10 +22,16 @@ test(
         portOffset: 30000,
         allowUnqualifiedLinux: true,
       });
+    const nativeHost = engine.host.bind(engine);
+    engine.host = async () => {
+      const host = await nativeHost();
+      return { ...host, listening: host.listening.filter(p => p >= 30000).map(p => p - 30000),
+        containers: host.containers.filter(c => String(c.Names || '').startsWith(engine.project + '-')) };
+    };
     let plan;
     try {
       plan = await engine.createPlan({
-        selected: ["Radarr"],
+        selected: ["Jellyfin", "Radarr", "Seerr"],
         path: root + "/data",
         username: "fixture-admin",
         language: "Deutsch",
@@ -69,6 +76,15 @@ test(
       assert.equal(fixed.capGiB, 7.5);
       await limits.verify(s, fixed);
       assert.notEqual(fixed.profileId, bound.profileId);
+      const shared = new SharedFilmStandard({engine:{vault}}, limits);
+      const initialServer = (await s.additional.seerr('/settings/radarr')).find(v=>v.isDefault&&!v.is4k);
+      await shared.configure(s,plan,{rate:2,capGiB:0});
+      assert.equal(shared.status.state,'ready');
+      await shared.configure(s,plan,{rate:0,capGiB:4});
+      assert.equal(shared.status.state,'ready');
+      await shared.configure(s,plan,{rate:0,capGiB:0});
+      assert.equal((await s.additional.seerr('/settings/radarr')).find(v=>v.id===initialServer.id).activeProfileId,initialServer.activeProfileId);
+      console.log('FRESH_SHARED_STANDARD_AND_RESTORE_CONFIRMED');
       const format = await s.arr("Radarr", `/customformat/${bound.formatId}`);
       format.specifications[0].fields.find((f) => f.name === "max").value = 12;
       await s.arr("Radarr", `/customformat/${bound.formatId}`, {

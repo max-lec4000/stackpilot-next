@@ -1,3 +1,7 @@
+import { ImportedReplacement } from "./imported-replacement.js";
+import { SeriesRemoval } from "./series-removal.js";
+import { SharedFilmStandard } from "./shared-film-standard.js";
+import { ViewerRequests } from "./viewer-requests.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { Couchdeck } from "./couchdeck.js";
 import { RemoteSetup } from "./remote-setup.js";
@@ -131,6 +135,7 @@ export function inventoryMiddleware(options = {}) {
     oidcBackchannel,
   );
   const viewers = new Viewers(identity);
+  const viewerRequests = new ViewerRequests(hub, ssoConnection, viewers);
   const viewerProfiles = new ViewerProfiles(hub, ssoConnection, viewers);
   const remoteSetup = new RemoteSetup(hub, {
     identity,
@@ -171,7 +176,10 @@ export function inventoryMiddleware(options = {}) {
     jellyfinProtection,
   );
   remoteSetup.security = remoteSecurity;
+  const seriesRemoval = new SeriesRemoval(hub);
   const sizeLimits = new SizeLimits(hub);
+  sizeLimits.shared = new SharedFilmStandard(hub, sizeLimits);
+  if (options.background !== false) sizeLimits.shared.start();
   const publicFunnel = new PublicFunnel(hub, identity, jellyfinProtection,
     ssoConnection, connectionCheck, identitySettings, remoteSecurity, identityBackups);
   if (options.background !== false) publicFunnel.start();
@@ -179,6 +187,8 @@ export function inventoryMiddleware(options = {}) {
   const records = new RequestRecords(state);
   hub.records = records;
   const requestDiagnostics = new RequestDiagnostics(hub);
+  const importedReplacement = new ImportedReplacement(hub, requestDiagnostics);
+  if (options.background !== false) importedReplacement.startWorker();
   const requestLifecycle = new RequestLifecycle(
     hub,
     requestDiagnostics,
@@ -563,6 +573,12 @@ export function inventoryMiddleware(options = {}) {
         );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
         result = await managedServices(installer(), host, appUpdates);
+      } else if (url.pathname === "/api/media/replacements" && req.method === "GET") {
+        result = await importedReplacement.jobs();
+      } else if (url.pathname === "/api/media/series-inventory" && req.method === "GET") {
+        result = await seriesRemoval.list();
+      } else if (url.pathname === "/api/viewer-requests" && req.method === "GET") {
+        result = await viewerRequests.list();
       } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
         result = await viewerProfiles.list();
       } else if (url.pathname === "/api/viewers" && req.method === "GET") {
@@ -742,10 +758,22 @@ export function inventoryMiddleware(options = {}) {
           if (!(await manager.reauthenticate(body.password, remoteAddress)))
             throw Error("Administratorpasswort stimmt nicht.");
           result = identity.credentials();
-        } else if (url.pathname === "/api/media/movie-removal/preview")
+        } else if (url.pathname === "/api/media/replacement/preview")
+          result = await importedReplacement.preview(body);
+        else if (url.pathname === "/api/media/replacement/start")
+          result = await importedReplacement.start(body);
+        else if (url.pathname === "/api/media/replacement/restore")
+          result = await importedReplacement.restore(body);
+        else if (url.pathname === "/api/media/series-removal/preview")
+          result = await seriesRemoval.preview(body);
+        else if (url.pathname === "/api/media/series-removal/execute")
+          result = await seriesRemoval.execute(body);
+        else if (url.pathname === "/api/media/movie-removal/preview")
           result = await movieRemoval.preview(body.requestId);
         else if (url.pathname === "/api/media/movie-removal/execute")
           result = await movieRemoval.execute(body);
+        else if (url.pathname === "/api/media/request/approve")
+          result = await requestLifecycle.approve(body);
         else if (url.pathname === "/api/media/request/archive")
           result = await requestLifecycle.archive(body);
         else if (url.pathname === "/api/media/request/cancel-season")
@@ -819,6 +847,8 @@ export function inventoryMiddleware(options = {}) {
           });
         } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);
+        else if (url.pathname === "/api/viewer-requests")
+          result = await viewerRequests.change(body);
         else if (url.pathname === "/api/viewer-profiles")
           result = await viewerProfiles.change(body);
         else if (url.pathname === "/api/viewers/action") {
@@ -942,6 +972,8 @@ export function inventoryMiddleware(options = {}) {
     publicFunnel.close();
     oidcBackchannel.close();
     guard.close();
+    sizeLimits.shared.close();
+    importedReplacement.close();
     hub.library.close();
     for (const op of state.operations())
       if (["running", "queued"].includes(op.status))

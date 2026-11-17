@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
 export function SizeSettings() {
@@ -7,6 +7,7 @@ export function SizeSettings() {
       capGiB?: number;
       rates: number[];
       scope: string;
+      shared?: {state:string;message:string};
     } | null>(null),
     [rate, setRate] = useState(0),
     [fixed, setFixed] = useState(false),
@@ -14,42 +15,36 @@ export function SizeSettings() {
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(""),
     [error, setError] = useState("");
+  async function load() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await get<NonNullable<typeof data>>("/api/media/size-settings");
+      setData(result);
+      setRate(result.rate);
+      setFixed(!!result.capGiB);
+      setCap(result.capGiB ? String(result.capGiB) : "");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => { void load(); }, []);
   return (
     <div className="tile">
       <h3>Größe neuer Filmanfragen</h3>
       <p>
-        Ein eigener Standard für StackPilot: 1080p ohne Remux mit einer
+        Gemeinsamer Standard für neue Filmanfragen: 1080p ohne Remux mit einer
         festen oder laufzeitabhängigen Obergrenze. Eine kleinere Grenze kann verfügbare
         Veröffentlichungen ausschließen.
       </p>
-      <button
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setError("");
-          try {
-            const result = await get<{
-              rate: number;
-              capGiB?: number;
-              rates: number[];
-              scope: string;
-            }>("/api/media/size-settings");
-            setData(result);
-            setRate(result.rate);
-            setFixed(!!result.capGiB);
-            setCap(result.capGiB ? String(result.capGiB) : "");
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        Medienprofile laden
-      </button>
+      {!data && !error && <p role="status">Medienprofile werden geladen …</p>}
+      {!data && error && <button disabled={busy} onClick={() => void load()}>Erneut laden</button>}
       {data && (
         <>
           <p>{data.scope}</p>
+          {data.shared && <p role="status">{data.shared.message}</p>}
           <label>
             Größenstandard
             <select
@@ -77,7 +72,7 @@ export function SizeSettings() {
             </label>
           )}
           <p>
-            Bei einer Laufzeitregel wird die Grenze wird pro Film auf die nächste halbe GiB aufgerundet.
+            Bei einer Laufzeitregel wird die Grenze pro Film auf die nächste halbe GiB aufgerundet.
             Vorhandene Dateien und andere Profile werden nicht geändert. Ohne
             bekannte Laufzeit kann eine feste Grenze verwendet werden.
           </p>
@@ -93,6 +88,7 @@ export function SizeSettings() {
                   { rate: fixed ? 0 : rate, capGiB: fixed ? Number(cap) : 0, confirmation: "OK" },
                 );
                 setMessage(result.message);
+                await load();
               } catch (e) {
                 setError((e as Error).message);
               } finally {

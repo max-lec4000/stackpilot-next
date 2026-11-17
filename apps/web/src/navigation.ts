@@ -10,7 +10,7 @@ const views: Record<string, string> = {
   "Stack konfigurieren": "einrichten",
 };
 const areas = new Set([
-  "remote", "sources", "profiles", "connections", "safety", "backups",
+  "media-files", "remote", "sources", "profiles", "connections", "safety", "backups",
   "diagnosis", "history", "audit", "about", "music",
 ]);
 type Route = { view: string; area: string };

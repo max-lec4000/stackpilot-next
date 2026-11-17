@@ -308,3 +308,59 @@ Zuweisungen lassen sich mit derselben Profilauswahl fortsetzen.
 Das Passwort, die bisherigen Faktoren und angemeldete Jellyfin-Geräte
 bleiben erhalten. Die einmalige Aufforderung lässt sich bei Bedarf über
 **Passkey-Einrichtung abbrechen** zurücknehmen.
+
+## Gemeinsamer Filmstandard, Freigaben und Bibliotheksdateien
+
+Unter **Verwaltung → Medienprofile** werden die aktuellen Werte direkt geladen.
+Der Größenstandard gilt für neue Standardanfragen aus StackPilot, Seerr,
+Streamyfin und Couchdeck. Bereits vorhandene Dateien werden dadurch nicht ersetzt.
+Ausdrücklich gewählte Einzelprofile bleiben eigene Vorgaben.
+
+Bei einer festen GiB-Grenze verwendet Seerr das passende Radarr-Profil. Bei
+GiB/h landen direkte Anfragen zuerst in „Größenprüfung ausstehend“: dessen
+Pflichtfilter lässt keinen Treffer zu. StackPilot prüft die Laufzeit, bestätigt
+die berechnete Grenze und startet erst danach die Suche. Ohne bestätigte Laufzeit
+bleibt der Film gesperrt. Die Prüfung läuft alle 30 Sekunden. Änderungen an
+nativen Regeln werden gemeldet; eigene Seerr-Profilregeln müssen vor einer
+Übernahme geprüft werden. Ausstehende Laufzeitprüfungen zuerst klären, bevor der
+Standard ausgeschaltet oder auf eine feste Grenze umgestellt wird.
+
+**Meine Anfragen → Details → Anfrage freigeben** genehmigt wartende Seerr-Anfragen.
+Unter **Verwaltung → Externer Zugriff → Zuschauer → Anfragen ohne Freigabe** kann
+man verknüpften Zuschauerkonten automatische Freigaben geben oder entziehen.
+Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
+Konten mit Verwaltungsrechten werden hier nicht verändert.
+
+Couchdecks eigene feste Filmgrenze verwendet einen besonderen Anfrageweg.
+Für Konten ohne automatische Filmfreigabe ist dieser Weg gesperrt, damit das
+Dienstkonto keine Freigabe umgeht. Dann die eigene Couchdeck-Filmgrenze ausschalten
+und mit der persönlichen Seerr-Anmeldung anfragen oder direkt Seerr verwenden.
+Der gemeinsame Standard bleibt wirksam. Unterstützung der eigenen Couchdeck-Grenze
+für freigabepflichtige Anfragen ist noch offen.
+
+**Verwaltung → Medienbestand** zeigt auch Serien, deren Anfrage bereits entfernt
+wurde. Serie, optional Staffel und anschließend eine Folge auswählen und die
+betroffenen Dateien prüfen. Zugeordnete Downloads erscheinen separat und werden
+nur bei ausdrücklicher Auswahl mitgelöscht. Gemeinsame Pakete mit weiteren Folgen
+sind bei einer Teilauswahl gesperrt. „Überwachung beenden“ verhindert automatische
+neue Suchen für die Auswahl. Die Löschung prüft den tatsächlichen Bibliothekspfad.
+Andere Hardlinks, Kopien und ein nativer Papierkorb können weiter Platz belegen.
+Filme werden weiterhin unter **Meine Anfragen → Film löschen** entfernt.
+Das Entfernen eines Torrents oder Archivieren einer Anfrage löscht für sich keine
+bereits importierten Bibliotheksdateien.
+
+Bei einem vorhandenen Film oder einer einzelnen Folge zuerst das gewünschte
+Qualitätsprofil speichern, dann **Passenden Ersatz suchen**. Nach Auswahl erstellt
+StackPilot eine überprüfte Kopie der alten Datei und fordert den Ersatz an.
+Die bisherige Datei bleibt bis zum nativen Import verfügbar. Ein Staffelpaket oder
+eine Mehrfolgendatei wird nicht als Ersatz einer einzelnen Folge angenommen.
+**Austauschstatus laden** zeigt den Fortschritt und den Sicherungspfad.
+**Zur gesicherten Version zurückkehren** importiert die alte Kopie erneut und
+prüft ihre Prüfsumme. Das gewählte Zielprofil bleibt dabei bestehen.
+
+Sicherungen liegen unter `<Medienpfad>/.stackpilot-versions/<Vorgang>/` und werden
+nicht automatisch entfernt. Dafür sowie für den neuen Download muss genügend
+Platz vorhanden sein. Die Wiederherstellung entfernt den Ersatztransfer aus
+qBittorrent, bewahrt dessen Dateien aber auf. Bei abweichenden Profilen, nicht
+zuordenbaren Dateien oder Importfehlern den angezeigten Befund prüfen; die Sicherung
+bleibt erhalten. Eine fehlende oder veränderte Sicherung wird nicht verwendet.

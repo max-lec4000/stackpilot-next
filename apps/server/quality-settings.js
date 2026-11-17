@@ -203,8 +203,12 @@ export class QualitySettings {
       let futureUpdated = false,
         warning = null;
       if (body.alsoFuture === true && sizeRate !== 0) {
+        await this.hub.sizeLimits.shared?.configure(s, plan, { rate: sizeRate, capGiB: 0 });
         this.hub.sizeLimits.setDefault(plan, sizeRate);
         futureUpdated = true;
+      } else if (body.alsoFuture === true && kind === "movie" &&
+          (this.hub.sizeLimits?.config?.(plan)?.rate || this.hub.sizeLimits?.config?.(plan)?.capGiB)) {
+        warning = "Das Einzelprofil wurde geändert. Für neue Anfragen bleibt der Größenstandard aktiv. Diesen bei Bedarf zuerst unter Verwaltung → Medienprofile ausschalten.";
       } else if (body.alsoFuture === true) {
         try {
           const list = await s.additional.seerr(

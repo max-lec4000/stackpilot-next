@@ -200,6 +200,10 @@ export class MediaHub {
           const normalize = (value) => String(value || "").toLowerCase().replaceAll("-", "");
           if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(couchdeck.owner))
             throw Error("Das Seerr-Konto konnte nicht dem Wohnzimmer-Konto zugeordnet werden.");
+          // The administrative actor used for an explicit profile would otherwise
+          // auto-approve on behalf of viewers whose requests require approval.
+          if (!Number.isSafeInteger(user.permissions) || !(user.permissions & (128 | 256)))
+            throw Error("Diese Anfrage benötigt eine Freigabe. Mit eigener Couchdeck-Größengrenze ist sie noch nicht möglich; bitte in Seerr anfragen oder die eigene Filmgrenze in Couchdeck ausschalten.");
         }
         if (typeof plan.spec.path === "string") {
           const storage = storageHealth(await this.storage(plan.spec.path));

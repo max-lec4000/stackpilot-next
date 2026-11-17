@@ -789,7 +789,7 @@ test("Couchdeck-Filmgrenze hat Vorrang und bleibt an den bestätigten Seerr-Besi
   const owner = "0123456789abcdef0123456789abcdef";
   const seerr = f.services.additional.seerr;
   f.services.additional.seerr = async (route, options) => route === "/user/9"
-    ? { jellyfinUserId: owner } : seerr(route, options);
+    ? { jellyfinUserId: owner, permissions: 160 } : seerr(route, options);
   f.hub.sizeLimits = {
     config: () => ({ rate: 0, capGiB: 10 }),
     forRequest: async (_s, _p, _detail, rate, capGiB) => {
@@ -805,3 +805,12 @@ test("Couchdeck-Filmgrenze hat Vorrang und bleibt an den bestätigten Seerr-Besi
   assert.equal(saved.userId, 9);
   assert.equal(saved.profileId, 6);
 });
+
+ test("Couchdeck explicit cap cannot bypass viewer approval", async () => {
+  const f = fixture(), owner = "0123456789abcdef0123456789abcdef";
+  const seerr = f.services.additional.seerr;
+  f.services.additional.seerr = async (route, options) => route === "/user/9"
+    ? { jellyfinUserId: owner, permissions: 32 } : seerr(route, options);
+  await assert.rejects(f.hub.request({type:"movie",id:42},{owner,userId:9,capGiB:7.5}), /Freigabe/);
+  assert.ok(!f.calls.some(c => c[1] === "/request"));
+ });

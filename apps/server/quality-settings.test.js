@@ -198,8 +198,14 @@ test("Unveränderter Seerr-Standard meldet Teilfehler statt falscher Erfolgsbest
   assert.equal(f.values.get("quality-policy:r:movie:42").profileId, 2);
   assert.equal(f.values.has("quality-default:r:Radarr"), false);
 });
-test("Größenregel als Standard speichert die Rate für neue Filme, kein festes Seerr-Profil", async () => {
+test("Größenregel bestätigt gemeinsamen Standard vor lokalem Speichern", async () => {
   const f = readbackFixture();
+  let sharedConfirmed=false;
+  f.q.hub.sizeLimits.shared={configure:async(_s,_plan,setting)=>{
+    assert.equal(setting.rate,3);
+    assert.equal(f.values.has('size-default:r'),false);
+    sharedConfirmed=true;
+  }};
   const result = await f.q.apply({
     requestId: 7,
     previousProfileId: 1,
@@ -207,7 +213,18 @@ test("Größenregel als Standard speichert die Rate für neue Filme, kein festes
     alsoFuture: true,
     confirmation: "OK",
   });
+  assert.equal(sharedConfirmed,true);
   assert.equal(result.futureUpdated, true);
   assert.equal(f.values.get("size-default:r").rate, 3);
   assert.equal(f.values.has("quality-default:r:Radarr"), false);
+});
+
+test('Einzelprofil überschreibt den gemeinsamen Größenstandard nicht', async () => {
+  const f = readbackFixture();
+  f.values.set('size-default:r', {rate:2});
+  const result = await f.q.apply({requestId:7,previousProfileId:1,profile:'2',alsoFuture:true,confirmation:'OK'});
+  assert.equal(result.futureUpdated,false);
+  assert.match(result.warning,/Größenstandard aktiv/);
+  assert.equal(f.values.get('size-default:r').rate,2);
+  assert.equal(f.values.has('quality-default:r:Radarr'),false);
 });

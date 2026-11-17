@@ -58,8 +58,9 @@ export class SizeLimits {
     return {
       ...this.config(plan),
       rates,
+      shared: this.shared?.status,
       scope:
-        "Neue Filmanfragen aus StackPilot; Serien und andere Radarr-Profile bleiben unverändert.",
+        "Neue Standard-Filmanfragen aus StackPilot, Seerr, Streamyfin und Couchdeck. Eigene ausdrücklich gewählte Profile bleiben unverändert.",
     };
   }
   setDefault(plan, rate) {
@@ -73,7 +74,8 @@ export class SizeLimits {
     const rate = Number(body.rate ?? 0), capGiB = Number(body.capGiB ?? 0);
     if (![0, ...rates].includes(rate) || (capGiB !== 0 && (!validFixedCap(capGiB) || rate !== 0)) || body.confirmation !== "OK")
       throw Error("Größenregel mit OK bestätigen.");
-    return this.hub.mutate(["Seerr", "Radarr"], async ({ plan }) => {
+    return this.hub.mutate(["Seerr", "Radarr"], async ({ s, plan }) => {
+      if (this.shared) await this.shared.configure(s, plan, { rate, capGiB });
       if (capGiB) this.hub.engine.vault.set(this.key(plan), {
         rate: 0, capGiB, updatedAt: new Date().toISOString(),
       });
@@ -81,9 +83,9 @@ export class SizeLimits {
       return {
         ok: true,
         message: capGiB
-          ? `Neue StackPilot-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${capGiB} GiB pro Film.`
+          ? `Neue Standard-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${capGiB} GiB pro Film.`
           : rate
-          ? `Neue StackPilot-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${rate} GiB pro Stunde Laufzeit.`
+          ? `Neue Standard-Filmanfragen verwenden 1080p ohne Remux mit höchstens ${rate} GiB pro Stunde Laufzeit.`
           : "Kein Größenstandard für neue Anfragen aktiv. Bereits angelegte Filmprofile bleiben unverändert.",
       };
     });

@@ -144,6 +144,9 @@ async function mockAPI(page, f) {
         if (body) f.viewer.passkeyPending = body.action === "add-passkey";
         json = { viewers: [f.viewer], addPasskeyReady: true, loginImproved: true, passwordChoice: true, recoveryEnabled: true };
         break;
+      case "/api/viewer-requests":
+        if(body) f.autoApprove=body.enabled;
+        json={viewers:[{username:'constructor',editable:true,userId:9,permissions:f.autoApprove?160:32,autoApprove:!!f.autoApprove,movieAutoApprove:!!f.autoApprove,tvAutoApprove:!!f.autoApprove}]};break;
       case "/api/viewer-profiles":
         if (body?.action === "create") f.viewerProfiles.push({ id: "series", name: body.name, folders: body.folders });
         if (body?.action === "assign") f.viewer.profileId = body.profileId;
@@ -158,6 +161,7 @@ async function mockAPI(page, f) {
       case "/api/stack": json = f.stackStatus === null ? {} : { status: f.stackStatus, spec: { selected: services.map((s) => s.name), quality: "1080p", path: "/data", username: "fixture", language: "Deutsch", vpn: true } }; break;
       case "/api/operations": json = { operations: [] }; break;
       case "/api/sources": json = { schemas: [], sources: [], connections: [], issues: [], note: "Keine Quellen in diesem Test eingerichtet." }; break;
+      case "/api/media/series-inventory": json = {series: []}; break;
       case "/api/media/size-settings": json = { rate: 3, rates: [1, 2, 3, 4, 6, 8], scope: "Größenstandard für neue Filme." }; break;
       case "/api/safety": json = { operations: [] }; break;
       case "/api/audit": json = { page: 1, pages: 1, total: 0, events: [] }; break;
@@ -640,7 +644,7 @@ async function run() {
     await navigate(page, "Verwaltung");
     assert.equal(await page.locator(".administration-panel").count(), 0);
     const areas = [
-      ["sources", "Quellen"], ["profiles", "Medienprofile"],
+      ["sources", "Quellen"], ["profiles", "Medienprofile"], ["media-files", "Medienbestand"],
       ["connections", "Verbindungen"], ["safety", "VPN & Ausfallsperre"],
       ["backups", "Sicherungen & Updates"], ["diagnosis", "Diagnose"],
       ["history", "Auftragsverlauf"], ["audit", "Änderungsverlauf"],
@@ -653,8 +657,9 @@ async function run() {
       assert.match(page.url(), new RegExp("#/verwaltung/" + id + "$"));
       assert.equal(await page.locator(".administration-panel").count(), 1);
       if (id === "profiles") {
-        await page.getByRole("button", { name: "Medienprofile laden", exact: true }).click();
+        assert.equal(await page.getByRole("button", { name: "Medienprofile laden", exact: true }).count(), 0);
         await page.getByLabel("Größenstandard", { exact: true }).waitFor();
+        assert.equal(await page.getByLabel("Größenstandard", { exact: true }).inputValue(), "3");
       }
       await navigate(page, "Verwaltung");
       await page.getByRole("heading", { name: "Was möchtest du erledigen?", exact: true }).waitFor();
@@ -800,6 +805,11 @@ async function run() {
     assert.equal(await protectedRow.getByRole("button", { name: "Geschützt fortsetzen", exact: true }).isDisabled(), true);
     f.viewerSetup = true;
     await page.goto(baseURL + "/#/verwaltung/remote");
+    await page.getByText("Anfragen ohne Freigabe", {exact:true}).click();
+    await post(page,"/api/viewer-requests",()=>page.getByRole('button',{name:'Neue Filme und Serien automatisch freigeben',exact:true}).click());
+    assert.equal(f.autoApprove,true);
+    await post(page,"/api/viewer-requests",()=>page.getByRole('button',{name:'Freigabe für neue Anfragen verlangen',exact:true}).click());
+    assert.equal(f.autoApprove,false);
     await page.getByText("Zuschauerprofile", { exact: true }).click();
     await page.getByLabel("Profilname").fill("Nur Serien");
     await page.getByRole("checkbox", { name: "Serien", exact: true }).check();

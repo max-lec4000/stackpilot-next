@@ -82,6 +82,9 @@ test("API lehnt Schreibzugriffe und fremde Ursprünge ab", async () => {
     const api = inventoryMiddleware({ store });
     for (const req of [
       ...[
+        "/api/viewer-requests",
+        "/api/media/series-inventory",
+        "/api/media/replacements",
         "/api/media/search?q=test",
         "/api/media/archive",
         "/api/media/request-action?requestId=1",
@@ -121,6 +124,11 @@ test("API lehnt Schreibzugriffe und fremde Ursprünge ab", async () => {
         "/api/development/consent",
         "/api/media/request",
         "/api/media/request/archive",
+        "/api/media/request/approve",
+        "/api/viewer-requests",
+        "/api/media/replacement/start",
+        "/api/media/replacement/restore",
+        "/api/media/series-removal/execute",
         "/api/media/request/cancel",
         "/api/media/size-settings",
         "/api/remote-access/identity/prepare",

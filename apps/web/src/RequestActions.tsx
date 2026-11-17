@@ -17,10 +17,12 @@ export function RequestActions({
   id,
   onChange,
   pending = false,
+  canApprove = false,
 }: {
   id: number;
   onChange: () => Promise<void>;
   pending?: boolean;
+  canApprove?: boolean;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null),
     [season, setSeason] = useState(""),
@@ -44,6 +46,15 @@ export function RequestActions({
   const seasons = stopsMonitoring ? preview?.monitoredSeasons : preview?.editableSeasons;
   return (
     <div className="request-actions">
+      {canApprove && <button className="primary" disabled={busy} onClick={async () => {
+        setBusy(true); setError("");
+        try {
+          await action("/api/media/request/approve", { requestId: id, confirmation: "OK" });
+          await onChange();
+        } catch (e) { setError((e as Error).message); }
+        finally { setBusy(false); }
+      }}>Anfrage freigeben</button>}
+
       <button
         disabled={busy}
         onClick={async () => {

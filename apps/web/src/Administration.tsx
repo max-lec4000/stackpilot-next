@@ -1,3 +1,4 @@
+import { SeriesRemoval } from "./SeriesRemoval";
 import { AuditLog } from "./AuditLog";
 import { DevelopmentDiagnostics } from "./DevelopmentDiagnostics";
 import { Icon } from "./Icon";
@@ -12,6 +13,7 @@ import { DeploymentCheck } from "./DeploymentCheck";
 import { Workspace } from "./Workspace";
 import { ServerCheck, get, type Inventory, type Storage } from "./ServerCheck";
 const areas = [
+  { id: "media-files", group: "Betrieb", icon: "▤", title: "Medienbestand", description: "Bibliotheksdateien prüfen und gezielt löschen.", color: "sage" },
   {
     id: "music",
     group: "Betrieb",
@@ -175,6 +177,7 @@ export function Administration({
     if (panel === "music") return <MusicLibrary />;
     if (panel === "remote") return <RemoteAccessView />;
     if (panel === "profiles") return <SizeSettings />;
+    if (panel === "media-files") return <SeriesRemoval />;
     if (panel === "sources") return <SourcesView />;
     if (panel === "safety") return <SafetyCheckView />;
     if (panel === "connections") return <ConnectionChecks />;

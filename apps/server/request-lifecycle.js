@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { positiveId } from "./media-hub.js";
 import { activeSearch } from "../../packages/domain/search-status.js";
+import { seerrServiceAdmin, qualityPolicyKey } from "./quality-policy.js";
 import { setupError } from "./identity/setup-error.js";
 const hash = (v) =>
   createHash("sha256").update(JSON.stringify(v)).digest("hex");
@@ -30,6 +31,42 @@ const itemIdentity = (i) =>
 export class RequestLifecycle {
   constructor(hub, diagnostics, records) {
     Object.assign(this, { hub, diagnostics, records });
+  }
+  async approve(body) {
+    if (body.confirmation !== "OK") throw Error("Freigabe mit OK bestätigen.");
+    const id = positiveId(body.requestId);
+    await this.hub.requireVpn();
+    return this.hub.mutate(["Seerr"], async ({ s, plan }) => {
+      if (!seerrServiceAdmin(await s.additional.seerr("/auth/me")))
+        throw Error("Das Seerr-Dienstkonto darf keine Anfragen freigeben.");
+      const target = await this.diagnostics.target(s, id);
+      if (target.request.status !== 1) throw Error("Die Anfrage wartet nicht mehr auf Freigabe. Neu laden.");
+      if (target.kind === "movie") {
+        const setting = this.hub.sizeLimits.config(plan);
+        if (setting.rate || setting.capGiB) {
+          const detail = await s.additional.seerr(`/movie/${target.mediaId}?language=de`);
+          const rule = await this.hub.sizeLimits.forRequest(s, plan, detail, setting.rate, setting.capGiB || 0);
+          const r = target.request;
+          await s.additional.seerr(`/request/${id}`, { method: "PUT", body: {
+            mediaType: "movie", serverId: rule.serverId, profileId: rule.profileId,
+            rootFolder: r.rootFolder, tags: r.tags,
+          } });
+          const saved = await s.additional.seerr(`/request/${id}`);
+          if (saved.status !== 1 || saved.profileId !== rule.profileId || saved.serverId !== rule.serverId ||
+              requestIdentity(saved) !== requestIdentity({ ...r, serverId: rule.serverId }))
+            throw Error("Seerr hat Anfrage und Größenprofil nicht bestätigt. Keine Freigabe.");
+          await this.hub.sizeLimits.verify(s, rule);
+          this.hub.engine.vault.set(qualityPolicyKey(plan, "movie", target.mediaId), {
+            profileId: rule.profileId, serverId: rule.serverId, compact: true,
+            size: { ...rule, ...(setting.rate ? { rate: setting.rate } : {}) },
+          });
+        }
+      }
+      await s.additional.seerr(`/request/${id}/approve`, { method: "POST" });
+      const confirmed = await s.additional.seerr(`/request/${id}`);
+      if (![2, 5].includes(confirmed.status)) throw Error("Seerr hat die Freigabe nicht bestätigt. Status erneut laden.");
+      return { ok: true, status: confirmed.status };
+    });
   }
   key(plan, id) {
     return `request-cancel:${plan.rootId || plan.id}:${positiveId(id)}`;

@@ -1,3 +1,4 @@
+import { ImportedReplacement } from "./ImportedReplacement";
 import { formatBytes } from "../../../packages/domain/format.js";
 import { useState } from "react";
 import { get } from "./ServerCheck";
@@ -84,6 +85,7 @@ export function QualityEditor({
       {open && (
         <div className="diagnosis-content">
           <h4>Qualitätsprofil</h4>
+          {data?.kind === "movie" && data.hasFile && <ImportedReplacement requestId={requestId} />}
           {error && (
             <p role="alert" className="error">
               {error}
@@ -252,7 +254,7 @@ export function QualityEditor({
                   onChange={(e) => setFuture(e.target.checked)}
                 />
                 Auch als Standard für zukünftige{" "}
-                {sizeRate > 0 ? "StackPilot-Filmanfragen" : data.kind === "movie" ? "Filmanfragen" : "Serienanfragen"}{" "}
+                {sizeRate > 0 ? "Standard-Filmanfragen" : data.kind === "movie" ? "Filmanfragen" : "Serienanfragen"}{" "}
                 verwenden
               </label>
               {!!data.sizeDefaultRate && (

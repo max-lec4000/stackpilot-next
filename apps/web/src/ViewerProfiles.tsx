@@ -1,3 +1,4 @@
+import { ViewerRequests } from "./ViewerRequests";
 import { useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
@@ -55,7 +56,7 @@ export function ViewerProfiles({ viewers, onChange }: {
       setBusy(false);
     }
   }
-  return <details onToggle={(event) => { if (event.currentTarget.open) void load(); }}>
+  return <><ViewerRequests /><details onToggle={(event) => { if (event.currentTarget.open) void load(); }}>
     <summary>Zuschauerprofile</summary>
     {error && <p role="alert">{error}</p>}
     {message && <p role="status">{message}</p>}
@@ -104,5 +105,5 @@ export function ViewerProfiles({ viewers, onChange }: {
           onClick={() => void save({ action: "delete", profileId: profile.id })}>Profil löschen</button>}
       </li>)}</ul>}
     </>}
-  </details>;
+  </details></>;
 }

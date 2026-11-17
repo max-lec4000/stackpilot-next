@@ -34,7 +34,7 @@ export async function requestQualityOptions(hub, s, plan, kind, id) {
   if (series?.pending) throw Error("Schließe zuerst den Profilwechsel unter Größenlimits ab.");
   const specific = hub.engine.vault.get(qualityPolicyKey(plan, kind, id)),
     global = hub.engine.vault.get(qualityDefaultKey(plan, service)),
-    policy = specific || global;
+    policy = specific || (kind === "movie" && (hub.sizeLimits?.config(plan)?.rate || hub.sizeLimits?.config(plan)?.capGiB) ? null : global);
   if (!policy) return {};
   const actor = await s.additional.seerr("/auth/me");
   if (!seerrServiceAdmin(actor))

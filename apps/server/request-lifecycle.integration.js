@@ -1,3 +1,4 @@
+import { ViewerRequests } from "./viewer-requests.js";
 // Native Seerr request API, seeded disposable database, synthetic ARR adapter; no providers/downloads.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -23,6 +24,13 @@ test(
         portOffset: 30000,
         allowUnqualifiedLinux: true,
       });
+    // This fixture owns only its shifted ports and unique Compose project.
+    const nativeHost = engine.host.bind(engine);
+    engine.host = async () => {
+      const host = await nativeHost();
+      return { ...host, listening: host.listening.filter(p => p >= 30000).map(p => p - 30000),
+        containers: host.containers.filter(c => String(c.Names || '').startsWith(engine.project + '-')) };
+    };
     let plan, db;
     try {
       plan = await engine.createPlan({
@@ -92,7 +100,20 @@ test(
         context: async () => ({ s, plan }),
         mutate: async (n, fn) => fn({ s, plan }),
         invalidateRequests() {},
+        requireVpn: async () => {},
+        sizeLimits: { config: () => ({ rate: 0 }) },
       };
+      const viewerId = Number(db.prepare('INSERT INTO user (email,permissions,userType,jellyfinUserId,jellyfinUsername,avatar) VALUES(?,?,?,?,?,?)')
+        .run('fixture-viewer@example.invalid', 32, 3, 'fixture-jellyfin-id', 'fixture-viewer', '').lastInsertRowid);
+      const viewerRequests = new ViewerRequests(hub,
+        {context: async () => ({request: async () => ({stackpilot:{CanonicalLinks:{'fixture-viewer':'fixture-jellyfin-id'}}})})},
+        {list: async () => ({viewers:[{username:'fixture-viewer',active:true}]})});
+      assert.equal((await viewerRequests.list()).viewers[0].editable,true);
+      await viewerRequests.change({username:'fixture-viewer',userId:viewerId,previousPermissions:32,enabled:true,confirmation:'OK'});
+      assert.equal((await native.additional.seerr(`/user/${viewerId}`)).permissions,160);
+      await viewerRequests.change({username:'fixture-viewer',userId:viewerId,previousPermissions:160,enabled:false,confirmation:'OK'});
+      assert.equal((await native.additional.seerr(`/user/${viewerId}`)).permissions,32);
+      console.log('NATIVE_VIEWER_APPROVAL_RIGHTS_CONFIRMED');
       const records = new RequestRecords(store),
         lifecycle = new RequestLifecycle(
           hub,
@@ -141,6 +162,11 @@ test(
       await assert.rejects(lifecycle.cancelSeason({
         requestId, season: 3, review: seasonPreview.review, confirmation: "OK",
       }), /Neu prüfen/);
+      const approval = await lifecycle.approve({requestId, confirmation:"OK"});
+      assert.equal(approval.status, 2);
+      assert.equal((await native.additional.seerr(`/request/${requestId}`)).status, 2);
+      await assert.rejects(lifecycle.approve({requestId, confirmation:"OK"}), /nicht mehr/);
+      console.log("NATIVE_REQUEST_APPROVAL_CONFIRMED");
       console.log(
         "Native Seerr-Entfernung und Nachweis, Daten-erhaltender Adapter und Archiv geprüft.",
       );
@@ -155,7 +181,7 @@ test(
             "down",
           ],
           { timeout: 120000 },
-        );
+        ).catch(() => {});
       store.close();
       await rm(root, { recursive: true, force: true });
     }

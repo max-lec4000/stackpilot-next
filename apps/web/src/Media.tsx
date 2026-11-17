@@ -693,7 +693,7 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
             {selected.state === "library-sync" && <button disabled={syncBusy} onClick={() => void sync()}>Bibliothek jetzt abgleichen</button>}
             <div className="request-detail-tools">
               <QualityEditor requestId={selected.id} onChange={refresh} />
-              <RequestActions id={selected.id} onChange={refresh} />
+              <RequestActions id={selected.id} canApprove={selected.state === "pending"} onChange={refresh} />
               <RequestDiagnosis id={selected.id} onChange={refresh} />
               {selected.type === "tv" && <RequestEpisodes requestId={selected.id} seasons={selected.seasons} />}
               {selected.type === "movie" && <MovieRemoval requestId={selected.id} onChange={refresh} />}

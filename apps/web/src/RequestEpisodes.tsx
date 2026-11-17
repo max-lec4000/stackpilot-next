@@ -1,3 +1,4 @@
+import { ImportedReplacement } from "./ImportedReplacement";
 import { useEffect, useState } from "react";
 import { action } from "./RetirementPanel";
 import { get } from "./ServerCheck";
@@ -134,6 +135,7 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
             <li key={episode.id}>
               Folge {episode.number}{episode.title ? ` · ${episode.title}` : ""}
               {episode.hasFile ? <> · Datei vorhanden
+                <ImportedReplacement requestId={requestId} episodeId={episode.id} />
                 {episode.removableFileId && <> <button disabled={busy} className="danger" onClick={() => void remove(episode)}>
                   Datei von Folge {episode.number} löschen
                 </button></>}

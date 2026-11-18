@@ -1,3 +1,4 @@
+import { createCappedCouchdeckRequest } from "./couchdeck-film-requests.js";
 import { inspectPath } from "./inventory.js";
 import { storageHealth } from "../../packages/domain/storage-health.js";
 import { LiveCache, allArrQueue, requestPage } from "./request-index.js";
@@ -200,10 +201,7 @@ export class MediaHub {
           const normalize = (value) => String(value || "").toLowerCase().replaceAll("-", "");
           if (!user?.jellyfinUserId || normalize(user.jellyfinUserId) !== normalize(couchdeck.owner))
             throw Error("Das Seerr-Konto konnte nicht dem Wohnzimmer-Konto zugeordnet werden.");
-          // The administrative actor used for an explicit profile would otherwise
-          // auto-approve on behalf of viewers whose requests require approval.
-          if (!Number.isSafeInteger(user.permissions) || !(user.permissions & (128 | 256)))
-            throw Error("Diese Anfrage benötigt eine Freigabe. Mit eigener Couchdeck-Größengrenze ist sie noch nicht möglich; bitte in Seerr anfragen oder die eigene Filmgrenze in Couchdeck ausschalten.");
+
         }
         if (typeof plan.spec.path === "string") {
           const storage = storageHealth(await this.storage(plan.spec.path));
@@ -218,7 +216,7 @@ export class MediaHub {
         const active = (detail.mediaInfo?.requests || []).filter(
           (r) => ![3, 5].includes(r.status),
         );
-        if (type === "movie" && active.length)
+        if (type === "movie" && active.length && !couchdeck)
           throw Error("Dieses Medium wurde bereits angefragt.");
         let seasons;
         if (type === "tv") {
@@ -309,7 +307,7 @@ export class MediaHub {
             if (state?.status !== 1)
               throw Error("Seerr hat den Status nicht zurückgesetzt.");
           }
-          const r = await s.additional.seerr("/request", {
+          const r = couchdeck ? await createCappedCouchdeckRequest(this, s, plan, couchdeck, id, sizePolicy, detail) : await s.additional.seerr("/request", {
             method: "POST",
             body: {
               mediaType: type,

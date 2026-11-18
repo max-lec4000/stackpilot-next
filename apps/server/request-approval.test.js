@@ -15,7 +15,7 @@ function fixture({rate=2,capGiB=0,status=1,admin=true,failProfile=false}={}) {
     }
     throw Error(route);
   }}};
-  const hub={engine:{vault:{set(){}}},requireVpn:async()=>{calls.push(['vpn']);},mutate:async(_,f)=>f({s,plan:{id:'p'}}),sizeLimits:{
+  const hub={engine:{vault:{set(){},get(){return null;}}},requireVpn:async()=>{calls.push(['vpn']);},mutate:async(_,f)=>f({s,plan:{id:'p'}}),sizeLimits:{
     config:()=>({rate,capGiB}),forRequest:async(...args)=>{calls.push(['rule',args.slice(2)]);return {serverId:1,profileId:10};},verify:async()=>{calls.push(['verified']);}
   }};
   const lifecycle=new RequestLifecycle(hub,{target:async()=>({kind:'movie',mediaId:42,request:structuredClone(request)})});
@@ -39,4 +39,17 @@ test('approval requires confirmation, pending request and Seerr admin',async()=>
     assert.ok(!f.calls.some(c=>c[0]==='/request/7/approve'));
   }
   await assert.rejects(fixture().lifecycle.approve({requestId:7}));
+});
+
+test('Couchdeck pending cap overrides broader shared standard at approval',async()=>{
+ const f=fixture({rate:0,capGiB:10});
+ f.lifecycle.hub.engine.vault.get=()=>({requestId:7,userId:3,rule:{capGiB:2}});
+ await f.lifecycle.approve({requestId:7,confirmation:'OK'});
+ assert.deepEqual(f.calls.find(c=>c[0]==='rule')[1],[{runtime:120},0,2]);
+});
+
+test('unassigned preparation account cannot be approved in StackPilot',async()=>{
+ const f=fixture();f.lifecycle.hub.engine.vault.get=()=>({requestId:7,userId:99,rule:{capGiB:2}});
+ await assert.rejects(f.lifecycle.approve({requestId:7,confirmation:'OK'}),/zugeordnet/);
+ assert.ok(!f.calls.some(c=>c[0]==='/request/7/approve'));
 });

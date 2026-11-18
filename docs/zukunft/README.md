@@ -55,9 +55,11 @@ Ursprünglicher Umfang und Nachweise:
 
 Umsetzung vom 17.11.2026: Freigabe in StackPilot, automatische Freigaben je
 Zuschauer sowie expliziter Film-/Einzelfolgenersatz mit Sicherung und Rückimport.
-Noch offen: Couchdecks eigene feste Filmgrenze auch für freigabepflichtige
-Anfragen sicher unterstützen. Der besondere Dienstkonto-Anfrageweg wird für
-solche Konten gesperrt; persönliche Standardanfragen bleiben möglich.
+Ergänzung vom 18.11.2026: Couchdecks eigene feste Filmgrenze funktioniert auch
+für freigabepflichtige Zuschauer. Vorbereitung ohne Freigaberechte, bestätigte
+Zuordnung und Beibehaltung der Grenze bei der späteren Freigabe sind umgesetzt.
+Der direkte Verwaltungszugriff im Tailnet hat eine Diagnose und eine auf einzelne
+Geräte begrenzte Regelvorlage; die tatsächliche Freigabe erfolgt im Tailscale-Konto.
 
 Ursprünglicher Umfang:
 
@@ -109,12 +111,11 @@ Ursprünglicher Umfang:
 
 ### Phase 5 · Abnahmen und Wartung
 
-- **StackPilot direkt im privaten Tailnet erreichen.** Zugriff über den
-  Tailscale-Gerätenamen bzw. die Tailnet-Adresse ermöglichen, ohne SSH-Tunnel.
-  Dienstbindung, MagicDNS, Tailnet-Zugriffsregeln und zulässige Host-/Origin-
-  Adressen zusammen prüfen. LAN-Zugriff bleibt erhalten. Die Verwaltungsoberfläche
-  bleibt privat und wird nicht über Funnel öffentlich freigegeben. Diagnose und
-  verständliche Hinweise für fehlende Freigaben ergänzen.
+- **Privater StackPilot-Tailnet-Zugriff umgesetzt.** Unter Externer Zugriff
+  stehen Diagnose, Adresse und eine Regelvorlage für eigene Verwaltungsgeräte
+  bereit. Zugriff samt Anmeldung vom zweiten Gerät zur Test-VM geprüft.
+  Fehlende Regeln müssen einmalig im Tailscale-Konto ergänzt werden; keine
+  öffentliche Funnel-Freigabe der Verwaltung.
 
 - **Geschütztes Jellyfin mit einer neueren stabilen Version prüfen.**
   Versionswechsel, Authentik-Anmeldung und Rollback abnehmen. Der

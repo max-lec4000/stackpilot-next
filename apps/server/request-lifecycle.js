@@ -1,3 +1,4 @@
+import { couchdeckFilmKey } from "./couchdeck-film-requests.js";
 import { createHash, randomUUID } from "node:crypto";
 import { positiveId } from "./media-hub.js";
 import { activeSearch } from "../../packages/domain/search-status.js";
@@ -42,14 +43,19 @@ export class RequestLifecycle {
       const target = await this.diagnostics.target(s, id);
       if (target.request.status !== 1) throw Error("Die Anfrage wartet nicht mehr auf Freigabe. Neu laden.");
       if (target.kind === "movie") {
-        const setting = this.hub.sizeLimits.config(plan);
+        const capped = this.hub.engine.vault.get?.(couchdeckFilmKey(plan, target.mediaId));
+        if (capped?.requestId === id && capped.userId !== target.request.requestedBy?.id)
+          throw Error("Die Couchdeck-Anfrage ist noch keinem bestätigten Zuschauer zugeordnet. Zuerst in Couchdeck erneut anfragen, um die Vorbereitung fortzusetzen.");
+        const ownCap = capped?.requestId === id && capped.userId === target.request.requestedBy?.id ? capped.rule?.capGiB : 0;
+        const setting = ownCap ? {rate:0,capGiB:ownCap} : this.hub.sizeLimits.config(plan);
         if (setting.rate || setting.capGiB) {
           const detail = await s.additional.seerr(`/movie/${target.mediaId}?language=de`);
           const rule = await this.hub.sizeLimits.forRequest(s, plan, detail, setting.rate, setting.capGiB || 0);
           const r = target.request;
           await s.additional.seerr(`/request/${id}`, { method: "PUT", body: {
             mediaType: "movie", serverId: rule.serverId, profileId: rule.profileId,
-            rootFolder: r.rootFolder, tags: r.tags,
+            ...(typeof r.rootFolder === 'string' ? {rootFolder:r.rootFolder} : {}),
+            ...(Array.isArray(r.tags) ? {tags:r.tags} : {}),
           } });
           const saved = await s.additional.seerr(`/request/${id}`);
           if (saved.status !== 1 || saved.profileId !== rule.profileId || saved.serverId !== rule.serverId ||

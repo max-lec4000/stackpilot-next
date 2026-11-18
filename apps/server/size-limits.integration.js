@@ -1,4 +1,6 @@
-// Real pinned Radarr, isolated files, no media requests or downloads.
+import { DatabaseSync } from "node:sqlite";
+import { createCappedCouchdeckRequest } from "./couchdeck-film-requests.js";
+// Fresh native Radarr/Seerr, isolated files and pending fixture request; no download providers.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -85,6 +87,18 @@ test(
       await shared.configure(s,plan,{rate:0,capGiB:0});
       assert.equal((await s.additional.seerr('/settings/radarr')).find(v=>v.id===initialServer.id).activeProfileId,initialServer.activeProfileId);
       console.log('FRESH_SHARED_STANDARD_AND_RESTORE_CONFIRMED');
+      const db = new DatabaseSync(plan.appdata + '/seerr/db/db.sqlite3');
+      const viewerId = Number(db.prepare('INSERT INTO user (email,permissions,userType,jellyfinUserId,jellyfinUsername,avatar) VALUES(?,?,?,?,?,?)')
+        .run('capped-fixture@example.invalid',32,3,'fixture-jellyfin-owner','fixture-viewer','').lastInsertRowid);
+      db.close();
+      const rule={...await limits.ensureCap(s,plan,2),serverId:initialServer.id};
+      const cappedHub={engine:{vault},sizeLimits:limits};
+      const pending=await createCappedCouchdeckRequest(cappedHub,s,plan,{owner:'fixture-jellyfin-owner',userId:viewerId,capGiB:2},10378,rule,await s.additional.seerr('/movie/10378'));
+      assert.equal(pending.status,1);assert.equal(pending.requestedBy.id,viewerId);
+      assert.equal((await s.arr('Radarr','/movie')).length,0);
+      assert.equal((await s.additional.seerr('/user/'+viewerId)).permissions,32);
+      console.log('FRESH_COUCHDECK_CAPPED_PENDING_REQUEST_CONFIRMED');
+
       const format = await s.arr("Radarr", `/customformat/${bound.formatId}`);
       format.specifications[0].fields.find((f) => f.name === "max").value = 12;
       await s.arr("Radarr", `/customformat/${bound.formatId}`, {

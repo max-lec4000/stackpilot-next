@@ -331,12 +331,21 @@ man verknüpften Zuschauerkonten automatische Freigaben geben oder entziehen.
 Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
 Konten mit Verwaltungsrechten werden hier nicht verändert.
 
-Couchdecks eigene feste Filmgrenze verwendet einen besonderen Anfrageweg.
-Für Konten ohne automatische Filmfreigabe ist dieser Weg gesperrt, damit das
-Dienstkonto keine Freigabe umgeht. Dann die eigene Couchdeck-Filmgrenze ausschalten
-und mit der persönlichen Seerr-Anmeldung anfragen oder direkt Seerr verwenden.
-Der gemeinsame Standard bleibt wirksam. Unterstützung der eigenen Couchdeck-Grenze
-für freigabepflichtige Anfragen ist noch offen.
+Couchdecks eigene feste Filmgrenze funktioniert auch bei Konten mit Freigabepflicht.
+Die Anfrage wird zunächst mit der gewünschten Grenze ohne Freigabe vorbereitet
+und dem persönlichen Zuschauer zugeordnet. Sie erscheint unter „Meine Anfragen“
+als wartend. Die Freigabe in StackPilot behält diese Grenze bei, selbst wenn der
+allgemeine Filmstandard größer ist. Bei erlaubter automatischer Freigabe wird sie
+nach bestätigter Zuordnung automatisch genehmigt. Die Zuschauerrechte bleiben
+unverändert; Couchdeck erhält keinen Seerr-Administratorschlüssel.
+
+Dafür legt StackPilot bei der ersten solchen Anfrage ein internes Seerr-Konto
+„StackPilot Anfragevorbereitung“ an. Dieses Konto besitzt ausschließlich
+Anfrage- und Profilauswahlrechte, keine Freigabe- oder Verwaltungsrechte.
+Nicht manuell erweitern. Bei einem unterbrochenen Aufruf denselben Film mit derselben
+Grenze erneut anfragen: StackPilot nimmt die Vorbereitung wieder auf. Eine noch
+nicht zugeordnete Vorbereitung nicht in Seerr freigeben. In StackPilot bleibt ihre
+Freigabe gesperrt, bis die Zuordnung bestätigt ist.
 
 **Verwaltung → Medienbestand** zeigt auch Serien, deren Anfrage bereits entfernt
 wurde. Serie, optional Staffel und anschließend eine Folge auswählen und die
@@ -364,3 +373,29 @@ Platz vorhanden sein. Die Wiederherstellung entfernt den Ersatztransfer aus
 qBittorrent, bewahrt dessen Dateien aber auf. Bei abweichenden Profilen, nicht
 zuordenbaren Dateien oder Importfehlern den angezeigten Befund prüfen; die Sicherung
 bleibt erhalten. Eine fehlende oder veränderte Sicherung wird nicht verwendet.
+
+
+## StackPilot direkt im privaten Tailnet
+
+Unter **Verwaltung → Externer Zugriff → StackPilot im privaten Tailnet** auf
+**Privaten StackPilot-Zugriff prüfen** klicken. Die Prüfung zeigt die Serveradresse
+mit Port 5173 und eine IP-Adresse als Alternative zu MagicDNS. Die Installation
+bindet StackPilot bereits an LAN und Tailnet; ein fehlendes Tailscale-Zugriffsrecht
+kann trotzdem Verbindungen von anderen Geräten verhindern.
+
+Die Tailscale-IP des eigenen Verwaltungsgeräts eintragen und **Passende
+Zugriffsregel anzeigen** wählen. Den erzeugten Eintrag im bestehenden `grants`-Array
+unter [Tailscale Access controls](https://login.tailscale.com/admin/acls) ergänzen.
+Bestehende Regeln behalten. Die Vorlage erlaubt nur den angegebenen Geräten
+TCP 5173 auf diesem Server, keine weiteren Dienstports und keine Öffentlichkeit.
+Für zusätzliche eigene Geräte deren Tailscale-Adressen ergänzen.
+
+Danach auf dem Verwaltungsgerät `http://<Tailscale-Gerätename>:5173` öffnen,
+anmelden und die Prüfung wiederholen. Erst „Diese Anfrage erreicht StackPilot
+bereits über das private Tailnet“ bestätigt den tatsächlichen Gerätezugriff.
+Ein lokaler Selbsttest oder ein SSH-Tunnel wird nicht als solcher Nachweis gezählt.
+Bei gesperrter Verbindungsannahme meldet die Oberfläche dies gesondert. Die
+Zugriffsregeln werden nicht automatisch verändert. HTTP bleibt innerhalb des
+verschlüsselten Tailscale-Verbindungswegs; Funnel und die Jellyfin-Freigaben werden
+nicht verändert. Hintergrund zur gezielten Portfreigabe:
+[Tailscale-Grants](https://tailscale.com/docs/features/access-control/grants).

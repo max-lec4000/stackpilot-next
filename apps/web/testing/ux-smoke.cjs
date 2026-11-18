@@ -138,6 +138,8 @@ async function mockAPI(page, f) {
     let json;
     switch (endpoint) {
       case "/api/couchdeck": json = { installed: true, state: "running", version: "0.2.0", updateVersion: f.couchdeckUpdate ? "0.2.6" : null, controllable: true, linked: { user: "wohnzimmer", seerr: true }, helper: { available: true, running: null, failed: null } }; break;
+      case "/api/admin-tailnet": json={addresses:['100.80.0.2'],url:'http://testserver.example.ts.net:5173',ipUrl:'http://100.80.0.2:5173',reachedViaTailnet:false,message:'Server vorbereitet; Gerätezugriff gesondert prüfen.'};break;
+      case "/api/admin-tailnet/grant": json={grant:{src:[body.sources],dst:[body.target],ip:['tcp:5173']}};break;
       case "/api/remote-setup": json = { status: f.viewerSetup ? "completed" : "idle", running: false, steps: [], error: null, result: null }; break;
       case "/api/viewers/action":
       case "/api/viewers":
@@ -805,6 +807,11 @@ async function run() {
     assert.equal(await protectedRow.getByRole("button", { name: "Geschützt fortsetzen", exact: true }).isDisabled(), true);
     f.viewerSetup = true;
     await page.goto(baseURL + "/#/verwaltung/remote");
+    await page.getByRole('button',{name:'Privaten StackPilot-Zugriff prüfen',exact:true}).click();
+    await page.getByRole('link',{name:'StackPilot im Tailnet öffnen',exact:true}).waitFor();
+    await page.getByLabel('Tailscale-IP deiner Verwaltungsgeräte',{exact:true}).fill('100.80.0.1');
+    await post(page,'/api/admin-tailnet/grant',()=>page.getByRole('button',{name:'Passende Zugriffsregel anzeigen',exact:true}).click());
+    await page.locator('pre').filter({hasText:'tcp:5173'}).waitFor();
     await page.getByText("Anfragen ohne Freigabe", {exact:true}).click();
     await post(page,"/api/viewer-requests",()=>page.getByRole('button',{name:'Neue Filme und Serien automatisch freigeben',exact:true}).click());
     assert.equal(f.autoApprove,true);

@@ -1,3 +1,4 @@
+import { AdminTailnetPanel } from "./AdminTailnet";
 import { FunnelPreview } from "./FunnelPreview";
 import { IdentityBackups } from "./IdentityBackups";
 import { RemoteSetupPanel } from "./RemoteSetupPanel";
@@ -7,6 +8,7 @@ import { Disclosure, SectionHeading } from "./ui";
 export function RemoteAccessView() {
   return (
     <>
+      <AdminTailnetPanel />
       <RemoteSetupPanel />
       <section className="managed-services" aria-label="Öffentlich über das Internet">
         <SectionHeading

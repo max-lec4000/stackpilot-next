@@ -1,3 +1,4 @@
+import { AdminTailnet, adminGrant } from "./admin-tailnet.js";
 import { ImportedReplacement } from "./imported-replacement.js";
 import { SeriesRemoval } from "./series-removal.js";
 import { SharedFilmStandard } from "./shared-film-standard.js";
@@ -134,6 +135,7 @@ export function inventoryMiddleware(options = {}) {
     identitySettings,
     oidcBackchannel,
   );
+  const adminTailnet = new AdminTailnet();
   const viewers = new Viewers(identity);
   const viewerRequests = new ViewerRequests(hub, ssoConnection, viewers);
   const viewerProfiles = new ViewerProfiles(hub, ssoConnection, viewers);
@@ -573,6 +575,8 @@ export function inventoryMiddleware(options = {}) {
         );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
         result = await managedServices(installer(), host, appUpdates);
+      } else if (url.pathname === "/api/admin-tailnet" && req.method === "GET") {
+        result = await adminTailnet.inspect(remoteAddress);
       } else if (url.pathname === "/api/media/replacements" && req.method === "GET") {
         result = await importedReplacement.jobs();
       } else if (url.pathname === "/api/media/series-inventory" && req.method === "GET") {
@@ -758,6 +762,10 @@ export function inventoryMiddleware(options = {}) {
           if (!(await manager.reauthenticate(body.password, remoteAddress)))
             throw Error("Administratorpasswort stimmt nicht.");
           result = identity.credentials();
+        } else if (url.pathname === "/api/admin-tailnet/grant") {
+          const access = await adminTailnet.inspect(remoteAddress);
+          if (!access.addresses.includes(body.target)) throw Error("Nur eine bestätigte eigene Tailnet-Adresse verwenden.");
+          result = {grant:adminGrant(body.sources,body.target)};
         } else if (url.pathname === "/api/media/replacement/preview")
           result = await importedReplacement.preview(body);
         else if (url.pathname === "/api/media/replacement/start")

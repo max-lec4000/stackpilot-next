@@ -106,7 +106,7 @@ test(
       const viewerId = Number(db.prepare('INSERT INTO user (email,permissions,userType,jellyfinUserId,jellyfinUsername,avatar) VALUES(?,?,?,?,?,?)')
         .run('fixture-viewer@example.invalid', 32, 3, 'fixture-jellyfin-id', 'fixture-viewer', '').lastInsertRowid);
       const viewerRequests = new ViewerRequests(hub,
-        {context: async () => ({request: async () => ({stackpilot:{CanonicalLinks:{'fixture-viewer':'fixture-jellyfin-id'}}})})},
+        {context: async () => ({request: async () => ({stackpilot:{CanonicalLinks:{'spv_fixture-viewer':'fixture-jellyfin-id'}}})})},
         {list: async () => ({viewers:[{username:'fixture-viewer',active:true}]})});
       assert.equal((await viewerRequests.list()).viewers[0].editable,true);
       await viewerRequests.change({username:'fixture-viewer',userId:viewerId,previousPermissions:32,enabled:true,confirmation:'OK'});

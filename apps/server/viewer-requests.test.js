@@ -21,3 +21,16 @@ test('viewer permission writes require the same linked user and previous permiss
   await service.change({confirmation:'OK',username:'viewer',enabled:true,userId:4,previousPermissions:32});
   assert.deepEqual(writes[0].body,{username:'viewer',permissions:160});
 });
+test('viewer mapping uses managed spv account and distinguishes missing Seerr account',async()=>{
+ const users=[{id:3,jellyfinUserId:'aabb',permissions:32},{id:4,jellyfinUserId:'ccdd',permissions:2}];
+ const service=new ViewerRequests({context:async()=>({s:{additional:{seerr:async()=>({results:users})}}})},
+  {context:async()=>({request:async()=>({stackpilot:{CanonicalLinks:{spv_max:'aa-bb',spv_flo:'eeff',spv_admin:'ccdd'}}})})},
+  {list:async()=>({viewers:['max','flo','admin','new'].map(username=>({username,active:true}))})});
+ const rows=(await service.list()).viewers;
+ assert.equal(rows[0].editable,true);assert.equal(rows[0].userId,3);
+ assert.equal(rows[1].editable,false);assert.match(rows[1].reason,/Seerr-Konto/);
+ assert.equal(rows[2].editable,false);assert.match(rows[2].reason,/Verwaltungsrechte/);
+ assert.equal(rows[3].editable,false);assert.match(rows[3].reason,/Jellyfin-Anmeldung/);
+ users.push({id:5,jellyfinUserId:'aabb',permissions:32});
+ const ambiguous=(await service.list()).viewers[0];assert.equal(ambiguous.editable,false);assert.match(ambiguous.reason,/Mehrere/);
+});

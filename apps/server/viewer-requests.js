@@ -23,17 +23,21 @@ export class ViewerRequests {
       if(skip===9900)throw Error('Seerr-Nutzerliste zu groß für einen sicheren Abgleich.');
     }
     const rows=viewers.filter(v=>v.active).map(v=>{
-      const link=normalize(links[v.username]);
+      const link=normalize(links["spv_" + v.username]);
       const matches=users.filter(u=>link && normalize(u.jellyfinUserId)===link);
       const user=matches.length===1?matches[0]:null;
       const permissions=user?.permissions;
       const editable=!!user && user.id!==1 && Number.isSafeInteger(permissions) && !(permissions & (2|16));
-      return {username:v.username,user,editable};
+      const reason = !link ? 'Noch keine bestätigte Jellyfin-Anmeldung. Zuerst einmal als Zuschauer anmelden.'
+        : matches.length === 0 ? 'Noch kein verknüpftes Seerr-Konto. Einmal mit diesem Jellyfin-Konto bei Seerr oder über Quick Connect in der Streamyfin-Seerr-Anbindung anmelden, danach diesen Bereich neu öffnen.'
+        : matches.length > 1 ? 'Mehrere Seerr-Konten sind mit demselben Jellyfin-Konto verknüpft. Zuordnung in Seerr prüfen.'
+        : !editable ? 'Dieses Seerr-Konto besitzt Verwaltungsrechte oder unbestätigte Rechte. Hier werden nur normale Zuschauerkonten geändert.' : null;
+      return {username:v.username,user,editable,reason};
     });
     return {s,rows};
   }
   project(rows) {
-    return {viewers:rows.map(({username,user,editable})=>({username,editable,
+    return {viewers:rows.map(({username,user,editable,reason})=>({username,editable,reason,
       userId:user?.id ?? null, permissions: user?.permissions ?? null,
       autoApprove:!!(user?.permissions & 128),
       movieAutoApprove:!!(user?.permissions & (128|256)),tvAutoApprove:!!(user?.permissions & (128|512)),

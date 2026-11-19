@@ -329,14 +329,16 @@ nativen Regeln werden gemeldet; eigene Seerr-Profilregeln müssen vor einer
 Standard ausgeschaltet oder auf eine feste Grenze umgestellt wird.
 
 **Meine Anfragen → Details → Anfrage freigeben** genehmigt wartende Seerr-Anfragen.
-Unter **Verwaltung → Externer Zugriff → Zuschauer → Anfragen ohne Freigabe** kann
-man verknüpften Zuschauerkonten automatische Freigaben geben oder entziehen.
-Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
-Konten mit Verwaltungsrechten werden hier nicht verändert. Ist der Knopf gesperrt,
-zeigt der Bereich den konkreten Grund. Bei einem fehlenden Seerr-Konto einmal
-mit dem zugehörigen Jellyfin-Zuschauerkonto bei Seerr anmelden und den Bereich
-anschließend neu öffnen. Der angezeigte Zuschauername wird automatisch dem
-verwalteten Jellyfin-Konto mit Präfix `spv_` zugeordnet.
+Unter **Verwaltung → Externer Zugriff → Zuschauer → Freigabe für Anfragen** hat
+jeder Zuschauer einen Schalter: an = neue Film- und Serienanfragen brauchen eine
+Freigabe, aus = sie laufen automatisch (Seerr-Rechte Anfragen + automatische
+Freigabe). Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
+Konten mit Verwaltungsrechten werden hier nicht verändert. Ist ein Schalter
+gesperrt, steht der konkrete Grund darunter. Hat ein Zuschauer noch kein
+Seerr-Konto, legt StackPilot es beim Ausschalten aus seinem Jellyfin-Zuschauerkonto
+an (Seerr-Import) und prüft danach, dass es keine Verwaltungsrechte hat. Der
+angezeigte Zuschauername wird automatisch dem verwalteten Jellyfin-Konto mit
+Präfix `spv_` zugeordnet.
 
 Couchdecks eigene feste Filmgrenze funktioniert auch bei Konten mit Freigabepflicht.
 Die Anfrage wird zunächst mit der gewünschten Grenze ohne Freigabe vorbereitet

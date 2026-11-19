@@ -81,3 +81,19 @@
 .remote-setup-invitation code { overflow-wrap: anywhere; }
 .remote-setup-viewers { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
 .remote-setup-viewers .couchdeck-actions { display: inline-flex; margin: 0 0 0 0.75rem; }
+
+/* Freigabe für Anfragen: ein Schalter pro Zuschauer */
+.viewer-requests { margin: 1rem 0; }
+.viewer-requests h4 { margin: 0 0 0.25rem; }
+.viewer-request-list { list-style: none; padding: 0; margin: 0.5rem 0 0; display: grid; gap: 0.5rem; }
+.switch { display: flex; align-items: center; gap: 0.75rem; cursor: pointer; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.switch.disabled { cursor: default; opacity: 0.8; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; flex: 0 0 auto; width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--border-strong); transition: background 0.15s; }
+.switch-thumb { position: absolute; top: 0.2rem; left: 0.2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--surface); transition: transform 0.15s; }
+.switch input:checked + .switch-track { background: var(--accent); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(1.1rem); }
+.switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch input:disabled + .switch-track { opacity: 0.5; }
+.switch-text { display: grid; gap: 0.1rem; }
+.switch-text span { font-size: 0.9em; color: var(--muted, inherit); }

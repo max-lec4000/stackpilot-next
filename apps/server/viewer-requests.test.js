@@ -28,9 +28,44 @@ test('viewer mapping uses managed spv account and distinguishes missing Seerr ac
   {list:async()=>({viewers:['max','flo','admin','new'].map(username=>({username,active:true}))})});
  const rows=(await service.list()).viewers;
  assert.equal(rows[0].editable,true);assert.equal(rows[0].userId,3);
- assert.equal(rows[1].editable,false);assert.match(rows[1].reason,/Seerr-Konto/);
+ assert.equal(rows[1].editable,true);assert.equal(rows[1].needsAccount,true);assert.equal(rows[1].reason,null);
  assert.equal(rows[2].editable,false);assert.match(rows[2].reason,/Verwaltungsrechte/);
  assert.equal(rows[3].editable,false);assert.match(rows[3].reason,/Jellyfin-Anmeldung/);
  users.push({id:5,jellyfinUserId:'aabb',permissions:32});
  const ambiguous=(await service.list()).viewers[0];assert.equal(ambiguous.editable,false);assert.match(ambiguous.reason,/Mehrere/);
+});
+
+test('fehlendes Seerr-Konto wird beim Umschalten aus dem verknüpften Jellyfin-Konto angelegt',async()=>{
+  const users=[{id:3,jellyfinUserId:'aabb',permissions:32}];
+  const writes=[];
+  const s={additional:{seerr:async(route,options)=>{
+    if(route==='/user/import-from-jellyfin'){writes.push(['import',options.body]);users.push({id:7,jellyfinUserId:'EE-FF',permissions:32,username:'spv_flo'});return [];}
+    if(route.startsWith('/user?'))return {results:structuredClone(users)};
+    const id=Number(route.split('/')[2]);const u=users.find(x=>x.id===id);
+    if(options?.method==='PUT'){writes.push(['put',id,options.body]);Object.assign(u,options.body);}
+    return structuredClone(u);
+  }}};
+  const service=new ViewerRequests({context:async()=>({s}),mutate:async(_,f)=>f()},
+    {context:async()=>({request:async()=>({stackpilot:{CanonicalLinks:{spv_flo:'ee-ff'}}})})},
+    {list:async()=>({viewers:[{username:'flo',active:true}]})});
+  // Oberfläche muss den Zustand „kein Konto“ gesehen haben
+  await assert.rejects(service.change({confirmation:'OK',username:'flo',enabled:true,userId:7,previousPermissions:32}));
+  assert.equal(writes.length,0);
+  await service.change({confirmation:'OK',username:'flo',enabled:true,userId:null,previousPermissions:null});
+  assert.deepEqual(writes[0],['import',{jellyfinUserIds:['eeff']}]);
+  assert.deepEqual(writes[1],['put',7,{username:'spv_flo',permissions:160}]);
+  const row=(await service.list()).viewers[0];
+  assert.equal(row.needsAccount,false);assert.equal(row.autoApprove,true);
+});
+
+test('angelegtes Konto mit Verwaltungsrechten wird nicht verändert',async()=>{
+  const users=[];
+  const s={additional:{seerr:async(route)=>{
+    if(route==='/user/import-from-jellyfin'){users.push({id:8,jellyfinUserId:'eeff',permissions:2});return [];}
+    return {results:structuredClone(users)};
+  }}};
+  const service=new ViewerRequests({context:async()=>({s}),mutate:async(_,f)=>f()},
+    {context:async()=>({request:async()=>({stackpilot:{CanonicalLinks:{spv_flo:'eeff'}}})})},
+    {list:async()=>({viewers:[{username:'flo',active:true}]})});
+  await assert.rejects(service.change({confirmation:'OK',username:'flo',enabled:true,userId:null,previousPermissions:null}),/unerwartete Rechte/);
 });

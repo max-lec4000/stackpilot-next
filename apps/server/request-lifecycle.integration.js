@@ -114,6 +114,25 @@ test(
       await viewerRequests.change({username:'fixture-viewer',userId:viewerId,previousPermissions:160,enabled:false,confirmation:'OK'});
       assert.equal((await native.additional.seerr(`/user/${viewerId}`)).permissions,32);
       console.log('NATIVE_VIEWER_APPROVAL_RIGHTS_CONFIRMED');
+      // Zuschauer ohne Seerr-Konto: der Schalter legt es aus dem Jellyfin-Konto an.
+      const jfAdmin = await native.additional.jellyfinLogin("fixture-viewer-import");
+      const jfHeader = { Authorization: `MediaBrowser Client="StackPilot", Device="fixture", DeviceId="fixture-viewer-import", Version="0.1.0", Token="${jfAdmin.AccessToken}"` };
+      const jfUser = await native.request("Jellyfin", "/Users/New", { method: "POST", headers: jfHeader,
+        body: { Name: "spv_fixture-new", Password: randomUUID() } });
+      const importing = new ViewerRequests(hub,
+        {context: async () => ({request: async () => ({stackpilot:{CanonicalLinks:{'spv_fixture-new':jfUser.Id}}})})},
+        {list: async () => ({viewers:[{username:'fixture-new',active:true}]})});
+      const before = (await importing.list()).viewers[0];
+      assert.equal(before.needsAccount, true);
+      assert.equal(before.editable, true);
+      await importing.change({username:'fixture-new',userId:null,previousPermissions:null,enabled:true,confirmation:'OK'});
+      const after = (await importing.list()).viewers[0];
+      assert.equal(after.needsAccount, false);
+      assert.equal(after.autoApprove, true);
+      assert.equal((await native.additional.seerr(`/user/${after.userId}`)).permissions, 160);
+      await importing.change({username:'fixture-new',userId:after.userId,previousPermissions:160,enabled:false,confirmation:'OK'});
+      assert.equal((await native.additional.seerr(`/user/${after.userId}`)).permissions, 32);
+      console.log('NATIVE_VIEWER_ACCOUNT_IMPORT_CONFIRMED');
       const records = new RequestRecords(store),
         lifecycle = new RequestLifecycle(
           hub,

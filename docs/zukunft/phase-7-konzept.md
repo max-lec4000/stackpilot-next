@@ -148,8 +148,19 @@ vorhandenen Tests und einer VM-Abnahme.
   Bestätigung) und hält die 27 Passwort-Routen fest. Nachweise in sp-test: 349 Tests; alle
   Lese-Routen 200; Meldungen wie bisher; echter Sonarr-Schlüsselwechsel und
   Tresor-Sicherung über die neuen Routen; alle Seiten im Browser ohne Fehler.
-- Offen in 7.0a: weitere App-Adapter (Jellyfin, ARR-Dienste, qBittorrent, Authentik) und
-  gemeinsame Oberflächen-Bausteine.
+- **Weitere App-Adapter** (`adapters/arr.js`, `qbittorrent.js`, `jellyfin.js`,
+  `authentik.js`), je mit einem umgestellten Nutzer: Radarr-Profilzuweisung der
+  Filmgrenze (zurückgelesen), Download-Aktionen (Anhalten/Fortsetzen/Entfernen jetzt mit
+  Bestätigung durch qBittorrent), Jellyfin-Anwendungsschlüssel beim Seerr-Tokenwechsel,
+  gemeinsamer Authentik-Skriptlauf für Zuschauer und Systemeinstellungen. Übrige direkte
+  App-Aufrufe (~400) ziehen mit 7.1–7.4 bereichsweise um.
+- **Gefundener Fehler behoben:** Nach einer Authentik-Sicherung (und „lokal fortsetzen“)
+  zeigte das Identitäts-Gateway auf eine veraltete interne Adresse des Authentik-Servers –
+  die Zuschauer-Anmeldung brach ab (Discovery 404), bis das Gateway neu startete. Jetzt
+  lädt StackPilot das Gateway nach jedem Authentik-Start neu (`startAuthentication`).
+  Nachweis in sp-test: Fehler nachgestellt und behoben, neue Sicherung → Gateway-Prozesse
+  1 s nach dem Server neu, Anmeldung mit MFA erfolgreich.
+- Offen in 7.0a: gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)
 

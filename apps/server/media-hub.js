@@ -1,3 +1,4 @@
+import { qbitAdapter } from "./adapters/qbittorrent.js";
 import { createCappedCouchdeckRequest } from "./couchdeck-film-requests.js";
 import { inspectPath } from "./inventory.js";
 import { storageHealth } from "../../packages/domain/storage-health.js";
@@ -708,21 +709,13 @@ export class MediaHub {
         (!plan.spec.vpn || plan.id !== this.guard.checkedPlanId)
       )
         throw Error("VPN-Zustand hat sich geändert.");
-      const list = await s.qbit("/torrents/info");
-      if (!list.some((t) => t.hash?.toLowerCase() === hash.toLowerCase()))
-        throw Error("Download nicht mehr vorhanden.");
-      if (body.action === "remove")
-        await s.qbit("/torrents/delete", {
-          hashes: hash,
-          deleteFiles: body.deleteFiles === true ? "true" : "false",
-        });
-      else if (body.action === "priority")
-        await s.qbit("/torrents/" + priorities[body.priority], { hashes: hash });
-      else
-        await s.qbit(
-          body.action === "pause" ? "/torrents/stop" : "/torrents/start",
-          { hashes: hash },
-        );
+      const qbit = qbitAdapter(s);
+      if (!(await qbit.find(hash))) throw Error("Download nicht mehr vorhanden.");
+      // Anhalten, Fortsetzen und Entfernen gelten erst nach Bestätigung durch qBittorrent
+      if (body.action === "remove") await qbit.remove(hash, body.deleteFiles === true);
+      else if (body.action === "priority") await qbit.priority(hash, body.priority);
+      else if (body.action === "pause") await qbit.stop(hash);
+      else await qbit.start(hash);
       if (["pause", "remove"].includes(body.action)) {
         const key = `download-policy:${plan.rootId || plan.id}:paused`;
         const paused = this.engine.vault.get(key) || [];

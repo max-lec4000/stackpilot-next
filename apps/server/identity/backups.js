@@ -53,22 +53,21 @@ export class IdentityBackups {
       at: new Date().toISOString(),
     });
   }
+  /**
+   * Authentik-Server und -Worker starten und danach das Identitäts-Gateway neu laden: Der
+   * Server kann beim Start eine neue interne Adresse bekommen, nginx löst „server“ aber nur
+   * beim Laden auf. Ohne Neuladen lief die Anmeldung danach ins Leere (Discovery 404).
+   */
+  async startAuthentication(projectArgs, docker = localDocker) {
+    await docker([...projectArgs, "start", "server", "worker"], { timeout: 60000 });
+    await docker([...projectArgs, "exec", "-T", "gateway", "nginx", "-s", "reload"], { timeout: 30000 });
+  }
   async resume(body) {
     if (body.confirmation !== "OK")
       throw Error("Lokales Fortsetzen mit OK bestätigen.");
     return this.hub.mutate(["Jellyfin"], async () => {
       const r = await this.identity.verify();
-      await localDocker(
-        [
-          "compose",
-          "-f",
-          path.join(r.directory, "compose.json"),
-          "start",
-          "server",
-          "worker",
-        ],
-        { timeout: 60000 },
-      );
+      await this.startAuthentication(["compose", "-f", path.join(r.directory, "compose.json")]);
       this.markMaintenance(r, false);
       return {
         ok: true,
@@ -203,9 +202,7 @@ export class IdentityBackups {
       } finally {
         if (stopped) {
           try {
-            await localDocker([...projectArgs, "start", "server", "worker"], {
-              timeout: 60000,
-            });
+            await this.startAuthentication(projectArgs);
             this.markMaintenance(r, false);
           } catch {
             throw Error(

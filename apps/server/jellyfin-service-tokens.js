@@ -1,3 +1,4 @@
+import { JellyfinAdapter } from "./adapters/jellyfin.js";
 import { randomBytes } from "node:crypto";
 import { dockerInput } from "./docker-io.js";
 
@@ -113,9 +114,9 @@ export async function rotateSeerrJellyfinToken(s) {
 
   const admin = await s.additional.jellyfinLogin("seerr-token-maintenance");
   const headers = requestHeaders(admin.AccessToken);
+  const jellyfin = new JellyfinAdapter(s, headers);
   try {
-    const list = async () => (await s.request("Jellyfin", "/Auth/Keys", { headers })).Items;
-    const keys = await list();
+    const keys = await jellyfin.apiKeys();
     const staged = s.vault.get(journal);
     const previousKey = keys.find(row => row.AccessToken === (staged?.previous || settings.apiKey));
     if (staged?.appName || previousKey) {
@@ -132,22 +133,17 @@ export async function rotateSeerrJellyfinToken(s) {
         throw Error("Der vorhandene Jellyfin-Anwendungsschlüssel gehört nicht eindeutig zu Seerr.");
       if (!staged?.appName) s.vault.set(journal, state);
       let matches = keys.filter(row => row.AppName === state.appName);
-      if (!matches.length && !state.token) {
-        await s.request("Jellyfin", "/Auth/Keys?app=" + encodeURIComponent(state.appName), { method: "POST", headers })
-          .catch(() => {});
-        matches = (await list()).filter(row => row.AppName === state.appName);
-      }
+      if (!matches.length && !state.token) matches = await jellyfin.createApiKey(state.appName);
       const token = matches[0]?.AccessToken;
       if (matches.length !== 1 || !tokenPattern.test(token || "") ||
           token === state.previous || (state.token && state.token !== token))
         throw Error("Jellyfin hat keinen eindeutigen neuen Seerr-Anwendungsschlüssel ausgegeben.");
       s.vault.set(journal, { ...state, token });
-      if (normalize((await s.request("Jellyfin", "/System/Info", { headers: requestHeaders(token) })).Id) !== normalize(server.Id))
+      if (normalize((await jellyfin.systemInfoAs(requestHeaders(token))).Id) !== normalize(server.Id))
         throw Error("Der neue Seerr-Schlüssel gehört nicht zum verwalteten Jellyfin.");
       await switchTo(token);
-      if (previousKey)
-        await s.request("Jellyfin", "/Auth/Keys/" + state.previous, { method: "DELETE", headers }).catch(() => {});
-      if ((await list()).some(row => row.AccessToken === state.previous))
+      if (previousKey) await jellyfin.revokeApiKey(state.previous);
+      if (await jellyfin.hasApiKey(state.previous))
         throw Error("Der frühere Seerr-Anwendungsschlüssel konnte nicht widerrufen werden.");
       s.vault.set(journal, {});
       return { ok: true };
@@ -159,7 +155,7 @@ export async function rotateSeerrJellyfinToken(s) {
     await switchTo(state.token);
     return await finish(s, journal, state);
   } finally {
-    await s.request("Jellyfin", "/Sessions/Logout", { method: "POST", headers }).catch(() => {});
+    await jellyfin.logout();
   }
 }
 

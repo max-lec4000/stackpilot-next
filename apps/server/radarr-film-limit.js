@@ -1,3 +1,4 @@
+import { arrAdapter } from "./adapters/arr.js";
 import { randomUUID } from "node:crypto";
 import { profileSignature } from "./series-limits.js";
 
@@ -69,11 +70,8 @@ export async function saveAutomaticFilmLimit(s, vault, key, item, cap) {
     const latest = await arr(route);
     if (latest.tmdbId !== movie.tmdbId || latest.qualityProfileId !== movie.qualityProfileId)
       throw Error("Die Filmzuordnung wurde während der Prüfung geändert.");
-    if (latest.qualityProfileId !== pending.to)
-      await arr(route, { method: "PUT", body: { ...latest, qualityProfileId: pending.to } });
-    movie = await arr(route);
-    if (movie.tmdbId !== item.tmdbId || movie.qualityProfileId !== pending.to)
-      throw Error("Radarr hat die Profilzuweisung nicht bestätigt. Speichere die Grenze erneut.");
+    movie = await arrAdapter(s, "Radarr").assignMovieProfile(latest, pending.to, item.tmdbId,
+      "Radarr hat die Profilzuweisung nicht bestätigt. Speichere die Grenze erneut.");
     const previous = stored.rule;
     stored = pending.next ? { movieId: item.id, tmdbId: item.tmdbId, base: stored.base, rule: pending.next } : {};
     vault.set(key, stored);

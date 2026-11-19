@@ -3,15 +3,14 @@
 // Startpasswort. Die Person öffnet den Link, meldet sich an und richtet dabei selbst ihren
 // zweiten Faktor ein. Das Startpasswort wird genau einmal angezeigt und nirgends gespeichert.
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { dockerInput } from "../docker-io.js";
 import { setupError } from "./setup-error.js";
+import { runAuthentikScript } from "../adapters/authentik.js";
 import { passkeyEnrollment } from "./viewer-passkey-enrollment.js";
 import { viewerRecovery } from "./viewer-recovery.js";
 import { viewerMfa, viewerPasskey } from "./viewer-mfa.js";
 import { viewerPassword, viewerPasswordUpgrade } from "./viewer-password.js";
 
-const wrapper = `import io,json,sys\nv=json.loads(sys.stdin.read())\nsys.stdin=io.StringIO(json.dumps(v["request"]))\nexec(v["program"])`;
 export const viewerName = /^[a-z][a-z0-9_-]{2,31}$/;
 const messages = {
   exists: "Diesen Benutzernamen gibt es in Authentik schon.",
@@ -34,27 +33,17 @@ export class Viewers {
     const record = await this.identity.verify();
     if (record.status !== "local-ready")
       throw setupError("Authentik ist noch nicht eingerichtet.");
-    const rows = await this.identity.containers(record, true);
-    const workers = rows.filter(
-      (v) => v.Config.Labels["com.docker.compose.service"] === "worker" && v.State.Running,
-    );
-    if (workers.length !== 1) throw setupError("Authentik-Worker nicht eindeutig bereit.");
-    const program = await readFile(new URL("./viewers.py", import.meta.url), "utf8");
-    let out;
-    try {
-      out = await this.input(
-        ["exec", "-i", workers[0].Id, "ak", "shell", "-c", wrapper],
-        JSON.stringify({ program, request: { ...request, viewerRecovery, viewerMfa, viewerPasskey, viewerPassword, passkeyEnrollment,
-          ...(request.action === "improve-login" ? { passwordUpgrade: viewerPasswordUpgrade() } : {}) } }),
-        { timeout: 60000 },
-      );
-    } catch (e) {
-      // SystemExit mit Ergebniszeile landet in der Fehlerausgabe.
-      out = `${e.stdout || ""}\n${e.stderr || ""}\n${e.message || ""}`;
-    }
-    const line = out.split(/\n/).find((v) => v.includes("STACKPILOT_VIEWERS="));
-    if (!line) throw setupError("Authentik hat die Zuschauerliste nicht bestätigt.");
-    const result = JSON.parse(line.slice(line.indexOf("STACKPILOT_VIEWERS=") + 19));
+    // SystemExit mit Ergebniszeile landet in der Fehlerausgabe (tolerateExit).
+    const result = await runAuthentikScript({
+      identity: this.identity, record, input: this.input,
+      script: new URL("./viewers.py", import.meta.url),
+      request: { ...request, viewerRecovery, viewerMfa, viewerPasskey, viewerPassword, passkeyEnrollment,
+        ...(request.action === "improve-login" ? { passwordUpgrade: viewerPasswordUpgrade() } : {}) },
+      marker: "STACKPILOT_VIEWERS=",
+      notReady: "Authentik-Worker nicht eindeutig bereit.",
+      unconfirmed: "Authentik hat die Zuschauerliste nicht bestätigt.",
+      tolerateExit: true,
+    });
     if (result.error) throw setupError(messages[result.error] || "Aktion fehlgeschlagen.");
     return { record, result };
   }

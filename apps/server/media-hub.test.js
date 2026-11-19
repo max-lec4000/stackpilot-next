@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { MediaHub, mediaSummary } from "./media-hub.js";
 import { Sources, publicSchema, schemaKey } from "./sources.js";
 function fixture() {
+  let torrentState = "downloading", torrentGone = false;
   const calls = [],
     values = new Map();
   let leased = false;
@@ -134,9 +135,15 @@ function fixture() {
         };
       return null;
     },
+    // Wie qBittorrent: Anhalten/Fortsetzen ändert den Zustand, nach dem Entfernen fehlt der
+    // Download bei der nächsten Abfrage (danach taucht er für weitere Testschritte wieder auf).
     qbit: async (route, body) => {
       calls.push(["qbit", route, body]);
-      return [{ hash: "a".repeat(40), progress: 0.4, tracker: "secret" }];
+      if (route === "/torrents/stop") torrentState = "stoppedDL";
+      if (route === "/torrents/start") torrentState = "downloading";
+      if (route === "/torrents/delete") torrentGone = true;
+      if (route === "/torrents/info" && torrentGone) { torrentGone = false; return []; }
+      return [{ hash: "a".repeat(40), progress: 0.4, tracker: "secret", state: torrentState }];
     },
   };
   const guard = {

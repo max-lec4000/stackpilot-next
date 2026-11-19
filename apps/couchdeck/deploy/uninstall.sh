@@ -4,6 +4,8 @@
 set -euo pipefail
 if [ "$(id -u)" -ne 0 ]; then echo "Bitte mit sudo ausführen."; exit 1; fi
 
+systemctl disable --now couchdeck-pot.service 2>/dev/null || true
+rm -f /etc/systemd/system/couchdeck-pot.service
 rm -f /etc/systemd/system/getty@tty1.service.d/couchdeck-autologin.conf
 rmdir /etc/systemd/system/getty@tty1.service.d 2>/dev/null || true
 systemctl daemon-reload

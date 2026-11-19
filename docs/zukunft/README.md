@@ -100,6 +100,15 @@ Ursprünglicher Umfang:
 
 ### Phase 4 · Direkte YouTube-Wiedergabe in Couchdeck
 
+- **Ohne Anmeldung (Couchdeck 0.2.8), persönliche Abnahme offen.** Befund vom 19.11.: YouTube
+  sperrte die IPv6-Adresse (yt-dlp und offizieller eingebetteter Player gleichermaßen),
+  IPv4 war frei. Couchdeck wechselt jetzt selbst zwischen IPv4 und IPv6, yt-dlp/mpv/
+  Segmentlisten über denselben Weg; PO-Token-Anbieter (bgutil) und sparsames Vorabladen;
+  bei Sperre beider Adressen Dialog mit großem QR-Code, „Über VPN versuchen“ (Tunnel über
+  StackPilot/vpn-probe) und zuletzt der Anmeldung. Ein Ausweich-Player im offiziellen
+  YouTube-Player wurde verworfen (aus gesperrter Adresse ebenfalls blockiert). In sp-test
+  mit echten Abrufen geprüft (`scripts/testvm/youtube-route-check.mjs`): Wechsel IPv6→IPv4,
+  mpv über den Weiterleiter, VPN-Abruf mit Mullvad-Adresse und Wiedergabe.
 - **Umgesetzt in Couchdeck 0.2.7, persönliche Abnahme offen.** Bei einer Bot-Meldung
   bietet Couchdeck „Bei YouTube anmelden“: echte Google-Seite oben, Bedienung mit
   Controller und Bildschirmtastatur, Sitzung bleibt gespeichert und wird über eine

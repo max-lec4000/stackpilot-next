@@ -42,14 +42,14 @@ class HlsTrimmer {
    * Segmentlisten für ein Video (direkte Adressen aus yt-dlp) laden und vorhalten.
    * Liefert null, wenn die Adressen keine einfachen Medien-Playlists sind.
    */
-  async prepare(direct, { timeoutMs = 10000 } = {}) {
+  async prepare(direct, { timeoutMs = 10000, fetchText = null } = {}) {
     if (!direct?.video || !/m3u8|playlist|index/i.test(direct.video)) return null;
     const known = this.byUrl.get(direct.video);
     if (known && this.entries.has(known)) return this.handleFor(known);
     await this.start();
     const [video, audio] = await Promise.all([
-      fetchPlaylist(direct.video, timeoutMs),
-      direct.audio ? fetchPlaylist(direct.audio, timeoutMs) : null,
+      fetchPlaylist(direct.video, timeoutMs, fetchText),
+      direct.audio ? fetchPlaylist(direct.audio, timeoutMs, fetchText) : null,
     ]);
     if (!video || (direct.audio && !audio)) return null;
     const key = crypto.randomBytes(9).toString('hex');
@@ -124,7 +124,11 @@ function segIndex(segs, t) {
   return lo;
 }
 
-async function fetchPlaylist(url, timeoutMs) {
+async function fetchPlaylist(url, timeoutMs, fetchText = null) {
+  // Über den YouTube-Abrufweg (IPv4/IPv6/VPN), damit die Adresse zur Abfrage passt
+  if (fetchText) {
+    try { return parsePlaylist(await fetchText(url, timeoutMs), url); } catch { return null; }
+  }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {

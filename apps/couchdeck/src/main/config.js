@@ -22,6 +22,14 @@ function integration() {
   } catch { return null; }
 }
 
+/** VPN-Weg für YouTube von StackPilot (youtube-vpn.json) oder null. Frisch gelesen. */
+function youtubeVpn() {
+  try {
+    const d = JSON.parse(fs.readFileSync(path.join(LINK_DIR, 'youtube-vpn.json'), 'utf8'));
+    return d && d.version === 1 && /^http:\/\/127\.0\.0\.1:\d+$/.test(d.proxy) && typeof d.token === 'string' ? d : null;
+  } catch { return null; }
+}
+
 const isHttpUrl = (v) => typeof v === 'string' && /^https?:\/\/[^\s]+$/.test(v);
 
 /**
@@ -146,4 +154,4 @@ function update(patch) {
   return current;
 }
 
-module.exports = { get, update, save, integration, DIR, CONTROL_DIR };
+module.exports = { get, update, save, integration, youtubeVpn, DIR, CONTROL_DIR };

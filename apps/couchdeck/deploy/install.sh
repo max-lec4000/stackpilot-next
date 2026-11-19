@@ -119,6 +119,7 @@ install -o "$APP_USER" -g "$APP_USER" -m 644 "$SRC/deploy/pipewire-raop.conf" "$
 
 echo "==> YouTube (optional)"
 bash "$SRC/deploy/install-ytdlp.sh" || echo "yt-dlp: Installation fehlgeschlagen – YouTube bleibt aus, Rest geht weiter."
+bash "$SRC/deploy/install-pot.sh" || echo "PO-Token-Anbieter: nicht eingerichtet – YouTube läuft ohne."
 
 echo "==> Bluetooth: Xbox-Controller-Unterstützung (ERTM aus)"
 # Ältere Xbox-One-S-Controller (Bluetooth classic) brechen sonst die HID-Verbindung ab.

@@ -27,9 +27,34 @@ geladen und gegen die SHA-256-Prüfsumme geprüft. SponsorBlock erhält nur eine
 
 ### Wenn YouTube eine Bestätigung verlangt
 
-YouTube verlangt von Servern manchmal „Bestätige, dass du kein Bot bist“. Couchdeck zeigt
-dann **Bei YouTube anmelden**: Die echte Google-Anmeldeseite erscheint oben auf dem
-Bildschirm, unten die Couchdeck-Leiste.
+YouTube sperrt bei „Bestätige, dass du kein Bot bist“ einzelne Internetadressen des
+Servers – oft nur IPv6 oder nur IPv4. Couchdeck braucht dafür zunächst **keine Anmeldung**:
+
+1. **Automatischer Adresswechsel.** Abrufe laufen zuerst über IPv4; bei einer Sperre
+   versucht Couchdeck sofort IPv6 (bzw. umgekehrt) und lässt den gesperrten Weg 30 min
+   ruhen. Stream-Adressen gelten nur für die Adresse, über die sie abgefragt wurden – yt-dlp,
+   mpv und das Laden der Segmentlisten laufen deshalb über einen kleinen lokalen
+   Weiterleiter (nur 127.0.0.1, zufälliger Schlüssel, nur YouTube/Google-Adressen) über
+   denselben Weg.
+2. **PO-Token-Anbieter** (bgutil, als Dienst `couchdeck-pot`, nur lokal): lässt die Abrufe
+   wie einen Browser aussehen. Hilft gegen das Auslösen einer Sperre, hebt eine bestehende
+   aber nicht auf.
+3. **Sparsames Vorabladen:** erst nach 1,5 s auf einer Kachel, höchstens 4 Abrufe pro
+   5 min, nach einer Sperre 10 min gar nicht.
+
+Sind beide eigenen Adressen gesperrt, zeigt Couchdeck einen Dialog mit großem QR-Code
+(vom Sofa aus scannbar) und diesen Auswegen:
+
+- **Über VPN versuchen** – nur mit StackPilot und VPN (Gluetun): Couchdeck ruft YouTube
+  für 6 Stunden über den VPN-Tunnel ab. StackPilot leitet dazu einzelne Verbindungen durch
+  den Container `vpn-probe` im Tunnel (Weiterleiter auf 127.0.0.1:4417 mit Schlüssel, nur
+  YouTube/Google-Adressen); Gluetun und qBittorrent bleiben unverändert. VPN-Adressen
+  können ebenfalls gesperrt sein.
+- **QR-Code** – Video auf dem Handy ansehen.
+- **Bei YouTube anmelden** – letzte Möglichkeit (siehe unten).
+
+Die Anmeldung: Die echte Google-Anmeldeseite erscheint oben auf dem Bildschirm, unten die
+Couchdeck-Leiste.
 
 | Controller | Wirkung |
 |---|---|
@@ -129,6 +154,9 @@ Voraussetzung: Ubuntu Server 24.04 (x86-64 oder arm64) mit angeschlossenem Bilds
 Das Installationsskript bringt **alles Nötige** mit: Systempakete per `apt`, die
 Electron-Laufzeit (exakt die Version aus `package.json`, von github.com/electron, gegen
 die offizielle SHA-256-Prüfsumme geprüft) und – nur nach Rückfrage – yt-dlp für YouTube.
+Ist yt-dlp vorhanden und StackPilots Node-Laufzeit da, richtet `deploy/install-pot.sh` den
+PO-Token-Anbieter ein (bgutil 2.0.2, feste Prüfsummen, gebaut ohne Paket-Skripte als
+Benutzer couchdeck, systemd-Dienst `couchdeck-pot` abgeschottet auf 127.0.0.1:4416).
 
 **Direkt von GitHub:**
 

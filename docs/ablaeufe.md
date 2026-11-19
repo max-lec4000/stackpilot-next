@@ -46,9 +46,12 @@ angemeldeten Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** lö
 - Läuft nur, wenn ein Bildschirm angeschlossen und eingeschaltet ist.
 - Neu verbinden (z. B. nach Neuinstallation von Jellyfin): **Verbindung erneuern**.
 - Aktualisieren: erscheint als Knopf, wenn eine neuere Couchdeck-Version mitgeliefert wird.
-- YouTube verlangt eine Bestätigung: im Dialog **Bei YouTube anmelden** wählen, mit einem
-  Google-Konto anmelden (Kreuz = nächstes Feld, A = bestätigen, Y = Tastatur, ☰ = fertig).
-  Danach läuft das Video weiter. An-/Abmelden auch unter Einstellungen → YouTube.
+- YouTube verlangt eine Bestätigung: Couchdeck wechselt zuerst selbst zwischen IPv4 und
+  IPv6. Sind beide gesperrt, erscheint ein Dialog mit großem QR-Code und den Auswegen
+  **Über VPN versuchen** (bei VPN im Stack, 6 Stunden über den Tunnel, StackPilot leitet
+  über `vpn-probe` weiter) und als letzte Möglichkeit **Bei YouTube anmelden**
+  (Kreuz = nächstes Feld, A = bestätigen, Y = Tastatur, ☰ = fertig). An-/Abmelden auch
+  unter Einstellungen → YouTube.
 
 ## Verwaltung
 

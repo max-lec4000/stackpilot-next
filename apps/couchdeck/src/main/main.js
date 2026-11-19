@@ -282,7 +282,7 @@ player.on('ended', () => {
 player.on('error', (msg) => toast(msg, 'error'));
 player.on('youtube-bot-check', (id, entry) => {
   ytBlocked = entry ? { entry, at: Date.now() } : null;
-  send('youtube-bot-check', { id, signedIn: yt.signedIn });
+  send('youtube-bot-check', { id, signedIn: yt.signedIn, vpn: yt.vpnStatus() });
 });
 ytLogin.on('ready', () => send('youtube-login', { state: 'ready' }));
 ytLogin.on('blocked', () => toast('Diese Seite ist in der YouTube-Anmeldung nicht erlaubt.', 'error'));
@@ -470,6 +470,16 @@ const handlers = {
   'yt:login-finish': () => ytLogin.finish(),
   'yt:login-cancel': () => { ytLogin.close(); },
   'yt:login-logout': async () => { const r = await ytLogin.logout(); yt.resetBotCheck(); return r; },
+  // Ausweg bei gesperrten eigenen Adressen: einige Stunden über den VPN-Tunnel von StackPilot
+  'yt:vpn-status': () => yt.vpnStatus(),
+  'yt:use-vpn': () => {
+    const st = yt.useVpn();
+    const pending = ytBlocked && Date.now() - ytBlocked.at < 30 * 60000 ? ytBlocked.entry : null;
+    ytBlocked = null;
+    if (pending) player.playYouTube([pending], 0).catch((e) => toast('YouTube: ' + e.message, 'error'));
+    return st;
+  },
+  'yt:stop-vpn': () => yt.stopVpn(),
   'seerr:status': () => seerr.status(),
   'seerr:trending': (page) => seerr.trending(page || 1),
   'seerr:search': ({ query, page }) => seerr.search(query, page || 1),

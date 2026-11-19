@@ -606,7 +606,7 @@ function spotlight(slides) {
     body.classList.remove('swap'); void body.offsetWidth; body.classList.add('swap');
     node.infoCard = sl.infoCard;
     node.item = sl.infoCard.item; node.ytItem = sl.infoCard.ytItem; // X zeigt Infos
-    if (sl.infoCard.ytItem && node.classList.contains('focused')) cd.call('yt:prefetch', sl.infoCard.ytItem).catch(() => {});
+    if (sl.infoCard.ytItem && node.classList.contains('focused')) ytPrefetchSoon(sl.infoCard.ytItem, node);
   }
   function go(i) { idx = (i + slides.length) % slides.length; draw(); restart(); }
   function restart() {
@@ -614,7 +614,7 @@ function spotlight(slides) {
     if (slides.length > 1) timer = setInterval(() => { if (!node.classList.contains('focused') && document.contains(node)) go(idx + 1); }, 9000);
   }
   node.onAdjust = (d) => go(idx + d); // ←/→ blättern
-  node.addEventListener('cdfocus', () => { const y = slides[idx]?.infoCard?.ytItem; if (y) cd.call('yt:prefetch', y).catch(() => {}); });
+  node.addEventListener('cdfocus', () => { const y = slides[idx]?.infoCard?.ytItem; if (y) ytPrefetchSoon(y, node); });
   draw(); restart();
   return { node, focusEl: node, destroy: () => clearInterval(timer) };
 }
@@ -2034,8 +2034,7 @@ function ytCard(e, list = null) {
   node.ytItem = e;
   // Schneller Start: nach kurzem Verweilen die Stream-Adressen im Hintergrund vorbereiten
   if (isVid) {
-    let pf = null;
-    node.addEventListener('cdfocus', () => { clearTimeout(pf); pf = setTimeout(() => { if (focused === node) cd.call('yt:prefetch', e).catch(() => {}); }, 600); });
+    node.addEventListener('cdfocus', () => ytPrefetchSoon(e, node));
   }
   node.addEventListener('cdselect', () => {
     if (e.kind === 'channel') push(ytChannelScreen(e));
@@ -2045,32 +2044,55 @@ function ytCard(e, list = null) {
   return node;
 }
 
+// Stream-Adressen vorbereiten, aber erst wenn die Kachel 1,5 s markiert bleibt: jeder Abruf zählt
+// bei YouTubes Bot-Prüfung, schnelles Durchblättern soll keine Abrufe auslösen.
+let ytPrefetchTimer = null;
+function ytPrefetchSoon(entry, node) {
+  clearTimeout(ytPrefetchTimer);
+  ytPrefetchTimer = setTimeout(() => { if (focused === node && node.ytItem?.id === entry.id) cd.call('yt:prefetch', entry).catch(() => {}); }, 1500);
+}
+
 async function ytPlay(entries, startIndex = 0) {
   toast('YouTube wird geladen …');
   try { await cd.call('yt:play', { entries: entries.filter((x) => x.kind === 'video'), startIndex: Math.max(0, startIndex) }); } catch (e) { toast('YouTube: ' + e.message, 'error'); }
 }
 
-function showYouTubeLink(id, blocked = false, signedIn = false) {
+function showYouTubeLink(id, blocked = false, signedIn = false, vpn = null) {
   const result = h('div', { class: 'yt-share-result' }, 'Link wird vorbereitet …');
-  const login = blocked ? h('button', { class: 'action primary focusable', 'data-autofocus': true,
+  // Auswege in dieser Reihenfolge: VPN-Tunnel (falls eingerichtet), QR-Code, zuletzt Anmeldung
+  const vpnOffer = blocked && vpn?.available && !vpn.active;
+  const useVpn = vpnOffer ? h('button', { class: 'action primary focusable', 'data-autofocus': true,
+    oncdselect: async () => {
+      closeOverlay();
+      try { await cd.call('yt:use-vpn'); toast('YouTube läuft jetzt einige Stunden über den VPN-Tunnel.'); }
+      catch (e) { toast('VPN: ' + e.message, 'error'); }
+    } }, 'Über VPN versuchen') : null;
+  const login = blocked ? h('button', { class: 'action focusable', 'data-autofocus': !vpnOffer || undefined,
     oncdselect: () => { closeOverlay(); openYouTubeLogin({ autoFinish: true }); } },
   signedIn ? 'Anmeldung erneuern' : 'Bei YouTube anmelden') : null;
-  const panel = h('div', { class: 'dialog yt-share' },
+  const why = !blocked ? null
+    : signedIn ? 'YouTube verlangt trotz Anmeldung eine neue Bestätigung.'
+    : vpn?.active ? 'YouTube sperrt gerade auch den VPN-Tunnel.'
+    : 'YouTube sperrt gerade die Internetadressen dieses Servers (IPv4 und IPv6).';
+  const options = !blocked ? null
+    : vpnOffer ? 'Du kannst es über den VPN-Tunnel versuchen, das Video auf dem Handy ansehen oder dich als letzte Möglichkeit bei YouTube anmelden.'
+    : 'Sieh das Video auf dem Handy an oder melde dich als letzte Möglichkeit bei YouTube an. Couchdeck versucht es später von selbst wieder.';
+  const panel = h('div', { class: 'dialog yt-share' + (blocked ? ' blocked' : '') },
     h('h2', {}, blocked ? 'YouTube möchte eine Bestätigung' : 'Auf YouTube ansehen'),
-    blocked ? h('p', {}, signedIn
-      ? 'YouTube verlangt trotz Anmeldung eine neue Bestätigung. Melde dich erneut an – danach geht es mit dem Video weiter.'
-      : 'YouTube verlangt auf diesem Server eine Bestätigung. Melde dich einmal mit einem Google-Konto an – danach geht es mit dem Video weiter.') : null,
-    blocked ? h('p', { class: 'muted' }, 'Oder auf dem Handy ansehen:') : null,
-    result,
-    h('div', { class: 'actions' }, login,
-      h('button', { class: blocked ? 'action focusable' : 'action primary focusable', 'data-autofocus': !blocked || undefined, oncdselect: closeOverlay }, 'Schließen')));
+    h('div', { class: 'yt-share-body' },
+      result,
+      h('div', { class: 'yt-share-side' },
+        why ? h('p', {}, why) : null,
+        options ? h('p', { class: 'muted' }, options) : null,
+        h('div', { class: 'actions' }, useVpn, login,
+          h('button', { class: blocked ? 'action focusable' : 'action primary focusable', 'data-autofocus': !blocked || undefined, oncdselect: closeOverlay }, 'Schließen')))));
   showOverlay(panel, { centered: true, onAction: (a) => a === 'back' ? (closeOverlay(), true) : false,
     hints: () => [['A', 'a', blocked ? 'Auswählen' : 'Schließen'], ['B', 'b', 'Zurück']] });
   cd.call('yt:share', id).then(({ url, image }) => {
     if (!result.isConnected) return;
     result.textContent = '';
-    if (image) result.append(h('p', {}, 'Scanne den QR-Code mit der Kamera deines Handys oder Tablets.'),
-      h('img', { class: 'yt-share-code', src: image, alt: 'QR-Code zum YouTube-Video', width: 264, height: 264 }));
+    if (image) result.append(h('img', { class: 'yt-share-code', src: image, alt: 'QR-Code zum YouTube-Video' }),
+      h('p', {}, 'Mit der Handykamera scannen'));
     result.append(h('p', {}, h('code', {}, url)));
   }).catch(() => { result.textContent = 'Der YouTube-Link konnte nicht erstellt werden.'; });
 }
@@ -2895,7 +2917,7 @@ document.addEventListener('click', (e) => {
 // ---------- Ereignisse aus dem Hauptprozess ----------
 
 cd.on('toast', ({ text, kind }) => toast(text, kind));
-cd.on('youtube-bot-check', (p) => (typeof p === 'object' && p ? showYouTubeLink(p.id, true, p.signedIn) : showYouTubeLink(p, true)));
+cd.on('youtube-bot-check', (p) => (typeof p === 'object' && p ? showYouTubeLink(p.id, true, p.signedIn, p.vpn) : showYouTubeLink(p, true)));
 cd.on('youtube-login', (p) => ytLoginEvent(p));
 cd.on('auth', (a) => {
   const was = S.auth.loggedIn;

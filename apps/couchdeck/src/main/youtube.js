@@ -6,6 +6,7 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const crypto = require('crypto');
 const config = require('./config');
+const { RouteProxy } = require('./youtube-route');
 
 const BIN = process.env.COUCHDECK_YTDLP || '/opt/couchdeck/bin/yt-dlp';
 // Von der YouTube-Anmeldung in Couchdeck geschrieben (siehe youtube-login.js)
@@ -13,14 +14,27 @@ const COOKIE_FILE = require('path').join(config.DIR, 'youtube-cookies.txt');
 const hasCookies = () => { try { return fs.statSync(COOKIE_FILE).size > 0; } catch { return false; } };
 // yt-dlp braucht für YouTube eine JS-Laufzeit: Electron dient als Node (ELECTRON_RUN_AS_NODE)
 const NODE_WRAPPER = process.env.COUCHDECK_NODE || '/opt/couchdeck/bin/node';
+// PO-Token-Anbieter (bgutil, siehe deploy/install-pot.sh): Plugin für yt-dlp
+const POT_PLUGINS = process.env.COUCHDECK_YTDLP_PLUGINS || '/opt/couchdeck/yt-dlp-plugins';
 
 const SEARCH_FILTER = { channel: 'EgIQAg%3D%3D', playlist: 'EgIQAw%3D%3D' };
-const botPause = 2 * 60 * 1000;
+// Wie lange ein Weg (IPv4/IPv6/VPN) nach einer Bot-Sperre bzw. einem Verbindungsfehler ruht
+const blockPause = 30 * 60 * 1000;
+const unreachablePause = 10 * 60 * 1000;
 const prefetchPause = 10 * 60 * 1000;
+// Vorabladen sparsam: höchstens so viele Abrufe pro Zeitfenster (jeder Abruf zählt bei YouTube)
+const PREFETCH_BUDGET = 4;
+const PREFETCH_WINDOW = 5 * 60 * 1000;
+const VPN_HOURS = 6;
 const botCode = 'YOUTUBE_BOT_CHECK';
 
 function botCheckError() {
   return Object.assign(new Error('YouTube verlangt für diesen Abruf eine Anmeldung zur Bot-Prüfung.'), { code: botCode });
+}
+
+/** Weg nicht erreichbar (z. B. kein IPv6, VPN aus) – kein Hinweis auf eine Sperre. */
+function routeError(e) {
+  return /Tunnel connection failed|Unable to connect to proxy|ProxyError|Cannot connect to proxy|502 Bad Gateway|Network is unreachable|No route to host/i.test(e?.message || '');
 }
 
 function run(args, timeout = 45000) {
@@ -72,6 +86,12 @@ class YouTube {
     this.jsArgs = null;
     this.feedCache = null;
     this.lastBotCheck = -Infinity;
+    // Abrufweg: zuerst IPv4, bei einer Sperre automatisch IPv6; VPN nur auf Wunsch (Dialog)
+    this.routes = new RouteProxy({ vpn: () => config.youtubeVpn() });
+    this.blocked = {};
+    this.preferred = 'v4';
+    this.vpnUntil = 0;
+    this.prefetchLog = [];
   }
 
   get available() {
@@ -89,31 +109,95 @@ class YouTube {
     config.save();
   }
 
-  /** Argumente für die JS-Laufzeit, falls diese yt-dlp-Version sie kennt. */
-  async baseArgs() {
+  /** Argumente für JS-Laufzeit und PO-Token-Plugin (falls diese yt-dlp-Version sie kennt) und den Abrufweg. */
+  async baseArgs(route = null) {
     if (this.jsArgs === null) {
       try {
         const help = await run(['--help'], 15000);
-        this.jsArgs = help.includes('--js-runtimes') && fs.existsSync(NODE_WRAPPER) ? ['--js-runtimes', `node:${NODE_WRAPPER}`] : [];
+        this.jsArgs = [
+          ...(help.includes('--js-runtimes') && fs.existsSync(NODE_WRAPPER) ? ['--js-runtimes', `node:${NODE_WRAPPER}`] : []),
+          ...(help.includes('--plugin-dirs') && fs.existsSync(POT_PLUGINS) ? ['--plugin-dirs', POT_PLUGINS] : []),
+        ];
       } catch { this.jsArgs = []; }
     }
-    return [...this.jsArgs, ...(hasCookies() ? ['--cookies', COOKIE_FILE] : []), '--no-warnings', '--ignore-config'];
+    const proxy = route ? ['--proxy', this.routes.url(route)] : [];
+    return [...this.jsArgs, ...proxy, ...(hasCookies() ? ['--cookies', COOKIE_FILE] : []), '--no-warnings', '--ignore-config'];
   }
 
-  /** Nach einer Anmeldung: Sperrpause und zwischengespeicherte Fehlversuche verwerfen. */
+  /** Nach einer Anmeldung: Sperrpausen und zwischengespeicherte Fehlversuche verwerfen. */
   resetBotCheck() {
     this.lastBotCheck = -Infinity;
+    this.blocked = {};
     this.resolved?.clear();
+  }
+
+  /** Reihenfolge der Wege: gewählter VPN-Weg allein, sonst der zuletzt erfolgreiche zuerst. */
+  routeOrder() {
+    if (this.vpnUntil > Date.now() && this.routes.vpnAvailable) return ['vpn'];
+    return this.preferred === 'v6' ? ['v6', 'v4'] : ['v4', 'v6'];
+  }
+
+  /** Weg für einen Abruf, der gerade nicht gesperrt ist (für den ytdl-Hook). */
+  currentRoute() {
+    const now = Date.now();
+    return this.routeOrder().find((r) => !(this.blocked[r] > now)) || null;
+  }
+
+  /**
+   * fn(route) über den ersten freien Weg ausführen. Bei einer Bot-Sperre ruht der Weg 30 min und
+   * der nächste wird versucht; sind alle gesperrt, folgt die Bot-Meldung (Dialog mit Auswegen).
+   */
+  async withRoute(fn) {
+    await this.routes.start();
+    let lastError = null;
+    let sawBot = false;
+    for (const route of this.routeOrder()) {
+      if (this.blocked[route] > Date.now()) { sawBot = true; continue; }
+      try {
+        const result = await fn(route);
+        if (route !== 'vpn') this.preferred = route;
+        return { result, route };
+      } catch (error) {
+        if (error.code === botCode) { this.blocked[route] = Date.now() + blockPause; this.lastBotCheck = Date.now(); sawBot = true; lastError = error; continue; }
+        if (routeError(error)) { this.blocked[route] = Date.now() + unreachablePause; lastError = error; continue; }
+        throw error;
+      }
+    }
+    if (sawBot) { this.lastBotCheck = Date.now(); throw botCheckError(); }
+    throw lastError || new Error('Kein Weg zu YouTube');
+  }
+
+  /** Auf Wunsch (Dialog): für einige Stunden über den VPN-Tunnel von StackPilot abrufen. */
+  useVpn() {
+    if (!this.routes.vpnAvailable) throw new Error('Der VPN-Weg ist nicht eingerichtet.');
+    this.vpnUntil = Date.now() + VPN_HOURS * 3600 * 1000;
+    delete this.blocked.vpn;
+    this.resolved?.clear();
+    return this.vpnStatus();
+  }
+
+  stopVpn() { this.vpnUntil = 0; this.resolved?.clear(); return this.vpnStatus(); }
+
+  vpnStatus() {
+    const now = Date.now();
+    return {
+      available: this.routes.vpnAvailable,
+      active: this.vpnUntil > now,
+      blocked: this.blocked.vpn > now,
+      directBlocked: ['v4', 'v6'].every((r) => this.blocked[r] > now),
+    };
   }
 
   get signedIn() { return hasCookies(); }
 
   /** ytdl-raw-options für mpv (Fallback-Weg über den ytdl-Hook). */
-  async ytdlRawOptions() {
-    const base = await this.baseArgs();
+  async ytdlRawOptions(route = null) {
+    const base = await this.baseArgs(route);
     const raw = [];
     for (let i = 0; i < base.length; i++) {
       if (base[i] === '--js-runtimes') { raw.push(`js-runtimes=${base[i + 1]}`); i++; }
+      else if (base[i] === '--plugin-dirs') { raw.push(`plugin-dirs=${base[i + 1]}`); i++; }
+      else if (base[i] === '--proxy') { raw.push(`proxy=${base[i + 1]}`); i++; }
       else if (base[i] === '--cookies') { raw.push(`cookies=${base[i + 1]}`); i++; }
     }
     return raw.join(',');
@@ -156,12 +240,11 @@ class YouTube {
     this.inflight ||= new Map();
     const key = `${entry.id}@${this.settings.maxHeight}`;
     const hit = this.resolved.get(key);
-    if (hit && Date.now() - hit.at < 30 * 60000) return Promise.resolve(hit);
+    if (hit && Date.now() - hit.at < 30 * 60000 && !(this.blocked[hit.route] > Date.now()) && this.routeOrder().includes(hit.route)) return Promise.resolve(hit);
     if (this.inflight.has(key)) return this.inflight.get(key);
-    if (Date.now() - this.lastBotCheck < botPause) return Promise.reject(botCheckError());
     const url = `https://www.youtube.com/watch?v=${entry.id}`;
-    const attempt = async (extra) => {
-      const out = await run([...(await this.baseArgs()), ...extra, '-f', this.formatString(), '-J', url], 40000);
+    const attempt = async (route, extra) => {
+      const out = await run([...(await this.baseArgs(route)), ...extra, '-f', this.formatString(), '-J', url], 40000);
       const d = JSON.parse(out);
       const parts = d.requested_formats || [d];
       const video = parts.find((f) => f.vcodec && f.vcodec !== 'none') || parts[0];
@@ -172,16 +255,18 @@ class YouTube {
       if (parts.length > 1 && !audio?.url) throw new Error('keine Ton-Adresse');
       return { at: Date.now(), video: video.url, audio: audio?.url || null, duration: d.duration || null, height: video.height || null };
     };
-    const p = attempt(['--extractor-args', 'youtube:player_client=visionos'])
+    // Stream-Adressen gelten nur für die Internetadresse, über die sie abgefragt wurden:
+    // mpv und die Segmentlisten laden deshalb über denselben Weg (route/proxy).
+    const p = this.withRoute((route) => attempt(route, ['--extractor-args', 'youtube:player_client=visionos'])
       .catch((error) => {
-        if (error.code === botCode || /sign in/i.test(error.message)) throw error;
-        return attempt([]);
+        if (error.code === botCode || routeError(error) || /sign in/i.test(error.message)) throw error;
+        return attempt(route, []);
+      }))
+      .then(({ result, route }) => {
+        const r = { ...result, route, proxy: this.routes.url(route) };
+        this.resolved.set(key, r);
+        return r;
       })
-      .catch((error) => {
-        if (error.code === botCode) this.lastBotCheck = Date.now();
-        throw error;
-      })
-      .then((r) => { this.resolved.set(key, r); return r; })
       .finally(() => this.inflight.delete(key));
     this.inflight.set(key, p);
     // Zwischenspeicher klein halten
@@ -195,12 +280,24 @@ class YouTube {
     for (const k of [...this.resolved.keys()]) if (k.startsWith(`${entry.id}@`)) this.resolved.delete(k);
   }
 
-  /** Im Hintergrund vorbereiten (z. B. sobald eine Kachel markiert ist). */
-  prefetch(entry) {
+  /**
+   * Im Hintergrund vorbereiten (z. B. sobald eine Kachel länger markiert ist). Sparsam: nach einer
+   * Sperre 10 min gar nicht, sonst höchstens PREFETCH_BUDGET Abrufe pro 5 min. Das nächste Video
+   * der Warteschlange (queued) hat Vorrang und zählt nicht mit.
+   */
+  prefetch(entry, { queued = false } = {}) {
     if (!entry || entry.kind !== 'video' || entry.live) return;
     if (Date.now() - this.lastBotCheck < prefetchPause) return;
+    const hit = this.resolved?.get(`${entry.id}@${this.settings.maxHeight}`);
+    if (hit && Date.now() - hit.at < 30 * 60000) return;
+    if (!queued) {
+      const now = Date.now();
+      this.prefetchLog = this.prefetchLog.filter((t) => now - t < PREFETCH_WINDOW);
+      if (this.prefetchLog.length >= PREFETCH_BUDGET) return;
+    }
     // höchstens 2 Vorlade-Vorgänge gleichzeitig – sonst bremsen viele yt-dlp-Prozesse den Server
     if ((this.inflight?.size || 0) >= 2 && !this.inflight.has(`${entry.id}@${this.settings.maxHeight}`)) return;
+    if (!queued) this.prefetchLog.push(Date.now());
     this.resolve(entry).catch(() => {});
   }
 
@@ -259,7 +356,7 @@ class YouTube {
 
   async flat(url, { limit = 40, extra = [] } = {}) {
     if (!this.available) throw new Error('yt-dlp ist nicht installiert');
-    const out = await run([...(await this.baseArgs()), '--flat-playlist', '-J', '--playlist-end', String(limit), ...extra, url]);
+    const { result: out } = await this.withRoute(async (route) => run([...(await this.baseArgs(route)), '--flat-playlist', '-J', '--playlist-end', String(limit), ...extra, url]));
     const d = JSON.parse(out);
     const channel = d.channel || d.uploader || '';
     const entries = (d.entries || []).filter((e) => e && e.id).map(normalize)

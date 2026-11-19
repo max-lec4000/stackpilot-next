@@ -4,6 +4,7 @@ import { SeriesRemoval } from "./series-removal.js";
 import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
+import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { Couchdeck } from "./couchdeck.js";
 import { RemoteSetup } from "./remote-setup.js";
 import { ViewerProfiles } from "./identity/viewer-profiles.js";
@@ -90,6 +91,8 @@ export function inventoryMiddleware(options = {}) {
   const sources = new Sources(hub);
   const couchdeck = options.couchdeck || new Couchdeck(hub);
   installer().couchdeck = couchdeck;
+  // YouTube-Ausweg für Couchdeck über den VPN-Tunnel (nur lokal, nur mit Schlüssel)
+  if (options.background !== false) new YouTubeVpnRelay(hub, { linkDir: couchdeck.linkDir }).start();
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
   const appUpdates = new AppUpdates(installer());

@@ -47,7 +47,9 @@ class Mpv extends EventEmitter {
       ...(this.extra || []), // z. B. yt-dlp-Einstellungen für YouTube
       ...(p.extraArgs || []),
     ];
-    this.proc = spawn('mpv', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // YouTube läuft je Datei über den Couchdeck-Weiterleiter (http-proxy); lokale Adressen nie.
+    const env = { ...process.env, no_proxy: '127.0.0.1,localhost,::1', NO_PROXY: '127.0.0.1,localhost,::1' };
+    this.proc = spawn('mpv', args, { stdio: ['ignore', 'pipe', 'pipe'], env });
     this.proc.stdout.on('data', (d) => this.emit('log', d.toString().trim()));
     this.proc.stderr.on('data', (d) => this.emit('log', d.toString().trim()));
     this.proc.on('exit', (code) => {
@@ -264,7 +266,8 @@ class Player extends EventEmitter {
     if (direct?.video) {
       cur.direct = direct;
       // Segmentliste holen → Start/Sprünge über gekürzte Playlists (siehe hls.js)
-      cur.trim = await this.hls.prepare(direct).catch(() => null);
+      const fetchText = direct.route ? (u, t) => this.yt.routes.fetchText(direct.route, u, t) : null;
+      cur.trim = await this.hls.prepare(direct, { fetchText }).catch(() => null);
       if (this.current !== cur || gen !== this.loadGen) return;
       cur.fullDuration = cur.trim?.total || direct.duration || 0;
       if (cur.fullDuration) { this.state.duration = cur.fullDuration; this.osc('duration', cur.fullDuration); }
@@ -273,10 +276,12 @@ class Player extends EventEmitter {
     } else {
       const opts = cur.titleOpts + (resume ? `,start=${resume}` : '');
       await this.mpv.set('ytdl-format', this.yt.formatString()).catch(() => {});
-      // Nach einer Anmeldung in Couchdeck auch auf diesem Weg mit Cookies abrufen
-      const raw = await this.yt.ytdlRawOptions().catch(() => '');
+      // Gleicher Abrufweg wie sonst (IPv4/IPv6/VPN) und ggf. die Anmeldung in Couchdeck
+      const route = this.yt.currentRoute();
+      const raw = await this.yt.ytdlRawOptions(route).catch(() => '');
       if (raw) await this.mpv.set('ytdl-raw-options', raw).catch(() => {});
-      await this.mpv.command('loadfile', entry.url, 'replace', opts);
+      const proxy = route ? this.yt.routes.url(route) : '';
+      await this.mpv.command('loadfile', entry.url, 'replace', opts + (proxy ? `,http-proxy=%${Buffer.byteLength(proxy)}%${proxy}` : ''));
     }
     this.emit('log', `YouTube: Adressen ${direct?.video ? (cur.trim ? 'direkt, gekürzte Playlist' : 'direkt') : 'über ytdl-Hook'} nach ${Date.now() - t0} ms${resume ? `, Start bei ${resume} s` : ''}`);
     // Sicherheitsnetz: Bei sehr langen Videos hängt der Start tief im Video in ffmpeg manchmal.
@@ -299,7 +304,7 @@ class Player extends EventEmitter {
     this.emit('started', this.publicState());
     // nächstes Video der Warteschlange schon vorbereiten
     const next = this.queue[this.index + 1];
-    if (next && typeof next === 'object' && next.yt) this.yt.prefetch(next);
+    if (next && typeof next === 'object' && next.yt) this.yt.prefetch(next, { queued: true });
   }
 
   async playCurrent(opts = {}) {
@@ -440,8 +445,10 @@ class Player extends EventEmitter {
    * zuverlässig), absolute Zeitstempel (rebase-start-time=no) → time-pos = echte Position.
    */
   ytLoadArgs(cur, at) {
-    let opts = cur.titleOpts + ',ytdl=no';
     const len = (u) => Buffer.byteLength(u);
+    let opts = cur.titleOpts + ',ytdl=no';
+    // Stream-Adressen gelten nur über den Weg, über den sie abgefragt wurden
+    if (cur.direct?.proxy) opts += `,http-proxy=%${len(cur.direct.proxy)}%${cur.direct.proxy}`;
     if (cur.trim) {
       const p = cur.trim.at(at || 0);
       opts += ',rebase-start-time=no';

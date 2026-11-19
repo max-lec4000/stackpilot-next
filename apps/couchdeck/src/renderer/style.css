@@ -539,11 +539,21 @@ img.logo { max-height: 7.5rem; max-width: 34rem; object-fit: contain; object-pos
 .dialog h2 { margin-top: 0; }
 .dialog .actions { justify-content: center; }
 .infopop, .dialog { box-shadow: inset 0 0.25rem 0 var(--accent), 0 2rem 5rem rgba(0, 0, 0, 0.55); }
+/* QR-Code groß, damit er vom Sofa aus scannbar ist: Code links, Text und Knöpfe rechts */
+.dialog.yt-share { width: min(94vw, 82rem); text-align: left; }
+.yt-share-body { display: flex; gap: 2.4rem; align-items: center; }
+.yt-share-result { flex: 0 0 auto; text-align: center; }
+.yt-share-result p { margin: 0.6rem 0 0; color: var(--muted); }
+.yt-share-result code { font-size: 1.1rem; }
+.yt-share-side { flex: 1 1 auto; min-width: 0; }
+.yt-share-side p { font-size: 1.2rem; line-height: 1.45; }
+.dialog.yt-share .actions { justify-content: flex-start; flex-wrap: wrap; }
 .yt-share-code {
   display: block;
-  width: min(16rem, 60vw, 37vh);
+  width: min(66vh, 46vw);
   height: auto;
-  margin: 1rem 0;
+  margin: 0 auto;
+  border-radius: 0.5rem;
   image-rendering: pixelated;
 }
 .infopop {

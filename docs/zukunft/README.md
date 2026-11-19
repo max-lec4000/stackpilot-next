@@ -182,7 +182,8 @@ bedient –, sodass die Apps im Alltag nicht mehr einzeln geöffnet werden müss
 Die übrige Roadmap bleibt gültig; NAS, YouTube und frühere Abnahmen werden dadurch nicht
 erledigt oder ersetzt.
 
-**7.0 Zuerst: Funktionsumfang und Struktur überdenken.** Bevor Funktionen dazukommen:
+**7.0 Zuerst: Funktionsumfang und Struktur überdenken.** Entwurf zur Abstimmung:
+[phase-7-konzept.md](phase-7-konzept.md). Bevor Funktionen dazukommen:
 welche Funktionen StackPilot übernimmt, welche in den Apps bleiben, wie sie organisiert
 sind (Nutzersicht statt App-Sicht) und wie Verwaltung, Navigation, Server-Module und
 Schnittstellen in StackPilot dafür strukturiert werden. Ergebnis: ein abgestimmtes

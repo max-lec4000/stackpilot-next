@@ -6,10 +6,16 @@
 // Schutzstufen:
 //   session  – angemeldete Sitzung genügt (für GET immer)
 //   ok       – zusätzlich ausdrückliches „OK“ im Auftrag (body.confirmation === "OK")
-//   password – zusätzlich das Administratorpasswort (body.password)
+//   password – zusätzlich das Administratorpasswort (body.password); mit `confirm` außerdem „OK“
+// Antwortet eine Route mit einer Datei, liefert sie `fileResponse(bytes, dateiname)`.
 export const GUARDS = ["session", "ok", "password"];
 
 const userFacing = (message) => Object.assign(new Error(message), { userFacing: true });
+
+const FILE = Symbol("Datei");
+export const fileResponse = (bytes, filename) => ({ [FILE]: { bytes, filename } });
+export const isFileResponse = (result) => !!result?.[FILE];
+export const fileOf = (result) => result[FILE];
 
 export class RouteRegistry {
   constructor() {
@@ -43,8 +49,9 @@ export class RouteRegistry {
   /** Schutzstufe prüfen, dann die Fachlogik ausführen. */
   async run(route, ctx) {
     const body = ctx.body || {};
+    // reauthenticate wirft bei falschem Passwort oder zu vielen Versuchen
     if (route.guard === "password") await ctx.manager.reauthenticate(body.password, ctx.remoteAddress);
-    if (route.guard !== "session" && body.confirmation !== "OK")
+    if ((route.guard === "ok" || (route.guard === "password" && route.confirm)) && body.confirmation !== "OK")
       throw userFacing(route.confirm || "Mit OK bestätigen.");
     return route.handler(ctx);
   }

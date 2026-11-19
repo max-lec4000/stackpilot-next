@@ -111,7 +111,15 @@ vorhandenen Tests und einer VM-Abnahme.
   Zuschauer spricht Seerr nur noch darüber.
 - Nachweise in sp-test: 344 Tests, native Seerr-Integration (Konto anlegen, Rechte,
   Freigabe), Oberflächenprüfung des Freigabe-Schalters.
-- Offen in 7.0a: übrige ~140 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
+- **Zugriff & Netzwerk umgezogen** (`domains/access/remote.routes.js`, 34 Routen): Tailnet,
+  privates HTTPS, Schutz-Gateway, SSO, Authentik-Sicherungen, Administratoren, Geräte,
+  Funnel, Streamyfin. Schutzstufe `password` jetzt ohne Zwang zu „OK“ (nur mit `confirm`),
+  Datei-Antworten über `fileResponse`. Test hält fest: alles, was Zugang verändert,
+  verlangt das Passwort. Nachweise in sp-test: 345 Tests; alle Ansichten HTTP 200;
+  falsches Passwort abgelehnt; Streamyfin zurück/vorbereiten/aktivieren; Authentik-
+  Sicherung angelegt und als Datei geladen (ohne Passwort abgelehnt); Seite „Externer
+  Zugriff“ ohne Seiten- oder Schnittstellenfehler.
+- Offen in 7.0a: übrige ~105 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
   ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)

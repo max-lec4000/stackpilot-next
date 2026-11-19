@@ -1,11 +1,12 @@
-import { AdminTailnet, adminGrant } from "./admin-tailnet.js";
+import { AdminTailnet } from "./admin-tailnet.js";
 import { ImportedReplacement } from "./imported-replacement.js";
 import { SeriesRemoval } from "./series-removal.js";
 import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
-import { RouteRegistry } from "./routes.js";
+import { RouteRegistry, isFileResponse, fileOf } from "./routes.js";
+import { remoteRoutes } from "./domains/access/remote.routes.js";
 import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
@@ -219,7 +220,12 @@ export function inventoryMiddleware(options = {}) {
   const routes = new RouteRegistry()
     .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
-    .add(viewerRequestRoutes({ viewerRequests }));
+    .add(viewerRequestRoutes({ viewerRequests }))
+    .add(remoteRoutes({
+      connectionCheck, journey, remoteAccess, privateServe, jellyfinProtection, publicFunnel,
+      ssoConnection, identity, identityBackups, remoteSecurity, adminTailnet,
+      developmentUploadStatus, uploadDevelopmentReport, state,
+    }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -381,16 +387,6 @@ export function inventoryMiddleware(options = {}) {
         req.method === "GET"
       ) {
         result = await developmentUploadStatus(state);
-      } else if (
-        url.pathname === "/api/remote-access/connection" &&
-        req.method === "GET"
-      ) {
-        result = await connectionCheck.inspect();
-      } else if (
-        url.pathname === "/api/remote-access/journey" &&
-        req.method === "GET"
-      ) {
-        result = journey.snapshot();
       } else if (url.pathname === "/api/auth/status" && req.method === "GET") {
         result = {
           configured: manager.configured(),
@@ -522,61 +518,6 @@ export function inventoryMiddleware(options = {}) {
           query: url.searchParams.get("query") || "",
         });
       } else if (
-        url.pathname === "/api/remote-access" &&
-        req.method === "GET"
-      ) {
-        result = await remoteAccess.inspect();
-      } else if (
-        url.pathname === "/api/remote-access/private-serve" &&
-        req.method === "GET"
-      ) {
-        result = await privateServe.preview();
-      } else if (url.pathname === "/api/remote-access/streamyfin" && req.method === "GET") {
-        result = await jellyfinProtection.streamyfinPreview();
-      } else if (url.pathname === "/api/remote-access/funnel" && req.method === "GET") {
-        result = await publicFunnel.preview();
-      } else if (
-        url.pathname === "/api/remote-access/protection" &&
-        req.method === "GET"
-      ) {
-        result = jellyfinProtection.summary();
-      } else if (
-        url.pathname === "/api/remote-access/protection/preview" &&
-        req.method === "GET"
-      ) {
-        result = {
-          ...(await jellyfinProtection.preview()),
-          verified: (await jellyfinProtection.status()).verified,
-        };
-      } else if (
-        url.pathname === "/api/remote-access/sso" &&
-        req.method === "GET"
-      ) {
-        result = await ssoConnection.plan();
-      } else if (
-        url.pathname === "/api/remote-access/identity" &&
-        req.method === "GET"
-      ) {
-        result = identity.summary();
-      } else if (
-        url.pathname === "/api/remote-access/backups" &&
-        req.method === "GET"
-      ) {
-        result = {
-          backups: identityBackups.list(),
-          maintenance: identityBackups.maintenance(),
-        };
-      } else if (
-        url.pathname === "/api/remote-access/admins" &&
-        req.method === "GET"
-      ) {
-        result = await remoteSecurity.admins();
-      } else if (
-        url.pathname === "/api/remote-access/devices" &&
-        req.method === "GET"
-      ) {
-        result = await remoteSecurity.devices();
-      } else if (
         url.pathname === "/api/media/archive" &&
         req.method === "GET"
       ) {
@@ -594,8 +535,6 @@ export function inventoryMiddleware(options = {}) {
         );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
         result = await managedServices(installer(), host, appUpdates);
-      } else if (url.pathname === "/api/admin-tailnet" && req.method === "GET") {
-        result = await adminTailnet.inspect(remoteAddress);
       } else if (url.pathname === "/api/media/replacements" && req.method === "GET") {
         result = await importedReplacement.jobs();
       } else if (url.pathname === "/api/media/series-inventory" && req.method === "GET") {
@@ -660,6 +599,13 @@ export function inventoryMiddleware(options = {}) {
         const postRoute = routes.find("POST", url.pathname);
         if (postRoute) {
           result = await routes.run(postRoute, { url, body, session, manager, remoteAddress });
+          if (isFileResponse(result)) {
+            const file = fileOf(result);
+            try { audit.finish(auditId, true); } catch {}
+            res.setHeader("Content-Type", "application/octet-stream");
+            res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
+            return res.end(file.bytes);
+          }
         } else if (vaultRestore) {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await hub.mutate([], () => stageVaultRestore(state, body.archive, body.passphrase));
@@ -686,95 +632,6 @@ export function inventoryMiddleware(options = {}) {
           if (!(await developmentUploadStatus(state)).enabled)
             throw Error("Entwicklungsupload ist deaktiviert.");
           result = await uploadDevelopmentReport();
-        } else if (url.pathname === "/api/remote-access/private-serve/apply") {
-          await manager.reauthenticate(body.password, remoteAddress);
-          try {
-            result = await privateServe.apply(body);
-          } catch (e) {
-            try {
-              await uploadDevelopmentReport();
-            } catch {}
-            throw e;
-          }
-          if ((await developmentUploadStatus(state)).enabled) {
-            try {
-              result.developmentReport = await uploadDevelopmentReport();
-            } catch {
-              result.developmentReportWarning =
-                "Einrichtung geprüft; Entwicklungsbericht konnte nicht auf GitHub übertragen werden. Lokale Git-Berechtigung prüfen oder Bericht herunterladen.";
-            }
-          }
-        } else if (url.pathname === "/api/remote-access/streamyfin/activate" ||
-                   url.pathname === "/api/remote-access/streamyfin/rollback") {
-          await manager.reauthenticate(body.password, remoteAddress);
-          if (body.confirmation !== "OK") throw new Error("Gateway-Änderung mit OK bestätigen.");
-          result = url.pathname.endsWith("/activate")
-            ? await jellyfinProtection.activateStreamyfin()
-            : await jellyfinProtection.rollbackStreamyfin();
-        } else if (url.pathname === "/api/remote-access/streamyfin/prepare") {
-          await manager.reauthenticate(body.password, remoteAddress);
-          if (body.confirmation !== "OK")
-            throw new Error("Vorbereitung mit OK bestätigen.");
-          const { ready, version, minimumVersion } = await jellyfinProtection.prepareStreamyfin();
-          result = { ready, version, minimumVersion };
-        } else if (url.pathname === "/api/remote-access/protection/start") {
-          await manager.reauthenticate(body.password, remoteAddress);
-          result = await jellyfinProtection.start(body);
-        } else if (url.pathname === "/api/remote-access/sso/apply") {
-          if (!(await manager.reauthenticate(body.password, remoteAddress)))
-            throw Error("Administratorpasswort stimmt nicht.");
-          result = await ssoConnection.apply(body);
-        } else if (
-          [
-            "/api/remote-access/backup/create",
-            "/api/remote-access/backup/resume",
-            "/api/remote-access/backup/test",
-            "/api/remote-access/backup/download",
-            "/api/remote-access/admins/protect",
-            "/api/remote-access/devices/revoke",
-          ].includes(url.pathname)
-        ) {
-          if (!(await manager.reauthenticate(body.password, remoteAddress)))
-            throw Error("Administratorpasswort stimmt nicht.");
-          if (url.pathname.endsWith("/create"))
-            result = await identityBackups.create(body);
-          else if (url.pathname.endsWith("/resume"))
-            result = await identityBackups.resume(body);
-          else if (url.pathname.endsWith("/test"))
-            result = await identityBackups.verifyRestore(body);
-          else if (url.pathname.endsWith("/protect"))
-            result = await remoteSecurity.protectAdmins(body);
-          else if (url.pathname.endsWith("/revoke"))
-            result = await remoteSecurity.revoke(body);
-          else {
-            const bytes = await identityBackups.bytes(body.id);
-            res.setHeader("Content-Type", "application/octet-stream");
-            res.setHeader(
-              "Content-Disposition",
-              `attachment; filename="stackpilot-identity-${body.id}.spbackup"`,
-            );
-            return res.end(bytes);
-          }
-        } else if (["/api/remote-access/funnel/enable", "/api/remote-access/funnel/disable"].includes(url.pathname)) {
-          await manager.reauthenticate(body.password, remoteAddress);
-          result = url.pathname.endsWith("/enable")
-            ? await publicFunnel.apply(body) : await publicFunnel.disable(body);
-        } else if (url.pathname === "/api/remote-access/funnel-plan")
-          result = await remoteSecurity.funnelPlan();
-        else if (url.pathname === "/api/remote-access/identity/prepare")
-          result = await identity.prepare();
-        else if (url.pathname === "/api/remote-access/identity/check")
-          result = await identity.inspectSecurity();
-        else if (url.pathname === "/api/remote-access/identity/start")
-          result = await identity.start(body);
-        else if (url.pathname === "/api/remote-access/identity/credentials") {
-          if (!(await manager.reauthenticate(body.password, remoteAddress)))
-            throw Error("Administratorpasswort stimmt nicht.");
-          result = identity.credentials();
-        } else if (url.pathname === "/api/admin-tailnet/grant") {
-          const access = await adminTailnet.inspect(remoteAddress);
-          if (!access.addresses.includes(body.target)) throw Error("Nur eine bestätigte eigene Tailnet-Adresse verwenden.");
-          result = {grant:adminGrant(body.sources,body.target)};
         } else if (url.pathname === "/api/media/replacement/preview")
           result = await importedReplacement.preview(body);
         else if (url.pathname === "/api/media/replacement/start")

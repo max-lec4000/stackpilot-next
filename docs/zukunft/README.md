@@ -149,6 +149,15 @@ Ursprünglicher Umfang:
 - **Sicherheitsprüfungen fortführen.** Nach Änderungen an Gateway,
   Tailscale, Sitzungen, Containerrechten oder Images gezielt nachprüfen.
   Signierte StackPilot-Updates bleiben ein späteres Vorhaben.
+  Prüfung am 19.11. (YouTube-Wege, VPN-Weiterleitung, wireproxy, VPN-Profile,
+  Updates ohne Passwort): Proxy-Schlüssel stand auf der yt-dlp-Kommandozeile (per `ps`
+  lesbar) → jetzt 0600-Datei; Schlüsselvergleich bei Sonderzeichen gehärtet;
+  Profilkennung beim Wechsel geprüft. Nachweis: 4416/4417/wireproxy nur 127.0.0.1, aus
+  allen Docker-Netzen und über LAN/Tailnet geschlossen, kein Funnel.
+- **Streamyfin-Voraussetzung erfüllt.** Die drei Seerr-Hinweise (Bildproxy,
+  Passwortwechsel, Benutzerrechte) nennen 3.5.2 als behoben; der Katalog-Digest ist das
+  offizielle v3.5.2. Nächster Schritt: öffentliche Abnahme in der Test-VM, Funnel danach
+  wieder schließen; reatest nur nach Prüfung und ausdrücklicher Freigabe.
 
 ### Phase 7 · Apps zentral über StackPilot verwalten (nach Phase 5)
 

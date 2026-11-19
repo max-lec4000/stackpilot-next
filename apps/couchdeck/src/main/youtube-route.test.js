@@ -170,3 +170,21 @@ test('VPN gesperrt: nächstes Profil von StackPilot, jedes höchstens einmal', a
   assert.equal(yt.vpnStatus().blocked, true);
   yt.stopVpn(); yt.resetBotCheck();
 });
+
+test('Sicherheit: Proxy-Schlüssel nie auf der Kommandozeile, Konfigdatei nur für Couchdeck', async () => {
+  const yt = new YouTube();
+  yt.jsArgs = [];
+  await yt.routes.start();
+  try {
+    const args = await yt.baseArgs('v4');
+    assert.ok(!args.join(' ').includes(yt.routes.token), 'Schlüssel nicht in argv');
+    const file = args[args.indexOf('--config-locations') + 1];
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    assert.equal(fs.readFileSync(file, 'utf8'), `--proxy ${yt.routes.url('v4')}\n`);
+    const raw = await yt.ytdlRawOptions('v4');
+    assert.ok(raw.includes(`config-locations=${file}`) && !raw.includes(yt.routes.token));
+    // Sonderzeichen im Zugang: saubere Ablehnung statt Ausnahme
+    const b = (s) => 'Basic ' + Buffer.from(s).toString('base64');
+    assert.equal(parseAuth(b('v4:' + 'ä'.repeat(18)), 'a'.repeat(36)), null);
+  } finally { yt.routes.stop(); }
+});

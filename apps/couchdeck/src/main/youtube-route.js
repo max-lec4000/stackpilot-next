@@ -27,8 +27,10 @@ function parseAuth(header, token) {
   const m = /^Basic\s+([A-Za-z0-9+/=]+)$/.exec(String(header || ''));
   if (!m) return null;
   const [user, pass = ''] = Buffer.from(m[1], 'base64').toString().split(':');
-  if (!ROUTES.includes(user) || pass.length !== token.length) return null;
-  return crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(token)) ? user : null;
+  const a = Buffer.from(pass), b = Buffer.from(token);
+  // Byte- statt Zeichenlänge vergleichen: sonst wirft timingSafeEqual bei Sonderzeichen
+  if (!ROUTES.includes(user) || a.length !== b.length) return null;
+  return crypto.timingSafeEqual(a, b) ? user : null;
 }
 
 class RouteProxy {

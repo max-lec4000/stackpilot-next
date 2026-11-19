@@ -138,3 +138,9 @@ test("Eigener YouTube-Tunnel hat Vorrang; /next und /status nur mit Schlüssel",
     upstream.close();
   }
 });
+
+test("Schlüsselvergleich lehnt Sonderzeichen sauber ab", () => {
+  const b = (s) => "Basic " + Buffer.from(s).toString("base64");
+  assert.equal(proxyToken(b("x:" + "ä".repeat(24)), "a".repeat(48)), false);
+  assert.equal(proxyToken(b("x:" + "a".repeat(48)), "a".repeat(48)), true);
+});

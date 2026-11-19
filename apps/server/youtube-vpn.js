@@ -32,8 +32,10 @@ export function tunnelTarget(authority) {
 export function proxyToken(header, token) {
   const m = /^Basic\s+([A-Za-z0-9+/=]+)$/.exec(String(header || ""));
   if (!m || !token) return false;
-  const pass = Buffer.from(m[1], "base64").toString().split(":").slice(1).join(":");
-  return pass.length === token.length && timingSafeEqual(Buffer.from(pass), Buffer.from(token));
+  const pass = Buffer.from(Buffer.from(m[1], "base64").toString().split(":").slice(1).join(":"));
+  const want = Buffer.from(token);
+  // Bytelänge vergleichen: bei Sonderzeichen würde timingSafeEqual sonst werfen
+  return pass.length === want.length && timingSafeEqual(pass, want);
 }
 
 function dockerExec(container, host) {

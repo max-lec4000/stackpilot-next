@@ -120,8 +120,26 @@ class YouTube {
         ];
       } catch { this.jsArgs = []; }
     }
-    const proxy = route ? ['--proxy', this.routes.url(route)] : [];
+    // Proxy samt Schlüssel nicht auf die Kommandozeile (für alle lokalen Benutzer per ps
+    // sichtbar), sondern in eine nur für Couchdeck lesbare Konfigurationsdatei.
+    const proxy = route ? ['--config-locations', this.routeConfig(route)] : [];
     return [...this.jsArgs, ...proxy, ...(hasCookies() ? ['--cookies', COOKIE_FILE] : []), '--no-warnings', '--ignore-config'];
+  }
+
+  /** yt-dlp-Konfiguration mit dem Proxy eines Wegs (0600, neu bei jedem Couchdeck-Start). */
+  routeConfig(route) {
+    const url = this.routes.url(route);
+    this.routeFiles ||= new Map();
+    const file = require('path').join(config.DIR, `yt-dlp-route-${route}.conf`);
+    if (this.routeFiles.get(route) !== url) {
+      fs.mkdirSync(config.DIR, { recursive: true, mode: 0o700 });
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, `--proxy ${url}\n`, { mode: 0o600 });
+      fs.chmodSync(tmp, 0o600);
+      fs.renameSync(tmp, file);
+      this.routeFiles.set(route, url);
+    }
+    return file;
   }
 
   /** Nach einer Anmeldung: Sperrpausen und zwischengespeicherte Fehlversuche verwerfen. */
@@ -214,7 +232,7 @@ class YouTube {
     for (let i = 0; i < base.length; i++) {
       if (base[i] === '--js-runtimes') { raw.push(`js-runtimes=${base[i + 1]}`); i++; }
       else if (base[i] === '--plugin-dirs') { raw.push(`plugin-dirs=${base[i + 1]}`); i++; }
-      else if (base[i] === '--proxy') { raw.push(`proxy=${base[i + 1]}`); i++; }
+      else if (base[i] === '--config-locations') { raw.push(`config-locations=${base[i + 1]}`); i++; }
       else if (base[i] === '--cookies') { raw.push(`cookies=${base[i + 1]}`); i++; }
     }
     return raw.join(',');

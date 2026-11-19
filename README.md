@@ -92,6 +92,15 @@ Den Rest (Fernzugriff in Jellyfin, Admins nur lokal) erledigt StackPilot.
   `master.key`, beides zusammen sichern).
 - Root-Rechte hat StackPilot nur für genau vier Aufträge (Couchdeck installieren,
   mit YouTube installieren, entfernen, StackPilot aktualisieren).
+- YouTube-Hilfsdienste lauschen nur auf dem Server selbst (127.0.0.1): Couchdecks
+  Weiterleiter (zufälliger Port und Schlüssel je Start, Schlüssel nur in einer
+  0600-Datei, nie auf der Kommandozeile), StackPilots VPN-Weiterleitung (4417, Schlüssel,
+  nur YouTube-/Google-Ziele auf 443), PO-Token-Dienst (4416, abgeschotteter
+  systemd-Dienst) und wireproxy (WireGuard im Benutzerraum, ohne root, Zugang zufällig,
+  Konfiguration nach dem Start gelöscht). Aus Containern und aus dem Netz nicht erreichbar.
+- Updates (StackPilot, Container) brauchen statt Passwort ein ausdrückliches „OK“; jede
+  Änderung braucht angemeldete Sitzung, passenden Origin und CSRF-Token. Fernzugriff,
+  Funnel, Tresor und Zugangsdaten verlangen weiter das Passwort.
 
 ## Umstellen von StackPilot 0.4
 

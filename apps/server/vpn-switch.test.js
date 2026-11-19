@@ -5,17 +5,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { VpnSwitch, gluetunAuth } from "./vpn-switch.js";
 
+const OLD = "00000000-0000-4000-8000-000000000001";
+const NEW = "00000000-0000-4000-8000-000000000002";
+
 async function fixture({ failIdentityFor = null } = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), "sp-vpnswitch-"));
   const appdata = path.join(dir, "appdata");
   await mkdir(path.join(appdata, "gluetun"), { recursive: true });
   const vault = new Map([
-    ["vpn-profile:old", { config: "[Interface]\nPrivateKey = ALT\n", controlKey: "k-old", name: "Wien" }],
-    ["vpn-profile:new", { config: "[Interface]\nPrivateKey = NEU\n", controlKey: "k-new", name: "Zürich" }],
+    [`vpn-profile:${OLD}`, { config: "[Interface]\nPrivateKey = ALT\n", controlKey: "k-old", name: "Wien" }],
+    [`vpn-profile:${NEW}`, { config: "[Interface]\nPrivateKey = NEU\n", controlKey: "k-new", name: "Zürich" }],
   ]);
-  await writeFile(path.join(appdata, "gluetun", "wg0.conf"), vault.get("vpn-profile:old").config);
-  await writeFile(path.join(appdata, "gluetun", "auth.toml"), gluetunAuth(vault.get("vpn-profile:old")));
-  let plan = { id: "p1", rootId: "r1", appdata, spec: { vpn: true }, vpnProfileId: "old" };
+  await writeFile(path.join(appdata, "gluetun", "wg0.conf"), vault.get(`vpn-profile:${OLD}`).config);
+  await writeFile(path.join(appdata, "gluetun", "auth.toml"), gluetunAuth(vault.get(`vpn-profile:${OLD}`)));
+  let plan = { id: "p1", rootId: "r1", appdata, spec: { vpn: true }, vpnProfileId: OLD };
   const log = [];
   const engine = {
     store: { directory: path.join(dir, "state"), replacePlan: (p) => { plan = p; log.push(["plan", p.vpnProfileId]); } },
@@ -36,36 +39,42 @@ async function fixture({ failIdentityFor = null } = {}) {
 
 test("Profilwechsel für qBittorrent: neue Dateien, Neuaufbau, Prüfungen, dann Plan", async () => {
   const f = await fixture();
-  const r = await f.sw.apply({ profileId: "new", confirmation: "OK" });
-  assert.deepEqual(r, { profileId: "new", name: "Zürich" });
+  const r = await f.sw.apply({ profileId: NEW, confirmation: "OK" });
+  assert.deepEqual(r, { profileId: NEW, name: "Zürich" });
   assert.equal(await readFile(path.join(f.appdata, "gluetun", "wg0.conf"), "utf8"), "[Interface]\nPrivateKey = NEU\n");
   assert.match(await readFile(path.join(f.appdata, "gluetun", "auth.toml"), "utf8"), /apikey = "k-new"/);
-  assert.equal(f.getPlan().vpnProfileId, "new");
+  assert.equal(f.getPlan().vpnProfileId, NEW);
   assert.equal(f.stopped(), 1, "YouTube-Tunnel vorher angehalten");
   assert.deepEqual(f.log.map((e) => e.slice(0, 3)), [
     ["docker", "gluetun qbittorrent vpn-probe", "[Interface]\nPrivateKey = NEU\n"],
-    ["check", "new", "identity"],
-    ["check", "new", "isolation"],
+    ["check", NEW, "identity"],
+    ["check", NEW, "isolation"],
     ["qbit"],
-    ["plan", "new"],
+    ["plan", NEW],
   ]);
 });
 
 test("Profilwechsel scheitert → altes Profil zurück und geprüft, Plan unverändert", async () => {
-  const f = await fixture({ failIdentityFor: "new" });
-  await assert.rejects(f.sw.apply({ profileId: "new", confirmation: "OK" }), /bisherige Profil ist wieder aktiv/);
+  const f = await fixture({ failIdentityFor: NEW });
+  await assert.rejects(f.sw.apply({ profileId: NEW, confirmation: "OK" }), /bisherige Profil ist wieder aktiv/);
   assert.equal(await readFile(path.join(f.appdata, "gluetun", "wg0.conf"), "utf8"), "[Interface]\nPrivateKey = ALT\n");
   assert.match(await readFile(path.join(f.appdata, "gluetun", "auth.toml"), "utf8"), /apikey = "k-old"/);
-  assert.equal(f.getPlan().vpnProfileId, "old");
+  assert.equal(f.getPlan().vpnProfileId, OLD);
   assert.ok(!f.log.some((e) => e[0] === "plan"));
-  assert.deepEqual(f.log.filter((e) => e[0] === "check").map((e) => e.slice(1)), [["new", "identity"], ["old", "identity"], ["old", "isolation"]]);
+  assert.deepEqual(f.log.filter((e) => e[0] === "check").map((e) => e.slice(1)), [[NEW, "identity"], [OLD, "identity"], [OLD, "isolation"]]);
 });
 
 test("Profilwechsel: Bestätigung, gleiches Profil, offene Ausfallsperre", async () => {
   const f = await fixture();
-  await assert.rejects(f.sw.apply({ profileId: "new" }), /Bestätigung/);
-  await assert.rejects(f.sw.apply({ profileId: "old", confirmation: "OK" }), /schon aktiv/);
+  await assert.rejects(f.sw.apply({ profileId: NEW }), /Bestätigung/);
+  await assert.rejects(f.sw.apply({ profileId: OLD, confirmation: "OK" }), /schon aktiv/);
   f.vault.set("safety-latch:r1", { at: 1 });
-  await assert.rejects(f.sw.apply({ profileId: "new", confirmation: "OK" }), /VPN-Prüfung/);
+  await assert.rejects(f.sw.apply({ profileId: NEW, confirmation: "OK" }), /VPN-Prüfung/);
   assert.equal(f.log.length, 0);
+});
+
+test("Profilwechsel nur mit gültiger Profilkennung", async () => {
+  const f = await fixture();
+  await assert.rejects(f.sw.apply({ profileId: "../../x", confirmation: "OK" }), /Unbekanntes VPN-Profil/);
+  await assert.rejects(f.sw.apply({ profileId: { id: 1 }, confirmation: "OK" }), /Unbekanntes VPN-Profil/);
 });

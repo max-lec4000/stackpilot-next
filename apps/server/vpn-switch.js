@@ -29,6 +29,8 @@ export class VpnSwitch {
   }
   async apply({ profileId, confirmation } = {}) {
     if (confirmation !== "OK") throw Object.assign(Error("Bestätigung fehlt."), { userFacing: true });
+    if (typeof profileId !== "string" || !/^[0-9a-f-]{36}$/.test(profileId))
+      throw Object.assign(Error("Unbekanntes VPN-Profil."), { userFacing: true });
     return this.hub.mutate(["qBittorrent"], async ({ s, plan: checked }) => {
       const plan = this.engine.current().plan;
       const root = plan.rootId || plan.id;

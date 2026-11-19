@@ -124,16 +124,18 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 - Downloads laufen nur, wenn Mullvad und die Ausfallsperre nachgewiesen sind. Fällt das
   VPN aus, hält StackPilot die Torrents an; **Downloads → Geschützt fortsetzen** prüft neu.
 - VPN-Test: **Verwaltung → VPN & Ausfallsperre → Prüfauftrag starten**.
-- VPN-Profile: **Verwaltung → VPN & Ausfallsperre → VPN-Profile**. Mehrere Mullvad-
-  WireGuard-Dateien auf einmal importieren (Name aus dem Dateinamen). Eines nutzt
-  qBittorrent (Gluetun); **Für qBittorrent verwenden** stellt um: neue Dateien, Gluetun/
-  qBittorrent/vpn-probe neu erstellen, Mullvad-Ausgang und Ausfallsperre prüfen, erst dann
-  gilt das neue Profil – sonst kommt das alte zurück (Downloads ruhen dabei ca. 30 s bis
-  2 min). Alle übrigen Profile bilden den eigenen YouTube-Tunnel für Couchdeck (wireproxy,
-  WireGuard im Benutzerraum, nur lokaler Proxy mit Zugang): Sperrt YouTube eine Adresse,
-  schaltet Couchdeck selbst zum nächsten Profil. Ohne weiteres Profil nutzt „Über VPN
-  versuchen“ den qBittorrent-Tunnel mit (über vpn-probe). Jede Konfiguration nur einmal
-  importieren – zwei Tunnel mit demselben Schlüssel stören sich.
+- VPN je Dienst: **Verwaltung → VPN & Ausfallsperre → VPN je Dienst**. Pro Dienst ein
+  Auswahlmenü: **qBittorrent** (Gluetun) – Umstellen nach „OK“: neue Dateien, Gluetun/
+  qBittorrent/vpn-probe neu erstellen, Mullvad-Ausgang und Ausfallsperre prüfen, sonst
+  kommt die alte Config zurück (Downloads ruhen ca. 30 s bis 2 min). **YouTube in
+  Couchdeck**: automatisch (alle freien Configs, wechselt bei Sperre), eine feste Config
+  oder den qBittorrent-Tunnel mitnutzen. Eigener YouTube-Tunnel über wireproxy
+  (WireGuard im Benutzerraum, nur lokaler Proxy mit Zugang). Die Config von qBittorrent
+  steht für YouTube nicht zur Wahl – zwei Tunnel mit demselben Schlüssel stören sich.
+- WireGuard-Configs: darunter mehrere `.conf` auf einmal importieren (Name aus dem
+  Dateinamen, Doppelungen werden abgelehnt) und nicht genutzte entfernen.
+- Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
+  „OK“ oder „Abbrechen“.
 - Neue Quelle (Indexer): **Verwaltung → Quellen** → Anbieter wählen → testen → speichern.
 
 ## Neue App ins Projekt aufnehmen (Entwicklung)

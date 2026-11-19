@@ -109,3 +109,11 @@
 .vpn-profile-confirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .vpn-profile-import { display: grid; gap: 0.35rem; margin-top: 0.5rem; }
 .vpn-profiles .success { color: var(--success); }
+.vpn-services { display: grid; gap: 0.75rem; margin-top: 0.75rem; }
+.vpn-service { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1.4fr); gap: 0.4rem 1rem; align-items: center; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.vpn-service > label { display: flex; flex-direction: column; }
+.vpn-service > label .muted { font-size: var(--font-xs); }
+.vpn-service > select { width: 100%; }
+.vpn-service > p, .vpn-service-confirm { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 640px) { .vpn-service { grid-template-columns: 1fr; } }
+.update-confirm { margin-top: 0.75rem; }

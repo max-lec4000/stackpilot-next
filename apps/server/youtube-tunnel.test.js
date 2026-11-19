@@ -87,3 +87,26 @@ test("YouTube-Tunnel: ohne eigenes Profil oder ohne wireproxy nicht verfügbar",
   importVpn(vault, wg(8), "yt");
   assert.equal(await t.available(), false, "ohne wireproxy-Programm");
 });
+
+test("YouTube-Auswahl: automatisch, festes Profil, qBittorrent-Tunnel mitnutzen", async () => {
+  const { dir, store, vault } = await setup();
+  const q = importVpn(vault, wg(9), "qbit");
+  const y1 = importVpn(vault, wg(10), "yt-1");
+  const y2 = importVpn(vault, wg(11), "yt-2");
+  let plan = { spec: { vpn: true }, vpnProfileId: q.id };
+  const engine = { store, vault, current: () => ({ job: { status: "completed" }, plan }) };
+  const t = new YouTubeTunnel(engine, { dir: path.join(dir, "t") });
+  assert.deepEqual(t.settings(), { mode: "auto", profileId: null });
+  assert.deepEqual(t.pool().map((p) => p.name), ["yt-1", "yt-2"]);
+  t.saveSettings({ mode: "profile", profileId: y2.id });
+  assert.deepEqual(t.pool().map((p) => p.name), ["yt-2"]);
+  assert.throws(() => t.saveSettings({ mode: "profile", profileId: q.id }), /nicht zur Verfügung/);
+  assert.throws(() => t.saveSettings({ mode: "x" }), /Unbekannte/);
+  // Festes Profil wird von qBittorrent übernommen → YouTube fällt auf „automatisch“ zurück
+  plan = { ...plan, vpnProfileId: y2.id };
+  assert.deepEqual(t.pool().map((p) => p.name), ["qbit", "yt-1"]);
+  t.saveSettings({ mode: "shared" });
+  assert.deepEqual(t.pool(), []);
+  assert.equal(t.status().mode, "shared");
+  void y1;
+});

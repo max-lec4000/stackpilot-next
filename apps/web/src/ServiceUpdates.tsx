@@ -9,7 +9,7 @@ function savedJob() {
   try { const value = sessionStorage.getItem("stackpilot-code-update"); return value === "stackpilot-update" ? value : ""; } catch { return ""; }
 }
 export function ServiceUpdates() {
-  const [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [password, setPassword] = useState(""), [confirmed, setConfirmed] = useState(false), [jobId, setJobId] = useState(savedJob), [job, setJob] = useState<Job | null>(null), [waiting, setWaiting] = useState(false);
+  const [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false), [confirmed, setConfirmed] = useState(false), [jobId, setJobId] = useState(savedJob), [job, setJob] = useState<Job | null>(null), [waiting, setWaiting] = useState(false);
   useEffect(() => {
     try { if (jobId) sessionStorage.setItem("stackpilot-code-update", jobId); else sessionStorage.removeItem("stackpilot-code-update"); } catch {}
     if (!jobId) return;
@@ -41,18 +41,21 @@ export function ServiceUpdates() {
       <p>Installiert: {preview.currentVersion || "Nicht bestätigt"} · Ziel: {preview.nextVersion || "Nicht bestätigt"}</p>
       {preview.current && !preview.blockers.length && <p role="status">Der Quellstand ist bereits aktuell.</p>}
       {!!preview.blockers.length && <ul>{preview.blockers.map((item) => <li key={item}>{item}</li>)}</ul>}
-      {preview.ready && <form onSubmit={async (event) => {
-        event.preventDefault(); setBusy(true); setError("");
-        try {
-          const value = await action<Job>("/api/updates/start", { password, confirmation: confirmed ? "OK" : "", review: preview.review });
-          setJob(value); setJobId(value.id); setPreview(null);
-        } catch (e) { setError((e as Error).message); }
-        finally { setBusy(false); setPassword(""); }
-      }}>
-        <label>StackPilot-Passwort<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-        <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />Den geprüften Code installieren und StackPilot kurz neu starten.</label>
-        <button className="primary" disabled={busy || !confirmed}>Geprüfte Version installieren</button>
-      </form>}
+      {preview.ready && !confirmed && <button className="primary" disabled={busy} onClick={() => setConfirmed(true)}>Version {preview.nextVersion} installieren …</button>}
+      {preview.ready && confirmed && <div className="notice update-confirm" role="dialog" aria-label="Update bestätigen">
+        <p><b>StackPilot auf {preview.nextVersion} aktualisieren?</b> StackPilot startet dabei kurz neu, Mediencontainer laufen weiter.</p>
+        <div className="service-update-actions">
+          <button className="primary" disabled={busy} onClick={async () => {
+            setBusy(true); setError("");
+            try {
+              const value = await action<Job>("/api/updates/start", { confirmation: "OK", review: preview.review });
+              setJob(value); setJobId(value.id); setPreview(null);
+            } catch (e) { setError((e as Error).message); }
+            finally { setBusy(false); setConfirmed(false); }
+          }}>{busy ? "Wird gestartet …" : "OK"}</button>
+          <button disabled={busy} onClick={() => setConfirmed(false)}>Abbrechen</button>
+        </div>
+      </div>}
     </>}
     {jobId && <div className="notice" role="status">
       <b>{job?.phase || "Updateauftrag wird gelesen …"}</b>

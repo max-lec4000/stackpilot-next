@@ -663,13 +663,13 @@ export function inventoryMiddleware(options = {}) {
         if (url.pathname === "/api/updates/preview") {
           result = await serviceUpdates.preview();
         } else if (url.pathname === "/api/updates/start") {
-          await manager.reauthenticate(body.password, remoteAddress);
+          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
           result = await serviceUpdates.start(body);
         } else if (["/api/container-maintenance/update", "/api/container-maintenance/rollback"].includes(url.pathname)) {
-          await manager.reauthenticate(body.password, remoteAddress);
+          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
           result = await containerMaintenance.apply(body, url.pathname.endsWith("/rollback"));
         } else if (url.pathname === "/api/container-maintenance/batch") {
-          await manager.reauthenticate(body.password, remoteAddress);
+          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
           result = await containerMaintenance.applyBatch(body, couchdeck);
         } else if (vaultRestore) {
           await manager.reauthenticate(body.password, remoteAddress);
@@ -849,6 +849,9 @@ export function inventoryMiddleware(options = {}) {
           void youtubeVpn.publish().catch(() => {});
         } else if (url.pathname === "/api/vpn/profiles/qbittorrent") {
           result = await vpnSwitch.apply(body);
+          void youtubeVpn.publish().catch(() => {});
+        } else if (url.pathname === "/api/vpn/youtube") {
+          result = youtubeVpn.tunnel.saveSettings(body);
           void youtubeVpn.publish().catch(() => {});
         } else if (url.pathname === "/api/vpn/profiles/remove") {
           result = removeVpnProfile(installer().vault, completedPlan(), body.id);

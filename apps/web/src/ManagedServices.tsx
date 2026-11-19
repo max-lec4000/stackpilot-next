@@ -128,7 +128,6 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     [services, setServices] = useState<Service[]>([]),
     [maintenance, setMaintenance] = useState<Maintenance[]>([]),
     [updateSelection, setUpdateSelection] = useState<{ all: boolean; targets: UpdateTarget[] } | null>(null),
-    [updatePassword, setUpdatePassword] = useState(""),
     [updating, setUpdating] = useState(false),
     [updateError, setUpdateError] = useState(""),
     [updateResults, setUpdateResults] = useState<UpdateResult[]>([]),
@@ -160,7 +159,6 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     setBusy(false);
     if (!updateSelection?.all && !updating) {
       setUpdateSelection(null);
-      setUpdatePassword("");
     }
     opener.current?.focus({ preventScroll: true });
   }
@@ -216,7 +214,6 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     targets.push({ name: "Couchdeck", review: couch.updateVersion });
   const selectedTarget = targets.find((target) => target.name === selected?.name);
   function prepareUpdate(all: boolean, chosen: UpdateTarget[]) {
-    setUpdatePassword("");
     setUpdateError("");
     setUpdateResults([]);
     setUpdateSelection({ all, targets: chosen });
@@ -226,14 +223,13 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     setUpdateError("");
     try {
       const result = await action<{ results: UpdateResult[] }>("/api/container-maintenance/batch", {
-        targets: selection.targets, password: updatePassword, confirmation: "OK",
+        targets: selection.targets, confirmation: "OK",
       });
       setUpdateResults(result.results);
       setUpdateSelection(null);
     } catch (e) {
       setUpdateError((e as Error).message);
     } finally {
-      setUpdatePassword("");
       await Promise.all([load(), couchdeck.load()]);
       setUpdating(false);
     }
@@ -243,18 +239,11 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
       event.preventDefault();
       void runUpdates(updateSelection);
     }}>
-      <p>Stabile Updates für {updateSelection.targets.map(({ name }) => name).join(", ")}. Die Dienste können dabei kurz ausfallen.</p>
+      <p>Stabile Updates für {updateSelection.targets.map(({ name, review }) => name === "Couchdeck" ? `Couchdeck ${review}` : name).join(", ")} installieren? Die Dienste können dabei kurz ausfallen.</p>
       {updateError && <p className="error" role="alert">{updateError}</p>}
-      <label>StackPilot-Administratorpasswort
-        <input type="password" autoComplete="current-password" value={updatePassword}
-          onChange={(event) => setUpdatePassword(event.target.value)} required disabled={updating} />
-      </label>
       <div className="service-update-actions">
-        <button className="primary" disabled={updating}>{updating ? "Wird aktualisiert …" : "Update bestätigen"}</button>
-        <button type="button" disabled={updating} onClick={() => {
-          setUpdateSelection(null);
-          setUpdatePassword("");
-        }}>Abbrechen</button>
+        <button className="primary" disabled={updating}>{updating ? "Wird aktualisiert …" : "OK"}</button>
+        <button type="button" disabled={updating} onClick={() => setUpdateSelection(null)}>Abbrechen</button>
       </div>
     </form>
   );

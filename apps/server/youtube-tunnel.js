@@ -47,11 +47,43 @@ export class YouTubeTunnel {
     this.starting = null;
   }
 
-  /** Profile für YouTube: alle außer dem von qBittorrent. */
-  pool() {
+  /**
+   * Auswahl für YouTube: "auto" = alle Profile außer dem von qBittorrent (wechselt bei Sperre),
+   * "profile" = genau ein Profil, "shared" = den qBittorrent-Tunnel mitnutzen (kein eigener).
+   */
+  settings() {
+    const s = this.engine.vault.get("youtube-vpn-settings") || {};
+    return { mode: ["auto", "profile", "shared"].includes(s.mode) ? s.mode : "auto", profileId: s.profileId || null };
+  }
+
+  saveSettings({ mode, profileId } = {}) {
+    if (!["auto", "profile", "shared"].includes(mode)) throw Object.assign(Error("Unbekannte Auswahl."), { userFacing: true });
+    const free = this.free();
+    if (mode === "profile" && !free.some((p) => p.id === profileId))
+      throw Object.assign(Error("Dieses Profil steht für YouTube nicht zur Verfügung."), { userFacing: true });
+    this.engine.vault.set("youtube-vpn-settings", { mode, profileId: mode === "profile" ? profileId : null });
+    this.stop(); // startet beim nächsten Abruf mit der neuen Auswahl
+    this.index = 0;
+    return this.settings();
+  }
+
+  /** Profile, die YouTube überhaupt nutzen darf: alle außer dem von qBittorrent. */
+  free() {
     const current = this.engine.current?.();
     const plan = current?.job?.status === "completed" ? current.plan : null;
-    return listVpnProfiles(this.engine.vault, plan).filter((p) => p.youtube);
+    return listVpnProfiles(this.engine.vault, plan).filter((p) => !p.qbittorrent);
+  }
+
+  /** Profile für den eigenen YouTube-Tunnel gemäß Auswahl. */
+  pool() {
+    const { mode, profileId } = this.settings();
+    if (mode === "shared") return [];
+    const free = this.free();
+    if (mode === "profile") {
+      const one = free.filter((p) => p.id === profileId);
+      if (one.length) return one;
+    }
+    return free;
   }
 
   async programInstalled() {
@@ -70,7 +102,9 @@ export class YouTubeTunnel {
   status() {
     const pool = this.pool();
     return {
+      ...this.settings(),
       profiles: pool.length,
+      poolIds: pool.map((p) => p.id),
       active: this.current ? { name: this.current.name, position: pool.findIndex((p) => p.id === this.current.profileId) + 1 } : null,
     };
   }

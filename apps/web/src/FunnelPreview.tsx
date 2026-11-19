@@ -4,7 +4,7 @@ import { get } from "./ServerCheck";
 type Plan = {
   ready: boolean; review: string | null; active: boolean; complete?: boolean;
   canDisable: boolean; blockers: string[];
-  routes: { name: string; url: string }[];
+  routes: { name: string; url: string }[]; streamyfin?: boolean;
 };
 const checks = [
   ["browserMfa", "Im Browser als Zuschauer über Authentik mit MFA angemeldet; richtige Bibliotheken sichtbar."],
@@ -18,7 +18,7 @@ export function FunnelPreview() {
     [busy, setBusy] = useState(false), [error, setError] = useState(""),
     [message, setMessage] = useState(""), [password, setPassword] = useState(""),
     [accepted, setAccepted] = useState<Record<string, boolean>>({}),
-    [confirmed, setConfirmed] = useState(false);
+    [confirmed, setConfirmed] = useState(false), [streamyfinOk, setStreamyfinOk] = useState(false);
   async function refresh() {
     setBusy(true); setError(""); setPlan(null); setConfirmed(false);
     try { setPlan(await get<Plan>("/api/remote-access/funnel")); }
@@ -30,7 +30,7 @@ export function FunnelPreview() {
     try {
       const r = await action<{ok: boolean; message: string}>(
         "/api/remote-access/funnel/" + (enable ? "enable" : "disable"),
-        { review: plan?.review, password, confirmation: "OK", acceptance: accepted });
+        { review: plan?.review, password, confirmation: "OK", acceptance: accepted, streamyfinPublic: streamyfinOk });
       setMessage(r.message);
       setPassword(""); setConfirmed(false);
       await refresh();
@@ -68,6 +68,12 @@ export function FunnelPreview() {
           <input type="checkbox" checked={!!accepted[id]}
             onChange={(e) => setAccepted({...accepted, [id]: e.target.checked})} /> {label}
         </label>)}
+        {plan.streamyfin && <label>
+          <input type="checkbox" checked={streamyfinOk} onChange={(e) => setStreamyfinOk(e.target.checked)} />
+          {" "}Das Streamyfin-Gateway ist aktiv: Öffentlich wird zusätzlich der eng begrenzte Seerr-Teil für
+          Streamyfin (Quick-Connect-Anmeldung, Suche, Details, eigene Anfragen). Seerr-Oberfläche,
+          Verwaltung, Passwort-Anmeldung, Bildproxy und API-Schlüssel bleiben gesperrt.
+        </label>}
       </fieldset>}
       {(plan.canDisable || (plan.ready && !plan.complete)) && <>
         <label>StackPilot-Passwort
@@ -79,7 +85,7 @@ export function FunnelPreview() {
           Änderung des öffentlichen Zugriffs bestätigen</label>
         <div className="row">
           {plan.ready && !plan.complete && <button className="primary"
-            disabled={busy || !password || !confirmed || !checks.every(([id]) => accepted[id])}
+            disabled={busy || !password || !confirmed || !checks.every(([id]) => accepted[id]) || (!!plan.streamyfin && !streamyfinOk)}
             onClick={() => void change(true)}>Jellyfin und Anmeldung öffentlich freigeben</button>}
           {plan.canDisable && <button disabled={busy || !password || !confirmed}
             onClick={() => void change(false)}>Öffentlichen Zugriff abschalten · privat behalten</button>}

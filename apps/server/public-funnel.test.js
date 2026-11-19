@@ -6,7 +6,7 @@ function fixture() {
   const state = { calls: [], config: { TCP: {443: {HTTPS: true}, 8443: {HTTPS: true}}, Web: {
     [host + ":443"]: { Handlers: {"/": {Proxy: "http://127.0.0.1:19096"}} },
     [host + ":8443"]: { Handlers: {"/": {Proxy: "http://127.0.0.1:19080"}} },
-  }}, failPort: null, broken: false, mfa: true, backup: true, locked: false };
+  }}, failPort: null, broken: false, mfa: true, backup: true, locked: false, streamyfin: false, seerrReady: true };
   const plan = {id: "plan", rootId: "root"};
   const hub = { context: async () => ({plan}),
     mutate: async (_, fn) => { assert.equal(state.locked, false); state.locked = true;
@@ -42,7 +42,9 @@ function fixture() {
     return {ok: true};
   };
   const service = new PublicFunnel(hub, identity,
-    {verify: async () => ({hostname: host, target: "http://127.0.0.1:19096"})},
+    {verify: async () => ({hostname: host, target: "http://127.0.0.1:19096", streamyfin: state.streamyfin}),
+      streamyfinPreview: async () => ({ready: state.seerrReady, active: true, version: state.seerrReady ? "3.5.2" : "3.5.1",
+        reason: state.seerrReady ? null : "Seerr 3.5.1 läuft. Mindestens 3.5.2 erforderlich."})},
     {plan: async () => ({configured: true, hostname: host, review: "sso"})},
     {inspect: async () => ({ready: true})}, {inspect: async () => ({baseUrl: "expected"})},
     {remote: {inspect: async () => ({hostname: host, tailscaleRunning: true,
@@ -121,4 +123,22 @@ test("Ein vorübergehender Fehlschlag wird durch eine erfolgreiche Prüfung zur�
   f.state.mfa = false;
   await f.service.monitor();
   assert.equal((await f.service.preview()).active, true);
+});
+
+test("Streamyfin öffentlich nur mit sicherer Seerr-Version und eigener Bestätigung", async () => {
+  const f = fixture();
+  f.state.streamyfin = true; f.state.seerrReady = false;
+  let p = await f.service.preview();
+  assert.equal(p.ready, false); assert.equal(p.streamyfin, true);
+  assert.ok(p.blockers.some((b) => /Streamyfin: Seerr 3\.5\.1/.test(b)));
+  f.state.seerrReady = true;
+  p = await f.service.preview();
+  assert.equal(p.ready, true);
+  const body = await f.body();
+  await assert.rejects(f.service.apply(body), /begrenzte Seerr-Teil/);
+  assert.equal(f.state.calls.filter((c) => c[0] === "funnel").length, 0);
+  await f.service.apply({ ...body, streamyfinPublic: true });
+  assert.equal((await f.service.preview()).complete, true);
+  await f.service.disable({ confirmation: "OK" });
+  assert.equal((await f.service.preview()).active, false);
 });

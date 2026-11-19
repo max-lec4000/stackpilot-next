@@ -47,8 +47,14 @@ export class PublicFunnel {
     const record = await this.identity.verify();
     validateIdentityInput(record.input);
     const gateway = await this.protection.verify();
-    if (gateway.streamyfin)
-      throw setupError("Das Streamyfin-Gateway ist nur für die private Abnahme freigegeben. Vor Funnel die bisherige Konfiguration wiederherstellen.");
+    // Streamyfin öffentlich: zusätzlich der eng begrenzte Seerr-Teil (Quick Connect, Suche,
+    // Details, Anfragen). Nur mit einer Seerr-Version, die die bekannten Sicherheitslücken
+    // (Bildproxy, Passwortwechsel, Rechteänderung) behebt; eigene Bestätigung nötig.
+    let streamyfin = null;
+    if (gateway.streamyfin) {
+      streamyfin = await this.protection.streamyfinPreview().catch(() => ({ ready: false, reason: "Seerr-Version nicht prüfbar." }));
+      if (!streamyfin.active) throw setupError("Die Streamyfin-Gateway-Übernahme ist nicht abgeschlossen.");
+    }
     const sso = await this.sso.plan();
     if (!sso.configured || sso.hostname !== record.input.hostname || gateway.hostname !== record.input.hostname)
       throw setupError("SSO und Jellyfin-Schutz müssen für dieselbe Serveradresse bestätigt sein.");
@@ -79,9 +85,11 @@ export class PublicFunnel {
       blockers.push("Serveradresse, Fernzugriff, Quick Connect, Plugin und getrennte lokale Administratoren prüfen.");
     if (!this.backups.list().some((b) => b.restore?.status === "passed"))
       blockers.push("Authentik-Sicherung mit bestandenem isoliertem Wiederherstellungstest fehlt.");
-    const proof = [plan.id, record.id, desired, current, sso.review,
+    if (streamyfin && !streamyfin.ready)
+      blockers.push("Streamyfin: " + (streamyfin.reason || "Seerr-Version mit den Sicherheitskorrekturen nicht bestätigt."));
+    const proof = [plan.id, record.id, desired, current, sso.review, streamyfin && [streamyfin.version, streamyfin.ready],
       identityStatus.checks.map((c) => [c.name, c.state, c.message]), settings.baseUrl, blockers];
-    return { plan, record, desired, current, blockers, saved, review: digest(proof) };
+    return { plan, record, desired, current, blockers, saved, streamyfin: !!streamyfin, review: digest(proof) };
   }
   async preview() {
     let c;
@@ -95,7 +103,7 @@ export class PublicFunnel {
     const enabled = Object.entries(c.desired).filter(([host]) => c.current.AllowFunnel?.[host] === true).length;
     return { checkedAt: new Date().toISOString(), ready: c.blockers.length === 0, review: c.review,
       blockers: c.blockers, active: enabled > 0, complete: enabled === 2, canDisable: !!c.saved,
-      externallyVerified: false,
+      externallyVerified: false, streamyfin: c.streamyfin,
       routes: Object.keys(c.desired).map((host) => ({ url: "https://" + host.replace(/:443$/, ""),
         name: host.endsWith(":443") ? "Jellyfin" : "Authentik-Anmeldung" })) };
   }
@@ -112,6 +120,8 @@ export class PublicFunnel {
       const c = await this.context(true);
       if (c.blockers.length || body.review !== c.review)
         throw setupError("Voraussetzungen oder Konfiguration geändert. Freigabe erneut prüfen.");
+      if (c.streamyfin && body.streamyfinPublic !== true)
+        throw setupError("Bestätigen, dass mit Jellyfin auch der begrenzte Seerr-Teil für Streamyfin öffentlich wird.");
       const key = this.key(c.plan);
       this.hub.engine.vault.set(key, { planId: c.plan.id, rootId: c.plan.rootId || c.plan.id, desired: c.desired, status: "applying",
         at: new Date().toISOString(), acceptance: Object.fromEntries(acceptanceKeys.map((key) => [key, true])) });

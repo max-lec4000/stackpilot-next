@@ -7,6 +7,13 @@ export const streamyfinMaps = String.raw`map "$request_method:$uri" $sp_seerr_al
   "~^GET:/seerr/api/v1/(?:movie/[0-9]+(?:/ratings)?|tv/[0-9]+(?:/ratings|/season/[0-9]+)?|person/[0-9]+(?:/combined_credits)?)$" 1;
   "~^POST:/seerr/api/v1/(?:auth/jellyfin/quickconnect/(?:initiate|authenticate)|request)$" 1;
 }
+# Öffentliche Schreibzugriffe (Quick Connect, Anfragen) global begrenzen. Hinter Funnel
+# kommen alle Anfragen von 127.0.0.1, ein Limit je Adresse wäre wirkungslos.
+map $request_method $sp_seerr_write_key {
+  default "";
+  POST "seerr";
+}
+limit_req_zone $sp_seerr_write_key zone=sp_seerr_write:1m rate=30r/m;
 map $request_uri $sp_seerr_raw_path {
   "~^(?<sp_seerr_path>[^?]+)" $sp_seerr_path;
   default "";
@@ -31,6 +38,8 @@ export const streamyfinLocation = String.raw`location ^~ /seerr/ {
     if ($sp_seerr_raw_path != $uri) { return 400; }
     if ($sp_seerr_allowed = 0) { return 404; }
     if ($http_x_api_key != "") { return 403; }
+    limit_req zone=sp_seerr_write burst=20 nodelay;
+    limit_req_status 429;
     set $sp_seerr_upstream seerr:5055;
     rewrite ^/seerr(/api/v1/.*)$ $1 break;
     client_max_body_size 32k;

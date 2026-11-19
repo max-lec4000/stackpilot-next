@@ -5,6 +5,8 @@ import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
 import { remoteRoutes } from "./domains/access/remote.routes.js";
+import { safetyRoutes } from "./domains/access/safety.routes.js";
+import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 
 const h = () => "ok";
 
@@ -87,4 +89,16 @@ test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort", 
     "POST /api/remote-access/identity/prepare", "POST /api/remote-access/identity/start",
   ]);
   assert.equal(Object.keys(table).length, password.length + session.length);
+});
+
+test("Downloads und Ausfallsperren-Test: Schutzstufen", () => {
+  const r = new RouteRegistry().add(safetyRoutes({})).add(downloadRoutes({}));
+  assert.deepEqual(Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard])), {
+    "GET /api/safety": "session",
+    "POST /api/safety/start": "ok",
+    "GET /api/downloads/status": "session",
+    "GET /api/downloads/list": "session",
+    "POST /api/downloads/action": "session",
+    "POST /api/downloads/resume": "session",
+  });
 });

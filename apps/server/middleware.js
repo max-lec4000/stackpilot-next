@@ -7,6 +7,8 @@ import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { RouteRegistry, isFileResponse, fileOf } from "./routes.js";
 import { remoteRoutes } from "./domains/access/remote.routes.js";
+import { safetyRoutes } from "./domains/access/safety.routes.js";
+import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
@@ -225,7 +227,9 @@ export function inventoryMiddleware(options = {}) {
       connectionCheck, journey, remoteAccess, privateServe, jellyfinProtection, publicFunnel,
       ssoConnection, identity, identityBackups, remoteSecurity, adminTailnet,
       developmentUploadStatus, uploadDevelopmentReport, state,
-    }));
+    }))
+    .add(safetyRoutes({ safety }))
+    .add(downloadRoutes({ hub, guard }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -460,8 +464,6 @@ export function inventoryMiddleware(options = {}) {
         result = await sources.detail(url.searchParams.get("id"));
       } else if (url.pathname === "/api/sources" && req.method === "GET") {
         result = await sources.list();
-      } else if (url.pathname === "/api/safety" && req.method === "GET") {
-        result = { operations: safety.list() };
       } else if (url.pathname === "/api/media/poster" && req.method === "GET") {
         const poster = url.searchParams.get("path") || "";
         if (!/^\/[a-zA-Z0-9_-]+\.(jpg|png)$/.test(poster))
@@ -503,20 +505,6 @@ export function inventoryMiddleware(options = {}) {
         result = audit.list(url.searchParams.get("page") || 1);
       } else if (url.pathname === "/api/activity" && req.method === "GET") {
         result = await activity.get();
-      } else if (
-        url.pathname === "/api/downloads/status" &&
-        req.method === "GET"
-      ) {
-        result = await guard.check();
-      } else if (
-        url.pathname === "/api/downloads/list" &&
-        req.method === "GET"
-      ) {
-        result = await hub.downloads({
-          page: url.searchParams.get("page") || 1,
-          filter: url.searchParams.get("filter") || "all",
-          query: url.searchParams.get("query") || "",
-        });
       } else if (
         url.pathname === "/api/media/archive" &&
         req.method === "GET"
@@ -678,18 +666,12 @@ export function inventoryMiddleware(options = {}) {
           result = await requestDiagnostics.search(body);
         else if (url.pathname === "/api/media/releases")
           result = await requestDiagnostics.inspect(body.requestId, true);
-        else if (url.pathname === "/api/downloads/action")
-          result = await hub.downloadAction(body);
         else if (url.pathname === "/api/sources/test")
           result = await sources.test(body);
         else if (url.pathname === "/api/sources/save")
           result = await sources.save(body);
         else if (url.pathname === "/api/sources/action")
           result = await sources.action(body);
-        else if (url.pathname === "/api/safety/start")
-          result = await safety.start(body);
-        else if (url.pathname === "/api/downloads/resume")
-          result = await guard.resume();
         else if (url.pathname === "/api/deployment/plan")
           result = await installer().createPlan(body);
         else if (url.pathname === "/api/deployment/confirm")

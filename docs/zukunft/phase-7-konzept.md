@@ -119,7 +119,12 @@ vorhandenen Tests und einer VM-Abnahme.
   falsches Passwort abgelehnt; Streamyfin zurück/vorbereiten/aktivieren; Authentik-
   Sicherung angelegt und als Datei geladen (ohne Passwort abgelehnt); Seite „Externer
   Zugriff“ ohne Seiten- oder Schnittstellenfehler.
-- Offen in 7.0a: übrige ~105 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
+- **Downloads und Ausfallsperren-Test umgezogen** (`domains/downloads/downloads.routes.js`,
+  `domains/access/safety.routes.js`, 6 Routen). Nachweise in sp-test: 346 Tests,
+  Downloadliste/-status, Meldungen bei ungültiger Aktion und Entfernen ohne OK,
+  vollständiger Ausfallsperren-Test über die neue Route („completed“), danach
+  Downloadschutz „connected“.
+- Offen in 7.0a: übrige ~100 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
   ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)

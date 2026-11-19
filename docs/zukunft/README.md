@@ -237,6 +237,12 @@ Medien nach dem HexOS-Schema ablegen. Dafür fehlt:
 
 ### Weitere Ideen
 
+- **Updates ohne Passworteingabe.** Beim Einspielen von StackPilot-Updates
+  (Verwaltung → Sicherungen & Updates) reicht ein Bestätigungsdialog mit „OK“ und
+  „Abbrechen“, der Ziel-Version und Änderungen zeigt. Heute verlangen Vorschau und
+  Start (`/api/updates/preview`, `/api/updates/start`) jeweils das Passwort.
+  Vorher klären, ob die angemeldete Administratorsitzung samt CSRF-Token als Schutz
+  genügt oder ob z. B. nur bei älterer Anmeldung nachgefragt wird.
 - Gästeprofile mit Ablaufdatum für ausdrücklich befristete Zugänge.
 - Speicherwarnung früher und deutlicher (Systemplatte und Medienplatte getrennt).
 - Hardwarebeschleunigung in Jellyfin nach Geräteprüfung.

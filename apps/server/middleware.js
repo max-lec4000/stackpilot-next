@@ -50,7 +50,8 @@ import { Sources } from "./sources.js";
 import { SafetyCheck } from "./safety-check.js";
 import { DownloadGuard } from "./download-guard.js";
 import { ActivityMonitor } from "./activity.js";
-import { importVpn } from "./vpn.js";
+import { importVpn, listVpnProfiles, removeVpnProfile } from "./vpn.js";
+import { VpnSwitch } from "./vpn-switch.js";
 import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
 import { managedServices, revealCredentials, checkManaged } from "./managed.js";
@@ -92,7 +93,14 @@ export function inventoryMiddleware(options = {}) {
   const couchdeck = options.couchdeck || new Couchdeck(hub);
   installer().couchdeck = couchdeck;
   // YouTube-Ausweg für Couchdeck über den VPN-Tunnel (nur lokal, nur mit Schlüssel)
-  if (options.background !== false) new YouTubeVpnRelay(hub, { linkDir: couchdeck.linkDir }).start();
+  const youtubeVpn = options.youtubeVpn || new YouTubeVpnRelay(hub, { linkDir: couchdeck.linkDir });
+  // Fester Port: nicht aus Tests heraus starten (node --test setzt NODE_TEST_CONTEXT)
+  if (options.background !== false && !process.env.NODE_TEST_CONTEXT) youtubeVpn.start();
+  const vpnSwitch = new VpnSwitch(hub, { tunnel: youtubeVpn.tunnel });
+  const completedPlan = () => {
+    const current = installer().current();
+    return current?.job.status === "completed" ? current.plan : null;
+  };
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
   const appUpdates = new AppUpdates(installer());
@@ -383,6 +391,15 @@ export function inventoryMiddleware(options = {}) {
         };
       } else if (url.pathname === "/api/session" && req.method === "GET") {
         result = { token: session.csrf };
+      } else if (url.pathname === "/api/vpn/profiles" && req.method === "GET") {
+        const tunnel = youtubeVpn.tunnel;
+        result = {
+          profiles: listVpnProfiles(installer().vault, completedPlan()),
+          youtube: {
+            program: tunnel ? await tunnel.programInstalled() : false,
+            status: tunnel?.status() || null,
+          },
+        };
       } else if (url.pathname === "/api/catalog" && req.method === "GET") {
         result = catalog;
       } else if (url.pathname === "/api/stack" && req.method === "GET") {
@@ -827,8 +844,16 @@ export function inventoryMiddleware(options = {}) {
           result = await safety.start(body);
         else if (url.pathname === "/api/downloads/resume")
           result = await guard.resume();
-        else if (url.pathname === "/api/vpn/import")
-          result = importVpn(installer().vault, body.config);
+        else if (url.pathname === "/api/vpn/import") {
+          result = importVpn(installer().vault, body.config, body.name);
+          void youtubeVpn.publish().catch(() => {});
+        } else if (url.pathname === "/api/vpn/profiles/qbittorrent") {
+          result = await vpnSwitch.apply(body);
+          void youtubeVpn.publish().catch(() => {});
+        } else if (url.pathname === "/api/vpn/profiles/remove") {
+          result = removeVpnProfile(installer().vault, completedPlan(), body.id);
+          void youtubeVpn.publish().catch(() => {});
+        }
         else if (url.pathname === "/api/deployment/plan")
           result = await installer().createPlan(body);
         else if (url.pathname === "/api/deployment/confirm")

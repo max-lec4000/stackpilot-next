@@ -45,11 +45,12 @@ Servers – oft nur IPv6 oder nur IPv4. Couchdeck braucht dafür zunächst **kei
 Sind beide eigenen Adressen gesperrt, zeigt Couchdeck einen Dialog mit großem QR-Code
 (vom Sofa aus scannbar) und diesen Auswegen:
 
-- **Über VPN versuchen** – nur mit StackPilot und VPN (Gluetun): Couchdeck ruft YouTube
-  für 6 Stunden über den VPN-Tunnel ab. StackPilot leitet dazu einzelne Verbindungen durch
-  den Container `vpn-probe` im Tunnel (Weiterleiter auf 127.0.0.1:4417 mit Schlüssel, nur
-  YouTube/Google-Adressen); Gluetun und qBittorrent bleiben unverändert. VPN-Adressen
-  können ebenfalls gesperrt sein.
+- **Über VPN versuchen** – nur mit StackPilot und VPN: Couchdeck ruft YouTube für 6 Stunden
+  über StackPilots Weiterleiter (127.0.0.1:4417, mit Schlüssel, nur YouTube/Google-Adressen)
+  ab. Sind in StackPilot weitere VPN-Profile importiert, läuft das über einen eigenen
+  YouTube-Tunnel (wireproxy); sperrt YouTube dessen Adresse, schaltet Couchdeck zum
+  nächsten Profil. Sonst geht es durch den Container `vpn-probe` im qBittorrent-Tunnel.
+  Gluetun und qBittorrent bleiben dabei unverändert.
 - **QR-Code** – Video auf dem Handy ansehen.
 - **Bei YouTube anmelden** – letzte Möglichkeit (siehe unten).
 

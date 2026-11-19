@@ -100,6 +100,11 @@ Ursprünglicher Umfang:
 
 ### Phase 4 · Direkte YouTube-Wiedergabe in Couchdeck
 
+- **Mehrere VPN-Profile (StackPilot, Couchdeck 0.2.9), Abnahme offen.** VPN-Profilliste unter
+  VPN & Ausfallsperre; qBittorrent-Profil umstellbar mit Prüfung und Rückweg; übrige Profile
+  als eigener YouTube-Tunnel (wireproxy v1.1.3, feste Prüfsumme) mit Weiterschalten bei
+  Sperre. In sp-test nativ geprüft: YouTube über wireproxy mit Mullvad-Adresse, Wechsel
+  qBittorrent hin und zurück inkl. Ausfallsperre, Downloadschutz danach „connected“.
 - **Ohne Anmeldung (Couchdeck 0.2.8), persönliche Abnahme offen.** Befund vom 19.11.: YouTube
   sperrte die IPv6-Adresse (yt-dlp und offizieller eingebetteter Player gleichermaßen),
   IPv4 war frei. Couchdeck wechselt jetzt selbst zwischen IPv4 und IPv6, yt-dlp/mpv/

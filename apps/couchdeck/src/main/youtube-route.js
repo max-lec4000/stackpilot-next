@@ -126,6 +126,26 @@ class RouteProxy {
     upstream.pipe(socket);
   }
 
+  /** StackPilot bitten, den YouTube-Tunnel auf das nächste VPN-Profil umzustellen. */
+  rotateVpn() {
+    const v = this.vpn();
+    if (!this.vpnAvailable) return Promise.resolve({ rotated: false, profiles: 0 });
+    const up = new URL(v.proxy);
+    return new Promise((resolve, reject) => {
+      const req = http.request({
+        host: up.hostname, port: Number(up.port), method: 'POST', path: '/next', timeout: 40000,
+        headers: { Authorization: 'Basic ' + Buffer.from('couchdeck:' + v.token).toString('base64'), 'Content-Length': 0 },
+      }, (res) => {
+        let body = '';
+        res.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
+        res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('Ungültige Antwort')); } });
+      });
+      req.on('timeout', () => req.destroy(new Error('Zeitüberschreitung')));
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
   /** Text (z. B. HLS-Playlist) über einen Weg laden. */
   async fetchText(route, url, timeoutMs = 10000) {
     const u = new URL(url);

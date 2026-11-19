@@ -48,7 +48,7 @@ test("VPN-Weiterleitung: Übergabe an Couchdeck und Tunnel über vpn-probe", asy
   const oldMask = process.umask(0o077); // wie der StackPilot-Dienst
   const linkDir = await mkdtemp(path.join(tmpdir(), "sp-ytvpn-"));
   const calls = [];
-  const relay = new YouTubeVpnRelay(hub(), { linkDir, port: 0, exec: fakeExec(calls) });
+  const relay = new YouTubeVpnRelay(hub(), { linkDir, port: 0, exec: fakeExec(calls), tunnel: null });
   relay.start();
   await new Promise((r) => setTimeout(r, 200));
   try {
@@ -78,7 +78,7 @@ test("VPN-Weiterleitung: Übergabe an Couchdeck und Tunnel über vpn-probe", asy
 test("Ohne VPN im Stack gibt es keine Übergabe und keinen Tunnel", async () => {
   const linkDir = await mkdtemp(path.join(tmpdir(), "sp-ytvpn-"));
   const calls = [];
-  const relay = new YouTubeVpnRelay(hub({ vpn: false }), { linkDir, port: 0, exec: fakeExec(calls) });
+  const relay = new YouTubeVpnRelay(hub({ vpn: false }), { linkDir, port: 0, exec: fakeExec(calls), tunnel: null });
   relay.start();
   await new Promise((r) => setTimeout(r, 200));
   try {
@@ -89,5 +89,52 @@ test("Ohne VPN im Stack gibt es keine Übergabe und keinen Tunnel", async () => 
     assert.equal(calls.length, 0);
   } finally {
     relay.stop();
+  }
+});
+
+test("Eigener YouTube-Tunnel hat Vorrang; /next und /status nur mit Schlüssel", async () => {
+  const linkDir = await mkdtemp(path.join(tmpdir(), "sp-ytvpn-"));
+  // Gegenstück zu wireproxy: CONNECT mit Zugangsdaten, danach Echo
+  const upstream = http.createServer();
+  upstream.on("connect", (req, sock) => {
+    if (req.headers["proxy-authorization"] !== "Basic " + Buffer.from("sp:pw").toString("base64")) return sock.end("HTTP/1.1 407 x\r\n\r\n");
+    sock.write("HTTP/1.1 200 OK\r\n\r\n");
+    sock.pipe(sock);
+  });
+  await new Promise((r) => upstream.listen(0, "127.0.0.1", r));
+  const { YouTubeTunnel } = await import("./youtube-tunnel.js");
+  const tunnel = Object.assign(Object.create(YouTubeTunnel.prototype), {
+    rotations: 0,
+    available: async () => true,
+    ensure: async () => ({ profileId: "p1", name: "Wien", httpPort: upstream.address().port, user: "sp", pass: "pw" }),
+    status: () => ({ profiles: 2, active: { name: "Wien", position: 1 } }),
+    next: async function () { this.rotations++; return { rotated: true, profiles: 2, name: "Frankfurt" }; },
+    stop: () => {},
+  });
+  const calls = [];
+  const relay = new YouTubeVpnRelay(hub({ probe: false }), { linkDir, port: 0, exec: fakeExec(calls), tunnel });
+  relay.start();
+  await new Promise((r) => setTimeout(r, 200));
+  try {
+    const port = relay.server.address().port;
+    relay.port = port;
+    assert.equal(await relay.publish(), true, "eigener Tunnel genügt für die Übergabe");
+    const token = relay.token();
+    const ok = await connect(port, "rr1.googlevideo.com:443", token);
+    assert.equal(ok.status, 200);
+    const echoed = await new Promise((r) => { ok.sock.once("data", (d) => r(d.toString())); ok.sock.write("hallo"); });
+    assert.equal(echoed, "hallo");
+    ok.sock.destroy();
+    assert.equal(calls.length, 0, "kein docker exec, wenn der eigene Tunnel läuft");
+    const auth = { Authorization: "Basic " + Buffer.from("couchdeck:" + token).toString("base64") };
+    assert.equal((await fetch(`http://127.0.0.1:${port}/next`, { method: "POST" })).status, 401);
+    const next = await (await fetch(`http://127.0.0.1:${port}/next`, { method: "POST", headers: auth })).json();
+    assert.deepEqual(next, { rotated: true, profiles: 2, name: "Frankfurt" });
+    assert.equal(tunnel.rotations, 1);
+    const st = await (await fetch(`http://127.0.0.1:${port}/status`, { headers: auth })).json();
+    assert.equal(st.tunnel.profiles, 2);
+  } finally {
+    relay.stop();
+    upstream.close();
   }
 });

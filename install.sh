@@ -100,6 +100,25 @@ else
   mv "$PREFIX/node.new" "$PREFIX/node"
 fi
 
+# YouTube-Tunnel für Couchdeck: wireproxy (WireGuard ganz im Benutzerraum, kein root und
+# kein NET_ADMIN nötig). Feste Version, feste Prüfsumme; gehört root, StackPilot startet ihn nur.
+WIREPROXY_VERSION=v1.1.3
+WIREPROXY_SHA256=e88c1d090740373fc606c1bafd81d9a5eadc642cce5667616e20e9d7a444f51c
+if [ "$(cat "$PREFIX/bin/wireproxy.version" 2>/dev/null || true)" != "$WIREPROXY_VERSION" ]; then
+  TMP_WP="$(mktemp -d)"
+  if curl -fsSL -o "$TMP_WP/wp.tgz" "https://github.com/pufferffish/wireproxy/releases/download/$WIREPROXY_VERSION/wireproxy_linux_amd64.tar.gz" \
+    && echo "$WIREPROXY_SHA256  $TMP_WP/wp.tgz" | sha256sum -c --status - \
+    && tar -xzf "$TMP_WP/wp.tgz" -C "$TMP_WP" --no-same-owner wireproxy; then
+    install -d -m 755 "$PREFIX/bin"
+    install -m 755 -o root -g root "$TMP_WP/wireproxy" "$PREFIX/bin/wireproxy"
+    echo "$WIREPROXY_VERSION" > "$PREFIX/bin/wireproxy.version"
+    echo "wireproxy $WIREPROXY_VERSION installiert."
+  else
+    echo "wireproxy: Download oder Prüfsumme fehlgeschlagen – YouTube nutzt dann den qBittorrent-Tunnel."
+  fi
+  rm -rf "$TMP_WP"
+fi
+
 echo "==> 3/6 StackPilot bauen"
 # Gebaut wird als normaler Benutzer in einem Wegwerfordner; root führt keine Paketskripte aus.
 BUILD="$(mktemp -d /var/tmp/stackpilot-build.XXXXXX)"

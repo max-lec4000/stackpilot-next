@@ -153,18 +153,35 @@ class YouTube {
     let sawBot = false;
     for (const route of this.routeOrder()) {
       if (this.blocked[route] > Date.now()) { sawBot = true; continue; }
-      try {
-        const result = await fn(route);
-        if (route !== 'vpn') this.preferred = route;
-        return { result, route };
-      } catch (error) {
-        if (error.code === botCode) { this.blocked[route] = Date.now() + blockPause; this.lastBotCheck = Date.now(); sawBot = true; lastError = error; continue; }
-        if (routeError(error)) { this.blocked[route] = Date.now() + unreachablePause; lastError = error; continue; }
-        throw error;
+      let rotations = 0;
+      for (;;) {
+        try {
+          const result = await fn(route);
+          if (route !== 'vpn') this.preferred = route;
+          return { result, route };
+        } catch (error) {
+          if (error.code === botCode) {
+            // VPN: StackPilot schaltet zum nächsten eigenen Profil (andere Adresse) – jedes einmal
+            if (route === 'vpn') {
+              const r = await this.routes.rotateVpn().catch(() => null);
+              if (r?.rotated && ++rotations < (r.profiles || 0)) { this.forgetRoute('vpn'); continue; }
+            }
+            this.blocked[route] = Date.now() + blockPause; this.lastBotCheck = Date.now(); sawBot = true; lastError = error;
+            break;
+          }
+          if (routeError(error)) { this.blocked[route] = Date.now() + unreachablePause; lastError = error; break; }
+          throw error;
+        }
       }
     }
     if (sawBot) { this.lastBotCheck = Date.now(); throw botCheckError(); }
     throw lastError || new Error('Kein Weg zu YouTube');
+  }
+
+  /** Zwischengespeicherte Adressen eines Wegs verwerfen (Adresse hat gewechselt). */
+  forgetRoute(route) {
+    if (!this.resolved) return;
+    for (const [k, v] of [...this.resolved.entries()]) if (v.route === route) this.resolved.delete(k);
   }
 
   /** Auf Wunsch (Dialog): für einige Stunden über den VPN-Tunnel von StackPilot abrufen. */

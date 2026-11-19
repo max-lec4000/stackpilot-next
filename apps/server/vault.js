@@ -83,4 +83,16 @@ export class Vault {
     }
     return value;
   }
+  /** Namen der Geheimnisse mit diesem Präfix (nur Namen, keine Inhalte). */
+  names(prefix) {
+    if (!/^[a-z0-9:_-]{1,60}$/.test(prefix)) throw new Error("Ungültiges Präfix.");
+    return this.store.db
+      .prepare("SELECT name FROM vault WHERE substr(name,1,length(?))=? ORDER BY name")
+      .all(prefix, prefix)
+      .map((r) => r.name);
+  }
+  delete(name) {
+    if (!/^[a-z0-9:_-]{1,100}$/.test(name)) throw new Error("Ungültiger Geheimnisname.");
+    this.store.db.prepare("DELETE FROM vault WHERE name=?").run(name);
+  }
 }

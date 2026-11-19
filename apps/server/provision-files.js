@@ -1,3 +1,4 @@
+import { gluetunAuth } from "./vpn-switch.js";
 import { randomBytes, pbkdf2Sync, createHash } from "node:crypto";
 import {
   mkdir,
@@ -461,7 +462,7 @@ export async function prepareFiles(plan, vault, manifestDir) {
     );
     await createFile(
       path.join(dir, "auth.toml"),
-      `[[roles]]\nname = "stackpilot-check"\nroutes = ["GET /v1/vpn/status", "PUT /v1/vpn/status"]\nauth = "apikey"\napikey = "${profile.controlKey}"\n`,
+      gluetunAuth(profile),
     );
   }
   await mkdir(manifestDir, { mode: 0o700, recursive: true });

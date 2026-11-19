@@ -150,3 +150,23 @@ test('Vorabladen: höchstens 4 je 5 min, Warteschlange hat Vorrang', () => {
   yt.prefetch({ kind: 'video', id: 'gesperrt' }, { queued: true });
   assert.equal(calls.length, 5);
 });
+
+test('VPN gesperrt: nächstes Profil von StackPilot, jedes höchstens einmal', async () => {
+  const yt = new YouTube();
+  yt.routes.start = async () => {};
+  fs.writeFileSync(path.join(process.env.COUCHDECK_LINK_DIR, 'youtube-vpn.json'), JSON.stringify({ version: 1, proxy: 'http://127.0.0.1:4417', token: 'e'.repeat(48) }));
+  yt.useVpn();
+  const bot = () => Object.assign(new Error('bot'), { code: 'YOUTUBE_BOT_CHECK' });
+  let rotations = 0;
+  yt.routes.rotateVpn = async () => { rotations++; return { rotated: true, profiles: 3 }; };
+  let calls = 0;
+  const r = await yt.withRoute(async () => { calls++; if (calls < 3) throw bot(); return 'ok'; });
+  assert.equal(r.route, 'vpn');
+  assert.equal(rotations, 2);
+  // Alle drei Profile gesperrt → Bot-Meldung nach höchstens 3 Versuchen
+  calls = 0; rotations = 0;
+  await assert.rejects(yt.withRoute(async () => { calls++; throw bot(); }), { code: 'YOUTUBE_BOT_CHECK' });
+  assert.equal(calls, 3);
+  assert.equal(yt.vpnStatus().blocked, true);
+  yt.stopVpn(); yt.resetBotCheck();
+});

@@ -1,3 +1,4 @@
+import { VpnProfiles } from "./VpnProfiles";
 import { SeriesRemoval } from "./SeriesRemoval";
 import { AuditLog } from "./AuditLog";
 import { DevelopmentDiagnostics } from "./DevelopmentDiagnostics";
@@ -179,7 +180,7 @@ export function Administration({
     if (panel === "profiles") return <SizeSettings />;
     if (panel === "media-files") return <SeriesRemoval />;
     if (panel === "sources") return <SourcesView />;
-    if (panel === "safety") return <SafetyCheckView />;
+    if (panel === "safety") return <><VpnProfiles /><SafetyCheckView /></>;
     if (panel === "connections") return <ConnectionChecks />;
     if (panel === "diagnosis")
       return (

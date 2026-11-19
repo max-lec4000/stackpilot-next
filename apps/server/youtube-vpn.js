@@ -2,14 +2,17 @@
 // des Servers sperrt. Couchdeck bietet ihn im Bot-Dialog an; nichts läuft automatisch darüber.
 //
 // Ein CONNECT-Weiterleiter nur auf 127.0.0.1, nur mit Schlüssel, nur zu YouTube-/Google-Namen
-// auf Port 443. Jede Verbindung läuft als `docker exec -i <vpn-probe> node -e …` im Netz des
-// VPN-Containers: Gluetun, seine Firewall und qBittorrent bleiben unverändert. Den Schlüssel
-// und die Adresse legt StackPilot in den Übergabeordner von Couchdeck (Gruppe couchdeck-link).
+// auf Port 443. Bevorzugt läuft YouTube über einen eigenen Tunnel (youtube-tunnel.js,
+// wireproxy mit einem eigenen VPN-Profil, wechselbar per POST /next). Gibt es kein eigenes
+// Profil, läuft jede Verbindung als `docker exec -i <vpn-probe> node -e …` im Netz des
+// qBittorrent-Tunnels; Gluetun, seine Firewall und qBittorrent bleiben unverändert. Den
+// Schlüssel und die Adresse legt StackPilot in den Übergabeordner von Couchdeck.
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { writeFile, rename, unlink, access, chmod, constants } from "node:fs/promises";
 import path from "node:path";
+import { YouTubeTunnel } from "./youtube-tunnel.js";
 
 export const YOUTUBE_VPN_PORT = 4417;
 const ALLOWED = /(^|\.)(youtube\.com|googlevideo\.com|ytimg\.com|ggpht\.com|google\.com|googleapis\.com|gstatic\.com|youtube-nocookie\.com|youtu\.be)$/i;
@@ -45,8 +48,9 @@ function dockerExec(container, host) {
 }
 
 export class YouTubeVpnRelay {
-  constructor(hub, { linkDir = process.env.COUCHDECK_LINK_DIR || "/var/lib/couchdeck", port = YOUTUBE_VPN_PORT, exec = dockerExec } = {}) {
+  constructor(hub, { linkDir = process.env.COUCHDECK_LINK_DIR || "/var/lib/couchdeck", port = YOUTUBE_VPN_PORT, exec = dockerExec, tunnel } = {}) {
     this.hub = hub;
+    this.tunnel = tunnel === undefined ? new YouTubeTunnel(hub.engine) : tunnel;
     this.linkDir = linkDir;
     this.port = port;
     this.exec = exec;
@@ -77,25 +81,42 @@ export class YouTubeVpnRelay {
   }
   start() {
     if (this.server) return;
-    const server = createServer((_req, res) => {
-      res.writeHead(405);
+    const server = createServer((req, res) => void this.request(req, res).catch(() => {
+      if (!res.headersSent) res.writeHead(500);
       res.end();
-    });
+    }));
     server.on("connect", (req, socket) => this.handle(req, socket).catch(() => socket.destroy()));
     server.on("clientError", (_e, socket) => socket.destroy());
-    server.on("error", () => {
+    server.on("error", (e) => {
       this.server = null;
+      console.error(`YouTube-VPN-Weiterleitung nicht gestartet (${e.code === "EADDRINUSE" ? `Port ${this.port} belegt` : e.code || "Fehler"}).`);
     });
     // Hält den Prozess nicht allein am Leben (der eigentliche Webserver tut das).
     server.unref();
     server.listen(this.port, "127.0.0.1", () => {
       this.server = server;
-      void this.publish().catch(() => {});
+      void this.publish().catch((e) => console.error("YouTube-VPN-Übergabe an Couchdeck fehlgeschlagen:", e.message));
     });
     this.timer = setInterval(() => void this.publish().catch(() => {}), 10 * 60000);
     this.timer.unref?.();
   }
+  /** Steuerung für Couchdeck: GET /status, POST /next (nächstes VPN-Profil). */
+  async request(req, res) {
+    const reply = (code, body) => {
+      res.writeHead(code, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body));
+    };
+    if (!proxyToken(req.headers.authorization, this.token())) return reply(401, { error: "Zugang fehlt" });
+    if (req.method === "GET" && req.url === "/status")
+      return reply(200, { tunnel: this.tunnel && (await this.tunnel.available()) ? this.tunnel.status() : null });
+    if (req.method === "POST" && req.url === "/next") {
+      if (!this.tunnel || !(await this.tunnel.available())) return reply(200, { rotated: false, profiles: 0 });
+      return reply(200, await this.tunnel.next());
+    }
+    return reply(404, { error: "Unbekannt" });
+  }
   stop() {
+    this.tunnel?.stop();
     clearInterval(this.timer);
     this.server?.close();
     this.server = null;
@@ -107,7 +128,8 @@ export class YouTubeVpnRelay {
     } catch {
       return false;
     }
-    const id = this.server ? await this.container().catch(() => null) : null;
+    const own = this.server && this.tunnel ? await this.tunnel.available().catch(() => false) : false;
+    const id = own || (this.server ? await this.container().catch(() => null) : null);
     if (!id) {
       await unlink(this.file).catch(() => {});
       return false;
@@ -125,6 +147,31 @@ export class YouTubeVpnRelay {
     }
     return true;
   }
+  async pipeTunnel(run, host, socket) {
+    this.tunnels++;
+    let upstream = null;
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      this.tunnels--;
+      upstream?.destroy();
+      socket.destroy();
+    };
+    socket.on("close", release);
+    try {
+      upstream = await this.tunnel.connect(run, host);
+    } catch {
+      if (!socket.destroyed) socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+      return release();
+    }
+    if (socket.destroyed) return release();
+    upstream.on("error", () => {});
+    upstream.on("close", release);
+    socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    socket.pipe(upstream);
+    upstream.pipe(socket);
+  }
   async handle(req, socket) {
     socket.on("error", () => {});
     if (!proxyToken(req.headers["proxy-authorization"], this.token()))
@@ -132,6 +179,10 @@ export class YouTubeVpnRelay {
     const host = tunnelTarget(req.url);
     if (!host) return socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
     if (this.tunnels >= MAX_TUNNELS) return socket.end("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+    // 1. Eigener YouTube-Tunnel (wireproxy), falls ein eigenes Profil vorhanden ist
+    const run = this.tunnel ? await this.tunnel.ensure().catch(() => null) : null;
+    if (run) return this.pipeTunnel(run, host, socket);
+    // 2. Sonst über den qBittorrent-Tunnel (vpn-probe)
     const id = await this.container().catch(() => null);
     if (!id) return socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n");
     this.tunnels++;

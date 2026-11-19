@@ -1,0 +1,17 @@
+// System → Updates: StackPilot selbst und die Mediencontainer.
+export function updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }) {
+  return [
+    { method: "GET", path: "/api/updates/job", guard: "session", handler: () => serviceUpdates.job() },
+    { method: "POST", path: "/api/updates/preview", guard: "session", handler: () => serviceUpdates.preview() },
+    { method: "POST", path: "/api/updates/start", guard: "ok", confirm: "Update mit OK bestätigen.",
+      handler: ({ body }) => serviceUpdates.start(body) },
+    { method: "GET", path: "/api/container-maintenance", guard: "session", handler: () => containerMaintenance.list() },
+    { method: "POST", path: "/api/container-maintenance/update", guard: "ok", confirm: "Dienst und Bestätigung fehlen.",
+      handler: ({ body }) => containerMaintenance.apply(body, false) },
+    { method: "POST", path: "/api/container-maintenance/rollback", guard: "ok", confirm: "Dienst und Bestätigung fehlen.",
+      handler: ({ body }) => containerMaintenance.apply(body, true) },
+    { method: "POST", path: "/api/container-maintenance/batch", guard: "ok",
+      confirm: "Anwendungen und Bestätigung fehlen oder sind ungültig.",
+      handler: ({ body }) => containerMaintenance.applyBatch(body, couchdeck) },
+  ];
+}

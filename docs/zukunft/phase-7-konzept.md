@@ -96,6 +96,24 @@ Der Umbau erfolgt schrittweise ohne Funktionsänderung: zuerst Routen-Verzeichni
 Adapter für bestehende Funktionen, dann Navigation mit Weiterleitungen, jeweils mit den
 vorhandenen Tests und einer VM-Abnahme.
 
+### Fortschritt 7.0a (19.11.2026)
+
+- **Routen-Verzeichnis** `apps/server/routes.js`: Routen mit Methode, Pfad und Schutzstufe
+  (`session`/`ok`/`password`), Stufe wird vor der Fachlogik erzwungen; GET braucht nie eine
+  Bestätigung, doppelte Routen sind ausgeschlossen. Die Middleware fragt zuerst das
+  Verzeichnis, sonst die bisherige Bedingungskette.
+- **Umgezogen** (14 Routen): System → Updates (`domains/system/updates.routes.js`),
+  Zugriff → VPN (`domains/access/vpn.routes.js`), Anfragen → Freigabe je Zuschauer
+  (`domains/requests/viewer-requests.routes.js`). Fehlermeldungen unverändert; ein Test
+  hält die Schutzstufen fest.
+- **App-Adapter** `apps/server/adapters/`: `confirm.js` (schreiben und zurücklesen),
+  `seerr.js` (Konten, Import aus Jellyfin, Rechte mit Bestätigung, Version). Die Freigabe je
+  Zuschauer spricht Seerr nur noch darüber.
+- Nachweise in sp-test: 344 Tests, native Seerr-Integration (Konto anlegen, Rechte,
+  Freigabe), Oberflächenprüfung des Freigabe-Schalters.
+- Offen in 7.0a: übrige ~140 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
+  ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

@@ -5,6 +5,10 @@ import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
+import { RouteRegistry } from "./routes.js";
+import { updateRoutes } from "./domains/system/updates.routes.js";
+import { vpnRoutes } from "./domains/access/vpn.routes.js";
+import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
 import { Couchdeck } from "./couchdeck.js";
 import { RemoteSetup } from "./remote-setup.js";
 import { ViewerProfiles } from "./identity/viewer-profiles.js";
@@ -50,7 +54,6 @@ import { Sources } from "./sources.js";
 import { SafetyCheck } from "./safety-check.js";
 import { DownloadGuard } from "./download-guard.js";
 import { ActivityMonitor } from "./activity.js";
-import { importVpn, listVpnProfiles, removeVpnProfile } from "./vpn.js";
 import { VpnSwitch } from "./vpn-switch.js";
 import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
 import { catalog } from "./catalog.js";
@@ -211,6 +214,12 @@ export function inventoryMiddleware(options = {}) {
   const qualitySettings = new QualitySettings(hub, requestDiagnostics);
   const safety = new SafetyCheck(installer(), guard);
   let draining = false;
+  // Routen-Verzeichnis (Phase 7.0a): umgezogene Bereiche mit deklarierter Schutzstufe.
+  // Alles andere läuft noch über die Bedingungskette unten.
+  const routes = new RouteRegistry()
+    .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
+    .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
+    .add(viewerRequestRoutes({ viewerRequests }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -343,10 +352,9 @@ export function inventoryMiddleware(options = {}) {
     try {
       const url = new URL(req.url, `http://${host}`);
       let result;
-      if (url.pathname === "/api/updates/job" && req.method === "GET") {
-        result = await serviceUpdates.job();
-      } else if (url.pathname === "/api/container-maintenance" && req.method === "GET") {
-        result = await containerMaintenance.list();
+      const getRoute = req.method === "GET" ? routes.find("GET", url.pathname) : null;
+      if (getRoute) {
+        result = await routes.run(getRoute, { url, session, manager, remoteAddress });
       } else if (url.pathname === "/api/vault-backup" && req.method === "GET") {
         result = { local: vaultBackupLocal };
       } else if (url.pathname === "/api/music/tags" && req.method === "GET") {
@@ -391,15 +399,6 @@ export function inventoryMiddleware(options = {}) {
         };
       } else if (url.pathname === "/api/session" && req.method === "GET") {
         result = { token: session.csrf };
-      } else if (url.pathname === "/api/vpn/profiles" && req.method === "GET") {
-        const tunnel = youtubeVpn.tunnel;
-        result = {
-          profiles: listVpnProfiles(installer().vault, completedPlan()),
-          youtube: {
-            program: tunnel ? await tunnel.programInstalled() : false,
-            status: tunnel?.status() || null,
-          },
-        };
       } else if (url.pathname === "/api/catalog" && req.method === "GET") {
         result = catalog;
       } else if (url.pathname === "/api/stack" && req.method === "GET") {
@@ -601,8 +600,6 @@ export function inventoryMiddleware(options = {}) {
         result = await importedReplacement.jobs();
       } else if (url.pathname === "/api/media/series-inventory" && req.method === "GET") {
         result = await seriesRemoval.list();
-      } else if (url.pathname === "/api/viewer-requests" && req.method === "GET") {
-        result = await viewerRequests.list();
       } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
         result = await viewerProfiles.list();
       } else if (url.pathname === "/api/viewers" && req.method === "GET") {
@@ -660,17 +657,9 @@ export function inventoryMiddleware(options = {}) {
           e.store.operation(body.operationId)?.kind !== "deployment"
         )
           throw Error("Dieser Auftrag gehört nicht zur Installation.");
-        if (url.pathname === "/api/updates/preview") {
-          result = await serviceUpdates.preview();
-        } else if (url.pathname === "/api/updates/start") {
-          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
-          result = await serviceUpdates.start(body);
-        } else if (["/api/container-maintenance/update", "/api/container-maintenance/rollback"].includes(url.pathname)) {
-          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
-          result = await containerMaintenance.apply(body, url.pathname.endsWith("/rollback"));
-        } else if (url.pathname === "/api/container-maintenance/batch") {
-          // Updates: angemeldete Sitzung + CSRF-Token + ausdrückliches „OK“ genügen (kein Passwort)
-          result = await containerMaintenance.applyBatch(body, couchdeck);
+        const postRoute = routes.find("POST", url.pathname);
+        if (postRoute) {
+          result = await routes.run(postRoute, { url, body, session, manager, remoteAddress });
         } else if (vaultRestore) {
           await manager.reauthenticate(body.password, remoteAddress);
           result = await hub.mutate([], () => stageVaultRestore(state, body.archive, body.passphrase));
@@ -844,19 +833,6 @@ export function inventoryMiddleware(options = {}) {
           result = await safety.start(body);
         else if (url.pathname === "/api/downloads/resume")
           result = await guard.resume();
-        else if (url.pathname === "/api/vpn/import") {
-          result = importVpn(installer().vault, body.config, body.name);
-          void youtubeVpn.publish().catch(() => {});
-        } else if (url.pathname === "/api/vpn/profiles/qbittorrent") {
-          result = await vpnSwitch.apply(body);
-          void youtubeVpn.publish().catch(() => {});
-        } else if (url.pathname === "/api/vpn/youtube") {
-          result = youtubeVpn.tunnel.saveSettings(body);
-          void youtubeVpn.publish().catch(() => {});
-        } else if (url.pathname === "/api/vpn/profiles/remove") {
-          result = removeVpnProfile(installer().vault, completedPlan(), body.id);
-          void youtubeVpn.publish().catch(() => {});
-        }
         else if (url.pathname === "/api/deployment/plan")
           result = await installer().createPlan(body);
         else if (url.pathname === "/api/deployment/confirm")
@@ -886,8 +862,6 @@ export function inventoryMiddleware(options = {}) {
           });
         } else if (url.pathname === "/api/credentials/reveal")
           result = await revealCredentials(installer(), body, manager, remoteAddress);
-        else if (url.pathname === "/api/viewer-requests")
-          result = await viewerRequests.change(body);
         else if (url.pathname === "/api/viewer-profiles")
           result = await viewerProfiles.change(body);
         else if (url.pathname === "/api/viewers/action") {

@@ -138,10 +138,16 @@ Ursprünglicher Umfang:
   Fehlende Regeln müssen einmalig im Tailscale-Konto ergänzt werden; keine
   öffentliche Funnel-Freigabe der Verwaltung.
 
-- **Geschütztes Jellyfin mit einer neueren stabilen Version prüfen.**
-  Versionswechsel, Authentik-Anmeldung und Rollback abnehmen. Der
-  veröffentlichte Rückweg wurde mit zwei Image-Referenzen desselben
-  Releases 12.4.0 geprüft.
+- **Geschütztes Jellyfin: echter Versionssprung abgenommen (19.11., Test-VM).** Da 12.4
+  die neueste Version ist, wurde Jellyfin in sp-test auf das offizielle 12.3.0 gesetzt
+  (nur dort für den Test freigegeben, Startprobe auf einer Datenkopie vorab) und dann über
+  StackPilots reguläre Container-Wartung auf 12.4.0 aktualisiert (23 s), per Rückweg
+  zurück auf 12.3.0 (16 s, gesicherte Konfiguration) und wieder auf 12.4.0. Nach jedem
+  Schritt vollständige Zuschauer-Anmeldung über Authentik mit MFA
+  (`scripts/testvm/oidc-login.mjs`): Konto kein Admin, Passwortanbieter gesperrt,
+  Bibliotheken über das Schutz-Gateway. VM danach im Ausgangszustand (12.4, Streamyfin
+  aktiv, kein Funnel, VM-Freigabe für 12.3 entfernt). Beim nächsten echten Jellyfin-Release
+  bleibt nur, Image und SSO-Plugin-Kompatibilität in den Katalog aufzunehmen.
 - **Streamyfin öffentlich über HTTPS prüfen.** Auf ein offizielles
   Seerr-Image mit den Sicherheitskorrekturen warten und die öffentlichen
   Routen separat abnehmen. Die private Integration ist bereits bestätigt.

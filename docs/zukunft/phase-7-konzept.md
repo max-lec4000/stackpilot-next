@@ -1,6 +1,6 @@
 # Phase 7.0 · Konzept: Apps zentral über StackPilot verwalten
 
-Stand: Entwurf vom 19.11.2026 zur Abstimmung. Noch keine Umsetzung. Grundlage ist der
+Stand: 19.11.2026, **mit Max abgestimmt** (Entscheidungen in Abschnitt 7). Noch keine Umsetzung. Grundlage ist der
 Code-Stand `main` nach StackPilot 0.5.0 / Couchdeck 0.2.10.
 
 ## 1. Ausgangslage
@@ -119,10 +119,13 @@ Fachlogik, sondern über die bestehende Root-Hilfe bzw. den späteren Wächter.
    und Quellen → **7.4/7.5** Medien, Speicher, Sicherung und Wiederherstellung →
    **7.6/7.7** Couchdeck und Container-Umzug.
 
-## 7. Zu entscheiden
+## 7. Entscheidungen (19.11.2026)
 
-- Zielnavigation wie in Abschnitt 3?
-- Expertenzugang zu den App-Oberflächen (nur Tailnet) behalten oder ganz abschaffen?
-- Zuschauer-Oberfläche in StackPilot (eigene Anfragen, Limits sehen) – ja/später/nein?
-- Container: StackPilot ohne Socket mit Wächter; Tailscale auf dem Host; Couchdeck erst
-  nach Machbarkeitsprobe?
+- **Zielnavigation:** wie in Abschnitt 3 – neun Bereiche nach Aufgaben, alte Links leiten
+  weiter, Umbau zuerst ohne Funktionsänderung.
+- **Expertenzugang:** bleibt für Seltenes – gezielte Links in die App-Oberflächen, nur im
+  Tailnet.
+- **Zuschauer-Oberfläche:** aktuell nein, vielleicht später. StackPilot bleibt vorerst
+  Verwaltung; Rollen so anlegen, dass eine spätere Zuschaueransicht nicht verbaut wird.
+- **Container:** StackPilot als Container ohne Docker-Socket mit kleinem Docker-Wächter auf
+  dem Host; Tailscale bleibt auf dem Host; Couchdeck erst nach Machbarkeitsprobe entscheiden.

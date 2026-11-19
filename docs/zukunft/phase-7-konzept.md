@@ -160,7 +160,13 @@ vorhandenen Tests und einer VM-Abnahme.
   lädt StackPilot das Gateway nach jedem Authentik-Start neu (`startAuthentication`).
   Nachweis in sp-test: Fehler nachgestellt und behoben, neue Sicherung → Gateway-Prozesse
   1 s nach dem Server neu, Anmeldung mit MFA erfolgreich.
-- Offen in 7.0a: gemeinsame Oberflächen-Bausteine.
+- **Oberflächen-Bausteine** (`apps/web/src/ui.tsx`): `ConfirmBar` (Frage, „OK“ fokussiert,
+  „Abbrechen“, Fehler direkt darunter) und `useAction` (läuft/Fehler/Meldung). Umgestellt:
+  StackPilot-Update, Container-Wartung, Sammel-Updates, VPN-Umstellung und Config
+  entfernen. Fünf Stellen mit Browser-`window.confirm` (Downloads, Qualität, Folgen,
+  Einrichtung) ziehen mit ihren Bereichen in 7.1–7.4 um. Nachweise in sp-test: Typprüfung,
+  Build, 355 Tests, Dialoge im Browser (Fokus, Abbrechen setzt zurück, keine Fehler).
+- **7.0a abgeschlossen.** Nächster Schritt: 7.0b Zielnavigation.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)
 

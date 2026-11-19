@@ -1,3 +1,4 @@
+import { ConfirmBar } from "./ui";
 import { useEffect, useState } from "react";
 import { action } from "./RetirementPanel";
 import { get } from "./ServerCheck";
@@ -42,20 +43,18 @@ export function ServiceUpdates() {
       {preview.current && !preview.blockers.length && <p role="status">Der Quellstand ist bereits aktuell.</p>}
       {!!preview.blockers.length && <ul>{preview.blockers.map((item) => <li key={item}>{item}</li>)}</ul>}
       {preview.ready && !confirmed && <button className="primary" disabled={busy} onClick={() => setConfirmed(true)}>Version {preview.nextVersion} installieren …</button>}
-      {preview.ready && confirmed && <div className="notice update-confirm" role="dialog" aria-label="Update bestätigen">
+      {preview.ready && confirmed && <ConfirmBar label="Update bestätigen" busy={busy} busyLabel="Wird gestartet …"
+        onCancel={() => setConfirmed(false)}
+        onOk={async () => {
+          setBusy(true); setError("");
+          try {
+            const value = await action<Job>("/api/updates/start", { confirmation: "OK", review: preview.review });
+            setJob(value); setJobId(value.id); setPreview(null);
+          } catch (e) { setError((e as Error).message); }
+          finally { setBusy(false); setConfirmed(false); }
+        }}>
         <p><b>StackPilot auf {preview.nextVersion} aktualisieren?</b> StackPilot startet dabei kurz neu, Mediencontainer laufen weiter.</p>
-        <div className="service-update-actions">
-          <button className="primary" disabled={busy} onClick={async () => {
-            setBusy(true); setError("");
-            try {
-              const value = await action<Job>("/api/updates/start", { confirmation: "OK", review: preview.review });
-              setJob(value); setJobId(value.id); setPreview(null);
-            } catch (e) { setError((e as Error).message); }
-            finally { setBusy(false); setConfirmed(false); }
-          }}>{busy ? "Wird gestartet …" : "OK"}</button>
-          <button disabled={busy} onClick={() => setConfirmed(false)}>Abbrechen</button>
-        </div>
-      </div>}
+      </ConfirmBar>}
     </>}
     {jobId && <div className="notice" role="status">
       <b>{job?.phase || "Updateauftrag wird gelesen …"}</b>

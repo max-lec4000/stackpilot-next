@@ -1,3 +1,4 @@
+import { ConfirmBar } from "./ui";
 import { useEffect, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
@@ -37,8 +38,9 @@ export function ContainerMaintenance() {
       {!service.update && !service.rollback && service.from === service.to && <small>Keine abweichende Katalogversion</small>}
       {service.note && <small>{service.note}</small>}
     </div>)}
-    {selected && <form onSubmit={async (event) => {
-      event.preventDefault();
+    {selected && <ConfirmBar label={selected.rollback ? "Rückkehr bestätigen" : "Update bestätigen"} busy={busy} busyLabel="Wartung läuft …"
+      onCancel={() => select(null)}
+      onOk={async () => {
       setBusy(true);
       setError("");
       setNotice("");
@@ -61,9 +63,7 @@ export function ContainerMaintenance() {
       <p>{selected.rollback
         ? `${selected.service.name} wird auf die gesicherte Version und Konfiguration zurückgesetzt. Neuere Änderungen werden separat auf dem Server abgelegt.`
         : `${selected.service.name} auf ${version(selected.service.to)} aktualisieren? Der Dienst wird kurz gestoppt. Wenn die neue Version die Funktionsprüfung nicht besteht, stellt StackPilot die bisherige Version wieder her.`}</p>
-      <button className="primary" disabled={busy}>{busy ? "Wartung läuft …" : "OK"}</button>
-      <button type="button" disabled={busy} onClick={() => select(null)}>Abbrechen</button>
-    </form>}
+    </ConfirmBar>}
     {notice && <p role="status">{notice}</p>}
     {error && <p role="alert">{error}</p>}
   </div>;

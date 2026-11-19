@@ -130,3 +130,68 @@ export function DetailPanel({
     </dialog>
   );
 }
+
+/**
+ * Einheitliche Bestätigung (Phase 7.0a): Frage oder Folgen, dann „OK“ oder „Abbrechen“.
+ * Während der Ausführung sind beide Knöpfe gesperrt; ein Fehler erscheint direkt darunter.
+ */
+export function ConfirmBar({
+  label,
+  children,
+  onOk,
+  onCancel,
+  busy = false,
+  busyLabel = "Wird ausgeführt …",
+  okLabel = "OK",
+  error = "",
+}: {
+  label: string;
+  children: ReactNode;
+  onOk: () => unknown;
+  onCancel: () => void;
+  busy?: boolean;
+  busyLabel?: string;
+  okLabel?: string;
+  error?: string;
+}) {
+  const ok = useRef<HTMLButtonElement>(null);
+  useEffect(() => { ok.current?.focus({ preventScroll: true }); }, []);
+  return (
+    <div className="notice ui-confirm" role="dialog" aria-label={label}>
+      <div className="ui-confirm-text">{children}</div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="service-update-actions">
+        <button ref={ok} type="button" className="primary" disabled={busy} onClick={() => void onOk()}>
+          {busy ? busyLabel : okLabel}
+        </button>
+        <button type="button" disabled={busy} onClick={onCancel}>Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Zustand rund um eine Aktion: läuft gerade (mit Kennung), Fehler, Erfolgsmeldung.
+ * run() setzt alles zurück, führt aus und liefert true bei Erfolg.
+ */
+export function useAction() {
+  const [busy, setBusy] = useState(""),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  async function run(label: string, fn: () => Promise<string | void>) {
+    setBusy(label);
+    setError("");
+    setNotice("");
+    try {
+      const message = await fn();
+      if (message) setNotice(message);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+  return { busy, error, notice, setError, setNotice, run };
+}

@@ -114,6 +114,8 @@
 .vpn-service > label { display: flex; flex-direction: column; }
 .vpn-service > label .muted { font-size: var(--font-xs); }
 .vpn-service > select { width: 100%; }
-.vpn-service > p, .vpn-service-confirm { grid-column: 1 / -1; margin: 0; }
+.vpn-service > p, .vpn-service > .ui-confirm { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 640px) { .vpn-service { grid-template-columns: 1fr; } }
-.update-confirm { margin-top: 0.75rem; }
+.ui-confirm { margin-top: 0.75rem; display: grid; gap: 0.5rem; }
+.ui-confirm-text p { margin: 0; }
+.vpn-profile-list .ui-confirm { flex-basis: 100%; margin-top: 0.25rem; }

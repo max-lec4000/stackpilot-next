@@ -8,6 +8,7 @@ import {
   Pagination,
   SectionHeading,
   StatusBadge,
+  ConfirmBar,
 } from "./ui";
 import "./services.css";
 import { usePreference, oneOf } from "./preferences";
@@ -235,17 +236,10 @@ export function ManagedServices({ compact = false }: { compact?: boolean }) {
     }
   }
   const confirmation = updateSelection && (
-    <form className="service-update-form" onSubmit={(event) => {
-      event.preventDefault();
-      void runUpdates(updateSelection);
-    }}>
+    <ConfirmBar label="Updates bestätigen" busy={updating} busyLabel="Wird aktualisiert …" error={updateError}
+      onOk={() => runUpdates(updateSelection)} onCancel={() => setUpdateSelection(null)}>
       <p>Stabile Updates für {updateSelection.targets.map(({ name, review }) => name === "Couchdeck" ? `Couchdeck ${review}` : name).join(", ")} installieren? Die Dienste können dabei kurz ausfallen.</p>
-      {updateError && <p className="error" role="alert">{updateError}</p>}
-      <div className="service-update-actions">
-        <button className="primary" disabled={updating}>{updating ? "Wird aktualisiert …" : "OK"}</button>
-        <button type="button" disabled={updating} onClick={() => setUpdateSelection(null)}>Abbrechen</button>
-      </div>
-    </form>
+    </ConfirmBar>
   );
   const results = (items: UpdateResult[]) => items.length > 0 && (
     <ul className="service-update-results" role="status">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
+import { ConfirmBar, useAction } from "./ui";
 
 type Profile = {
   id: string;
@@ -28,12 +29,10 @@ type Data = { profiles: Profile[]; youtube: { program: boolean; status: YouTubeS
  */
 export function VpnProfiles() {
   const [data, setData] = useState<Data | null>(null),
-    [busy, setBusy] = useState(""),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
     [confirmRemove, setConfirmRemove] = useState<Profile | null>(null),
     [switchTo, setSwitchTo] = useState<Profile | null>(null),
     [importResult, setImportResult] = useState<{ done: string[]; failed: string[] } | null>(null);
+  const { busy, error, notice, setError, run } = useAction();
   async function load() {
     try {
       setData(await get<Data>("/api/vpn/profiles"));
@@ -44,19 +43,6 @@ export function VpnProfiles() {
   useEffect(() => {
     void load();
   }, []);
-  async function run(label: string, fn: () => Promise<string>) {
-    setBusy(label);
-    setError("");
-    setNotice("");
-    try {
-      setNotice(await fn());
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy("");
-    }
-  }
   async function importFiles(files: FileList | null) {
     if (!files?.length) return;
     setImportResult(null);
@@ -112,20 +98,18 @@ export function VpnProfiles() {
                 <span className="muted">qBittorrent nutzt kein VPN.</span>
               )}
               {switchTo && qbit && (
-                <div className="vpn-service-confirm notice" role="dialog" aria-label="VPN für qBittorrent umstellen">
+                <ConfirmBar label="VPN für qBittorrent umstellen" busy={busy === "switch"} busyLabel="Wird umgestellt und geprüft …"
+                  onCancel={() => setSwitchTo(null)}
+                  onOk={() => run("switch", async () => {
+                    await action("/api/vpn/profiles/qbittorrent", { profileId: switchTo.id, confirmation: "OK" });
+                    setSwitchTo(null);
+                    return `qBittorrent nutzt jetzt ${switchTo.name}. Mullvad-Ausgang und Ausfallsperre sind geprüft.`;
+                  })}>
                   <p>
                     qBittorrent auf <b>{switchTo.name}</b> umstellen? Downloads ruhen dafür etwa 30 Sekunden bis 2 Minuten.
                     StackPilot prüft Mullvad und die Ausfallsperre; bei einem Fehler bleibt {qbit.name} aktiv.
                   </p>
-                  <div className="service-update-actions">
-                    <button className="primary" disabled={!!busy} onClick={() => void run("switch", async () => {
-                      await action("/api/vpn/profiles/qbittorrent", { profileId: switchTo.id, confirmation: "OK" });
-                      setSwitchTo(null);
-                      return `qBittorrent nutzt jetzt ${switchTo.name}. Mullvad-Ausgang und Ausfallsperre sind geprüft.`;
-                    })}>{busy === "switch" ? "Wird umgestellt und geprüft …" : "OK"}</button>
-                    <button disabled={!!busy} onClick={() => setSwitchTo(null)}>Abbrechen</button>
-                  </div>
-                </div>
+                </ConfirmBar>
               )}
             </div>
             <div className="vpn-service">
@@ -183,15 +167,15 @@ export function VpnProfiles() {
                 <span className={"badge " + (p.qbittorrent ? "badge-qbit" : "badge-yt")}>{usedBy(p)}</span>
                 {!p.qbittorrent &&
                   (confirmRemove?.id === p.id ? (
-                    <span className="vpn-profile-confirm">
-                      <span className="muted">Config entfernen?</span>
-                      <button className="danger" disabled={!!busy} onClick={() => void run(p.id, async () => {
+                    <ConfirmBar label={`${p.name} entfernen`} busy={busy === p.id} busyLabel="Wird entfernt …"
+                      onCancel={() => setConfirmRemove(null)}
+                      onOk={() => run(p.id, async () => {
                         await action("/api/vpn/profiles/remove", { id: p.id });
                         setConfirmRemove(null);
                         return `Entfernt: ${p.name}`;
-                      })}>{busy === p.id ? "Wird entfernt …" : "OK"}</button>
-                      <button disabled={!!busy} onClick={() => setConfirmRemove(null)}>Abbrechen</button>
-                    </span>
+                      })}>
+                      <p>Config <b>{p.name}</b> entfernen? Der verschlüsselte Schlüssel wird gelöscht.</p>
+                    </ConfirmBar>
                   ) : (
                     <button disabled={!!busy} onClick={() => setConfirmRemove(p)}>Entfernen</button>
                   ))}

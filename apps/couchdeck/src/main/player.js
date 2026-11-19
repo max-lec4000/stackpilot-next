@@ -135,6 +135,7 @@ class Player extends EventEmitter {
     this.mpv.on('log', (l) => this.emit('log', l));
     this.mpv.on('event', (e) => this.onEvent(e));
     this.mpv.on('exit', () => {
+      this.state.idle = null; // beendeter Prozess spielt nichts mehr
       this.soundKey = null; // neuer mpv-Prozess hat keine Filter mehr
       if (this.mpvRestarting) return; // gewollter Neustart (restartMpv)
       if (this.current) this.finish('error');
@@ -666,7 +667,21 @@ class Player extends EventEmitter {
     if (e.event === 'property-change') {
       const v = e.data;
       switch (e.name) {
-        case 'time-pos': if (typeof v === 'number') { this.state.pos = v; this.onTime(); } break;
+        case 'time-pos':
+          if (typeof v === 'number') {
+            // Läuft die Zeit, ist das erste Bild da – auch wenn mpv kein playback-restart meldet.
+            // Sonst blieb der Ladezustand hängen und Eingaben gingen an die Oberfläche.
+            if (this.loading && this.current) {
+              if (this.loading.pos == null) this.loading.pos = v;
+              else if (v > this.loading.pos + 0.5) {
+                this.emit('log', 'Ladeanzeige beendet: Wiedergabe läuft (ohne playback-restart).');
+                this.setLoading(false);
+              }
+            }
+            this.state.pos = v; this.onTime();
+          }
+          break;
+        case 'idle-active': this.state.idle = !!v; break;
         case 'pause': this.state.paused = !!v; if (this.current?.started) this.report('progress'); break;
         case 'duration': this.state.duration = this.current?.fullDuration || v || 0; break;
         case 'volume': this.state.volume = v ?? 100; break;

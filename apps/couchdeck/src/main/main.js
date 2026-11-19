@@ -67,7 +67,28 @@ function createWindow() {
 // (Pause / Überspringen) erst beim Loslassen aus – und nur, wenn währenddessen nicht gespult wurde.
 const aHold = { down: false, seeked: false };
 
+/**
+ * Sicherheitsnetz: mpv spielt, aber Couchdeck hat keine zugehörige Wiedergabe mehr (sollte nicht
+ * vorkommen). Dann gehen Eingaben an mpv statt an die Oberfläche: B beendet, A pausiert, spulen.
+ */
+let orphanLogged = 0;
+function orphanInput(action) {
+  if (Date.now() - orphanLogged > 60000) { orphanLogged = Date.now(); log(`Eingabe "${action}": mpv spielt ohne zugeordnete Wiedergabe – Eingaben gehen an mpv.`); }
+  const p = config.get().player;
+  const mpv = player.mpv;
+  switch (action) {
+    case 'back': case 'home': case 'stop': mpv.command('stop').catch(() => {}); send('refresh'); break;
+    case 'select': case 'playpause': mpv.command('cycle', 'pause').catch(() => {}); break;
+    case 'stick-left': case 'lt': case 'rewind': mpv.command('seek', -p.seekBack, 'relative').catch(() => {}); break;
+    case 'stick-right': case 'rt': case 'fastforward': mpv.command('seek', p.seekForward, 'relative').catch(() => {}); break;
+    case 'left': case 'voldown': volumeStep(-5); break;
+    case 'right': case 'volup': volumeStep(5); break;
+    default: break;
+  }
+}
+
 pads.on('action', (action) => {
+  if (!player.active && !player.loading && player.state.idle === false) { orphanInput(action); return; }
   if (player.loading) { send('input', action.replace(/^stick-/, '')); return; } // Ladeanzeige: B bricht ab
   if (player.active && !audioOnly()) {
     if (action === 'select') { aHold.down = true; aHold.seeked = false; return; }

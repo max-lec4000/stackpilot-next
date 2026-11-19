@@ -124,7 +124,12 @@ vorhandenen Tests und einer VM-Abnahme.
   Downloadliste/-status, Meldungen bei ungültiger Aktion und Entfernen ohne OK,
   vollständiger Ausfallsperren-Test über die neue Route („completed“), danach
   Downloadschutz „connected“.
-- Offen in 7.0a: übrige ~100 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
+- **Qualität & Quellen umgezogen** (`domains/quality/quality.routes.js`, 7 Routen:
+  Größenregel, Suchquellen). Nachweise in sp-test: 347 Tests, Größenregel gelesen und
+  unverändert gespeichert, OK-Pflicht wie bisher, Quellenliste mit 641 Typen. Nicht nativ
+  geprüft: Detail/Test einer konkreten Quelle (in der VM ist keine eingerichtet).
+  Titelbezogene Qualität (`/api/media/quality`, `/film-limit`) folgt mit Anfragen/Medien.
+- Offen in 7.0a: übrige ~95 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
   ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)

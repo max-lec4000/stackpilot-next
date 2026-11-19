@@ -9,6 +9,7 @@ import { RouteRegistry, isFileResponse, fileOf } from "./routes.js";
 import { remoteRoutes } from "./domains/access/remote.routes.js";
 import { safetyRoutes } from "./domains/access/safety.routes.js";
 import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
+import { qualityRoutes } from "./domains/quality/quality.routes.js";
 import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
@@ -229,7 +230,8 @@ export function inventoryMiddleware(options = {}) {
       developmentUploadStatus, uploadDevelopmentReport, state,
     }))
     .add(safetyRoutes({ safety }))
-    .add(downloadRoutes({ hub, guard }));
+    .add(downloadRoutes({ hub, guard }))
+    .add(qualityRoutes({ sources, sizeLimits }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -457,13 +459,6 @@ export function inventoryMiddleware(options = {}) {
         result = await requestDiagnostics.inspect(
           url.searchParams.get("requestId"),
         );
-      } else if (
-        url.pathname === "/api/sources/detail" &&
-        req.method === "GET"
-      ) {
-        result = await sources.detail(url.searchParams.get("id"));
-      } else if (url.pathname === "/api/sources" && req.method === "GET") {
-        result = await sources.list();
       } else if (url.pathname === "/api/media/poster" && req.method === "GET") {
         const poster = url.searchParams.get("path") || "";
         if (!/^\/[a-zA-Z0-9_-]+\.(jpg|png)$/.test(poster))
@@ -489,11 +484,6 @@ export function inventoryMiddleware(options = {}) {
         }
         res.setHeader("Content-Type", response.headers.get("content-type"));
         return res.end(Buffer.concat(chunks));
-      } else if (
-        url.pathname === "/api/media/size-settings" &&
-        req.method === "GET"
-      ) {
-        result = await sizeLimits.settings();
       } else if (
         url.pathname === "/api/operations/overview" &&
         req.method === "GET"
@@ -646,8 +636,6 @@ export function inventoryMiddleware(options = {}) {
           result = await hub.request(body);
         else if (url.pathname === "/api/media/library/refresh")
           result = await hub.library.run(true);
-        else if (url.pathname === "/api/media/size-settings")
-          result = await sizeLimits.save(body);
         else if (url.pathname === "/api/media/film-limit")
           result = await qualitySettings.filmLimit(body);
         else if (url.pathname === "/api/media/quality")
@@ -666,12 +654,6 @@ export function inventoryMiddleware(options = {}) {
           result = await requestDiagnostics.search(body);
         else if (url.pathname === "/api/media/releases")
           result = await requestDiagnostics.inspect(body.requestId, true);
-        else if (url.pathname === "/api/sources/test")
-          result = await sources.test(body);
-        else if (url.pathname === "/api/sources/save")
-          result = await sources.save(body);
-        else if (url.pathname === "/api/sources/action")
-          result = await sources.action(body);
         else if (url.pathname === "/api/deployment/plan")
           result = await installer().createPlan(body);
         else if (url.pathname === "/api/deployment/confirm")

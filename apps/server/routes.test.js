@@ -7,6 +7,7 @@ import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.j
 import { remoteRoutes } from "./domains/access/remote.routes.js";
 import { safetyRoutes } from "./domains/access/safety.routes.js";
 import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
+import { qualityRoutes } from "./domains/quality/quality.routes.js";
 
 const h = () => "ok";
 
@@ -100,5 +101,18 @@ test("Downloads und Ausfallsperren-Test: Schutzstufen", () => {
     "GET /api/downloads/list": "session",
     "POST /api/downloads/action": "session",
     "POST /api/downloads/resume": "session",
+  });
+});
+
+test("Qualität & Quellen: Schutzstufen", () => {
+  const r = new RouteRegistry().add(qualityRoutes({}));
+  assert.deepEqual(Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard])), {
+    "GET /api/media/size-settings": "session",
+    "POST /api/media/size-settings": "ok",
+    "GET /api/sources": "session",
+    "GET /api/sources/detail": "session",
+    "POST /api/sources/test": "session",
+    "POST /api/sources/save": "ok",
+    "POST /api/sources/action": "session",
   });
 });

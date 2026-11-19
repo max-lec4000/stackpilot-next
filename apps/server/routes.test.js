@@ -8,6 +8,8 @@ import { remoteRoutes } from "./domains/access/remote.routes.js";
 import { safetyRoutes } from "./domains/access/safety.routes.js";
 import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 import { qualityRoutes } from "./domains/quality/quality.routes.js";
+import { requestRoutes } from "./domains/requests/requests.routes.js";
+import { libraryRoutes } from "./domains/library/library.routes.js";
 
 const h = () => "ok";
 
@@ -115,4 +117,23 @@ test("Qualität & Quellen: Schutzstufen", () => {
     "POST /api/sources/save": "ok",
     "POST /api/sources/action": "session",
   });
+});
+
+test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlangen OK", () => {
+  const r = new RouteRegistry().add(requestRoutes({})).add(libraryRoutes({}));
+  const table = Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard]));
+  const ok = [
+    "request/approve", "request/cancel-season", "request/cancel", "film-limit", "quality",
+    "season-transfer/replace", "season-transfer/remove", "season-transfer/pause", "episodes/delete-file",
+    "series-limits", "replacement/start", "replacement/restore", "series-removal/execute", "movie-removal/execute",
+  ].map((p) => `POST /api/media/${p}`);
+  for (const key of ok) assert.equal(table[key], "ok", key);
+  for (const [key, guard] of Object.entries(table)) if (key.startsWith("GET ")) assert.equal(guard, "session", key);
+  const sessionPosts = Object.entries(table).filter(([k, g]) => k.startsWith("POST ") && g === "session").map(([k]) => k).sort();
+  assert.deepEqual(sessionPosts, [
+    "POST /api/media/library/refresh", "POST /api/media/movie-removal/preview", "POST /api/media/releases",
+    "POST /api/media/replacement/preview", "POST /api/media/request", "POST /api/media/request/archive",
+    "POST /api/media/research", "POST /api/media/series-removal/preview",
+  ]);
+  assert.equal(Object.keys(table).length, 39);
 });

@@ -129,7 +129,16 @@ vorhandenen Tests und einer VM-Abnahme.
   unverändert gespeichert, OK-Pflicht wie bisher, Quellenliste mit 641 Typen. Nicht nativ
   geprüft: Detail/Test einer konkreten Quelle (in der VM ist keine eingerichtet).
   Titelbezogene Qualität (`/api/media/quality`, `/film-limit`) folgt mit Anfragen/Medien.
-- Offen in 7.0a: übrige ~95 Routen bereichsweise umziehen, weitere Adapter (Jellyfin,
+- **Anfragen und Medien umgezogen** (`domains/requests/requests.routes.js` 24 Routen,
+  `domains/library/library.routes.js` 15 Routen, u. a. Cover als Bildantwort über
+  `rawResponse`). 14 löschende, abbrechende, freigebende oder austauschende Aktionen sind
+  im Verzeichnis als „OK“ deklariert (bisherige Meldungen). Nachweise in sp-test: 348
+  Tests, Listen/Suche/Musik/Archiv/Cover über neue Routen, Bestätigungsmeldungen wie
+  bisher, sieben betroffene Seiten im Browser fehlerfrei. Nicht nativ geprüft:
+  anfragebezogene Ansichten (keine offene Anfrage in der VM; echte Anfrage hätte einen
+  Download ausgelöst).
+- Offen in 7.0a: übrige ~55 Routen (Einrichtung/Ablösung, Anwendungen/Couchdeck,
+  Sicherungen/Tresor, Zuschauer, Diagnose, Anmeldung) umziehen, weitere Adapter (Jellyfin,
   ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)

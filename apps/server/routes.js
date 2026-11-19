@@ -7,15 +7,20 @@
 //   session  – angemeldete Sitzung genügt (für GET immer)
 //   ok       – zusätzlich ausdrückliches „OK“ im Auftrag (body.confirmation === "OK")
 //   password – zusätzlich das Administratorpasswort (body.password); mit `confirm` außerdem „OK“
-// Antwortet eine Route mit einer Datei, liefert sie `fileResponse(bytes, dateiname)`.
+// Antwortet eine Route nicht mit JSON, liefert sie `rawResponse(bytes, header)` bzw. für
+// Downloads `fileResponse(bytes, dateiname)`.
 export const GUARDS = ["session", "ok", "password"];
 
 const userFacing = (message) => Object.assign(new Error(message), { userFacing: true });
 
-const FILE = Symbol("Datei");
-export const fileResponse = (bytes, filename) => ({ [FILE]: { bytes, filename } });
-export const isFileResponse = (result) => !!result?.[FILE];
-export const fileOf = (result) => result[FILE];
+const RAW = Symbol("Rohantwort");
+export const rawResponse = (bytes, headers) => ({ [RAW]: { bytes, headers } });
+export const fileResponse = (bytes, filename) => rawResponse(bytes, {
+  "Content-Type": "application/octet-stream",
+  "Content-Disposition": `attachment; filename="${filename}"`,
+});
+export const isRawResponse = (result) => !!result?.[RAW];
+export const rawOf = (result) => result[RAW];
 
 export class RouteRegistry {
   constructor() {

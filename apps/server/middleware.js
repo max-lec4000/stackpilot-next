@@ -5,11 +5,13 @@ import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
-import { RouteRegistry, isFileResponse, fileOf } from "./routes.js";
+import { RouteRegistry, isRawResponse, rawOf } from "./routes.js";
 import { remoteRoutes } from "./domains/access/remote.routes.js";
 import { safetyRoutes } from "./domains/access/safety.routes.js";
 import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 import { qualityRoutes } from "./domains/quality/quality.routes.js";
+import { requestRoutes } from "./domains/requests/requests.routes.js";
+import { libraryRoutes } from "./domains/library/library.routes.js";
 import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
@@ -19,9 +21,6 @@ import { ViewerProfiles } from "./identity/viewer-profiles.js";
 import { Viewers } from "./identity/viewers.js";
 import { RemoteJourney } from "./remote-journey.js";
 import { Notifications } from "./notifications.js";
-import { globalSearch } from "./global-search.js";
-import { musicInventory, withMusicTrack } from "./music-library.js";
-import { inspectMusicTags } from "./music-tags.js";
 import { ServiceUpdates } from "./service-updates.js";
 import { AppUpdates } from "./app-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
@@ -231,7 +230,9 @@ export function inventoryMiddleware(options = {}) {
     }))
     .add(safetyRoutes({ safety }))
     .add(downloadRoutes({ hub, guard }))
-    .add(qualityRoutes({ sources, sizeLimits }));
+    .add(qualityRoutes({ sources, sizeLimits }))
+    .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
+    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -367,23 +368,13 @@ export function inventoryMiddleware(options = {}) {
       const getRoute = req.method === "GET" ? routes.find("GET", url.pathname) : null;
       if (getRoute) {
         result = await routes.run(getRoute, { url, session, manager, remoteAddress });
+        if (isRawResponse(result)) {
+          const raw = rawOf(result);
+          for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
+          return res.end(raw.bytes);
+        }
       } else if (url.pathname === "/api/vault-backup" && req.method === "GET") {
         result = { local: vaultBackupLocal };
-      } else if (url.pathname === "/api/music/tags" && req.method === "GET") {
-        const current = installer().current();
-        if (!current || current.job.status !== "completed") throw Object.assign(Error("Zuerst die Einrichtung abschließen."), { userFacing: true });
-        result = await withMusicTrack(current.plan.spec.path, url.searchParams.get("path"), async (file, before) => {
-          const report = await inspectMusicTags(file, before), after = await file.stat();
-          if (after.size !== before.size || after.mtimeMs !== before.mtimeMs)
-            return { state: "unconfirmed", fields: {}, embeddedCover: null, message: "Datei wurde während der Prüfung geändert. Erneut prüfen." };
-          return report;
-        });
-      } else if (url.pathname === "/api/music" && req.method === "GET") {
-        const current = installer().current();
-        if (!current || current.job.status !== "completed") throw Object.assign(Error("Zuerst die Einrichtung abschließen."), { userFacing: true });
-        result = await musicInventory(current.plan.spec.path);
-      } else if (url.pathname === "/api/search" && req.method === "GET") {
-        result = await globalSearch(url.searchParams.get("query"), hub);
       } else if (url.pathname === "/api/notifications" && req.method === "GET") {
         result = notifications.list();
       } else if (url.pathname === "/api/development/report" && req.method === "GET") {
@@ -414,76 +405,6 @@ export function inventoryMiddleware(options = {}) {
               vpnProfileId: current.plan.vpnProfileId || null,
             }
           : null;
-      } else if (url.pathname === "/api/media/search" && req.method === "GET") {
-        result = await hub.search(
-          url.searchParams.get("q"),
-          url.searchParams.get("page") || 1,
-        );
-      } else if (url.pathname === "/api/media/replace-download" && req.method === "GET") {
-        result = await requestDiagnostics.replacePreview(url.searchParams.get("requestId"));
-      } else if (url.pathname === "/api/media/season-transfer" && req.method === "GET") {
-        result = await requestDiagnostics.seasonTransferPreview({
-          requestId: url.searchParams.get("requestId"), season: url.searchParams.get("season"),
-          remove: url.searchParams.get("remove") === "1",
-        });
-      } else if (url.pathname === "/api/media/episode-seasons" && req.method === "GET") {
-        result = await requestDiagnostics.episodeSeasons(url.searchParams.get("requestId"));
-      } else if (url.pathname === "/api/media/episodes" && req.method === "GET") {
-        result = await requestDiagnostics.episodes(
-          url.searchParams.get("requestId"), url.searchParams.get("season"),
-        );
-      } else if (
-        url.pathname === "/api/media/quality" &&
-        req.method === "GET"
-      ) {
-        result = await qualitySettings.read(url.searchParams.get("requestId"));
-      } else if (url.pathname === "/api/media/detail" && req.method === "GET") {
-        result = await hub.detail(
-          url.searchParams.get("type"),
-          url.searchParams.get("id"),
-        );
-      } else if (
-        url.pathname === "/api/media/requests" &&
-        req.method === "GET"
-      ) {
-        result = await hub.requests({
-          force: url.searchParams.get("force") === "1",
-          page: url.searchParams.get("page") || 1,
-          filter: url.searchParams.get("filter") || "all",
-          type: url.searchParams.get("type") || "all",
-        });
-      } else if (
-        url.pathname === "/api/media/diagnosis" &&
-        req.method === "GET"
-      ) {
-        result = await requestDiagnostics.inspect(
-          url.searchParams.get("requestId"),
-        );
-      } else if (url.pathname === "/api/media/poster" && req.method === "GET") {
-        const poster = url.searchParams.get("path") || "";
-        if (!/^\/[a-zA-Z0-9_-]+\.(jpg|png)$/.test(poster))
-          throw Error("Ungültiges Cover.");
-        const response = await fetch(
-          "https://image.tmdb.org/t/p/w342" + poster,
-          { redirect: "error", signal: AbortSignal.timeout(8000) },
-        );
-        if (
-          !response.ok ||
-          !/^image\/(jpeg|png|webp)$/.test(
-            response.headers.get("content-type") || "",
-          ) ||
-          Number(response.headers.get("content-length")) > 2097152
-        )
-          throw Error("Cover nicht erreichbar.");
-        const chunks = [];
-        let size = 0;
-        for await (const chunk of response.body) {
-          size += chunk.length;
-          if (size > 2097152) throw Error("Cover zu groß.");
-          chunks.push(chunk);
-        }
-        res.setHeader("Content-Type", response.headers.get("content-type"));
-        return res.end(Buffer.concat(chunks));
       } else if (
         url.pathname === "/api/operations/overview" &&
         req.method === "GET"
@@ -495,28 +416,8 @@ export function inventoryMiddleware(options = {}) {
         result = audit.list(url.searchParams.get("page") || 1);
       } else if (url.pathname === "/api/activity" && req.method === "GET") {
         result = await activity.get();
-      } else if (
-        url.pathname === "/api/media/archive" &&
-        req.method === "GET"
-      ) {
-        const { plan } = await hub.context(["Seerr"]);
-        result = records.history(plan, {
-          page: url.searchParams.get("page") || 1,
-          type: url.searchParams.get("type") || "all",
-        });
-      } else if (
-        url.pathname === "/api/media/request-action" &&
-        req.method === "GET"
-      ) {
-        result = await requestLifecycle.preview(
-          url.searchParams.get("requestId"),
-        );
       } else if (url.pathname === "/api/managed" && req.method === "GET") {
         result = await managedServices(installer(), host, appUpdates);
-      } else if (url.pathname === "/api/media/replacements" && req.method === "GET") {
-        result = await importedReplacement.jobs();
-      } else if (url.pathname === "/api/media/series-inventory" && req.method === "GET") {
-        result = await seriesRemoval.list();
       } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
         result = await viewerProfiles.list();
       } else if (url.pathname === "/api/viewers" && req.method === "GET") {
@@ -577,12 +478,11 @@ export function inventoryMiddleware(options = {}) {
         const postRoute = routes.find("POST", url.pathname);
         if (postRoute) {
           result = await routes.run(postRoute, { url, body, session, manager, remoteAddress });
-          if (isFileResponse(result)) {
-            const file = fileOf(result);
+          if (isRawResponse(result)) {
+            const raw = rawOf(result);
             try { audit.finish(auditId, true); } catch {}
-            res.setHeader("Content-Type", "application/octet-stream");
-            res.setHeader("Content-Disposition", `attachment; filename="${file.filename}"`);
-            return res.end(file.bytes);
+            for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
+            return res.end(raw.bytes);
           }
         } else if (vaultRestore) {
           await manager.reauthenticate(body.password, remoteAddress);
@@ -610,50 +510,7 @@ export function inventoryMiddleware(options = {}) {
           if (!(await developmentUploadStatus(state)).enabled)
             throw Error("Entwicklungsupload ist deaktiviert.");
           result = await uploadDevelopmentReport();
-        } else if (url.pathname === "/api/media/replacement/preview")
-          result = await importedReplacement.preview(body);
-        else if (url.pathname === "/api/media/replacement/start")
-          result = await importedReplacement.start(body);
-        else if (url.pathname === "/api/media/replacement/restore")
-          result = await importedReplacement.restore(body);
-        else if (url.pathname === "/api/media/series-removal/preview")
-          result = await seriesRemoval.preview(body);
-        else if (url.pathname === "/api/media/series-removal/execute")
-          result = await seriesRemoval.execute(body);
-        else if (url.pathname === "/api/media/movie-removal/preview")
-          result = await movieRemoval.preview(body.requestId);
-        else if (url.pathname === "/api/media/movie-removal/execute")
-          result = await movieRemoval.execute(body);
-        else if (url.pathname === "/api/media/request/approve")
-          result = await requestLifecycle.approve(body);
-        else if (url.pathname === "/api/media/request/archive")
-          result = await requestLifecycle.archive(body);
-        else if (url.pathname === "/api/media/request/cancel-season")
-          result = await requestLifecycle.cancelSeason(body);
-        else if (url.pathname === "/api/media/request/cancel")
-          result = await requestLifecycle.cancel(body);
-        else if (url.pathname === "/api/media/request")
-          result = await hub.request(body);
-        else if (url.pathname === "/api/media/library/refresh")
-          result = await hub.library.run(true);
-        else if (url.pathname === "/api/media/film-limit")
-          result = await qualitySettings.filmLimit(body);
-        else if (url.pathname === "/api/media/quality")
-          result = await qualitySettings.apply(body);
-        else if (url.pathname === "/api/media/season-transfer/replace")
-          result = await requestDiagnostics.replaceSeasonPackage(body);
-        else if (url.pathname === "/api/media/season-transfer/remove")
-          result = await requestDiagnostics.pauseSeasonTransfer(body, undefined, true);
-        else if (url.pathname === "/api/media/season-transfer/pause")
-          result = await requestDiagnostics.pauseSeasonTransfer(body);
-        else if (url.pathname === "/api/media/episodes/delete-file")
-          result = await requestDiagnostics.deleteEpisodeFile(body);
-        else if (url.pathname === "/api/media/series-limits")
-          result = await requestDiagnostics.saveSeriesLimits(body);
-        else if (url.pathname === "/api/media/research")
-          result = await requestDiagnostics.search(body);
-        else if (url.pathname === "/api/media/releases")
-          result = await requestDiagnostics.inspect(body.requestId, true);
+        }
         else if (url.pathname === "/api/deployment/plan")
           result = await installer().createPlan(body);
         else if (url.pathname === "/api/deployment/confirm")

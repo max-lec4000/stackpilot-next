@@ -54,10 +54,11 @@ export class RouteRegistry {
   /** Schutzstufe prüfen, dann die Fachlogik ausführen. */
   async run(route, ctx) {
     const body = ctx.body || {};
-    // reauthenticate wirft bei falschem Passwort oder zu vielen Versuchen
-    if (route.guard === "password") await ctx.manager.reauthenticate(body.password, ctx.remoteAddress);
+    // Erst „OK“ prüfen: eine fehlende Bestätigung verbraucht keinen Passwortversuch.
     if ((route.guard === "ok" || (route.guard === "password" && route.confirm)) && body.confirmation !== "OK")
       throw userFacing(route.confirm || "Mit OK bestätigen.");
+    // reauthenticate wirft bei falschem Passwort oder zu vielen Versuchen
+    if (route.guard === "password") await ctx.manager.reauthenticate(body.password, ctx.remoteAddress);
     return route.handler(ctx);
   }
 }

@@ -137,9 +137,19 @@ vorhandenen Tests und einer VM-Abnahme.
   bisher, sieben betroffene Seiten im Browser fehlerfrei. Nicht nativ geprüft:
   anfragebezogene Ansichten (keine offene Anfrage in der VM; echte Anfrage hätte einen
   Download ausgelöst).
-- Offen in 7.0a: übrige ~55 Routen (Einrichtung/Ablösung, Anwendungen/Couchdeck,
-  Sicherungen/Tresor, Zuschauer, Diagnose, Anmeldung) umziehen, weitere Adapter (Jellyfin,
-  ARR-Dienste, qBittorrent, Authentik), gemeinsame Oberflächen-Bausteine.
+- **Alle übrigen Routen umgezogen:** Personen (`domains/people`), Couchdeck
+  (`domains/couchdeck`), Einrichtung/Ablösung (`domains/system/setup.routes.js`) und System
+  (`domains/system/system.routes.js`: Katalog, Stack, Inventar/Bericht, Aufträge, Verläufe,
+  Hinweise, verwaltete Apps, Schlüsselwechsel, Zugangsdaten, Tresor, Entwicklungsbericht).
+  In `middleware.js` (von ~1000 auf ~500 Zeilen) bleiben nur Anmeldung, Sitzung, Couchdecks
+  lokaler Medienzugang und die Größen-/Ortsprüfung für Tresor-Wiederherstellungen.
+  Das Verzeichnis prüft „OK“ jetzt vor dem Passwort (keine verbrauchten Passwortversuche).
+  Ein Test baut das gesamte Verzeichnis (≥150 Routen, keine Doppelungen, alle GET ohne
+  Bestätigung) und hält die 27 Passwort-Routen fest. Nachweise in sp-test: 349 Tests; alle
+  Lese-Routen 200; Meldungen wie bisher; echter Sonarr-Schlüsselwechsel und
+  Tresor-Sicherung über die neuen Routen; alle Seiten im Browser ohne Fehler.
+- Offen in 7.0a: weitere App-Adapter (Jellyfin, ARR-Dienste, qBittorrent, Authentik) und
+  gemeinsame Oberflächen-Bausteine.
 
 ## 5. Container-Architektur (früh festlegen, 7.7)
 

@@ -10,6 +10,10 @@ import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 import { qualityRoutes } from "./domains/quality/quality.routes.js";
 import { requestRoutes } from "./domains/requests/requests.routes.js";
 import { libraryRoutes } from "./domains/library/library.routes.js";
+import { peopleRoutes } from "./domains/people/people.routes.js";
+import { couchdeckRoutes } from "./domains/couchdeck/couchdeck.routes.js";
+import { setupRoutes } from "./domains/system/setup.routes.js";
+import { systemRoutes } from "./domains/system/system.routes.js";
 
 const h = () => "ok";
 
@@ -136,4 +140,25 @@ test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlange
     "POST /api/media/research", "POST /api/media/series-removal/preview",
   ]);
   assert.equal(Object.keys(table).length, 39);
+});
+
+test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen", () => {
+  const all = new RouteRegistry()
+    .add(updateRoutes({})).add(vpnRoutes({})).add(viewerRequestRoutes({})).add(remoteRoutes({}))
+    .add(safetyRoutes({})).add(downloadRoutes({})).add(qualityRoutes({})).add(requestRoutes({}))
+    .add(libraryRoutes({})).add(peopleRoutes({})).add(couchdeckRoutes({})).add(setupRoutes({})).add(systemRoutes({}));
+  const list = all.list();
+  assert.ok(list.length >= 150, `nur ${list.length} Routen`);
+  for (const r of list) if (r.method === "GET") assert.equal(r.guard, "session", r.path);
+  const password = list.filter((r) => r.guard === "password").map((r) => r.path).sort();
+  assert.deepEqual(password, [
+    "/api/credentials/reveal",
+    ...["bazarr", "jellyfin-couchdeck", "jellyfin-seerr", "jellyfin-streamystats", "lidarr", "prowlarr", "radarr", "seerr", "sonarr"].map((x) => "/api/credentials/rotate-" + x),
+    ...["admins/protect", "backup/create", "backup/download", "backup/resume", "backup/test", "devices/revoke",
+      "funnel/disable", "funnel/enable", "identity/credentials", "private-serve/apply", "protection/start", "sso/apply",
+      "streamyfin/activate", "streamyfin/prepare", "streamyfin/rollback"].map((x) => "/api/remote-access/" + x),
+    "/api/vault-backup", "/api/vault-backup/restore",
+  ].sort());
+  // Schlüsselwechsel verlangt zusätzlich „OK“ (vor dem Passwort, verbraucht keinen Versuch)
+  assert.equal(all.find("POST", "/api/credentials/rotate-sonarr").confirm, "Schlüsselwechsel zuerst bestätigen.");
 });

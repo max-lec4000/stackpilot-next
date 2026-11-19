@@ -12,6 +12,10 @@ import { downloadRoutes } from "./domains/downloads/downloads.routes.js";
 import { qualityRoutes } from "./domains/quality/quality.routes.js";
 import { requestRoutes } from "./domains/requests/requests.routes.js";
 import { libraryRoutes } from "./domains/library/library.routes.js";
+import { peopleRoutes } from "./domains/people/people.routes.js";
+import { couchdeckRoutes } from "./domains/couchdeck/couchdeck.routes.js";
+import { setupRoutes } from "./domains/system/setup.routes.js";
+import { systemRoutes } from "./domains/system/system.routes.js";
 import { updateRoutes } from "./domains/system/updates.routes.js";
 import { vpnRoutes } from "./domains/access/vpn.routes.js";
 import { viewerRequestRoutes } from "./domains/requests/viewer-requests.routes.js";
@@ -25,8 +29,7 @@ import { ServiceUpdates } from "./service-updates.js";
 import { AppUpdates } from "./app-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
 import { JellyfinMaintenance } from "./identity/jellyfin-maintenance.js";
-import { createVaultBackup, stageVaultRestore, vaultRestoreBodyLimit } from "./vault-backup.js";
-import { setReportConsent } from "./dev-report-consent.js";
+import { vaultRestoreBodyLimit } from "./vault-backup.js";
 import { OidcBackchannel } from "./identity/oidc-backchannel.js";
 import {
   developmentReport,
@@ -58,22 +61,13 @@ import { SafetyCheck } from "./safety-check.js";
 import { DownloadGuard } from "./download-guard.js";
 import { ActivityMonitor } from "./activity.js";
 import { VpnSwitch } from "./vpn-switch.js";
-import { DeploymentEngine, needsNetworkUpgrade } from "./installer.js";
-import { catalog } from "./catalog.js";
-import { managedServices, revealCredentials, checkManaged } from "./managed.js";
-import { rotateArrKey } from "./arr-key.js";
-import { rotateSeerrKey } from "./seerr-key.js";
-import { rotateCouchdeckToken, rotateSeerrJellyfinToken, rotateStreamystatsJellyfinToken } from "./jellyfin-service-tokens.js";
-import { rotateBazarrKey } from "./bazarr-key.js";
+import { DeploymentEngine } from "./installer.js";
 import path from "node:path";
 import { Auth, sessionCookie } from "./auth.js";
 import { Vault } from "./vault.js";
 import { StateStore } from "./state.js";
 import { RetirementEngine } from "./retirement.js";
-import os from "node:os";
-import { readFile } from "node:fs/promises";
-import { makeReport } from "./report.js";
-import { inventory, inspectPath } from "./inventory.js";
+import { inventory } from "./inventory.js";
 export function inventoryMiddleware(options = {}) {
   let pending = null;
   const state = options.store || new StateStore(options.stateDirectory);
@@ -232,7 +226,16 @@ export function inventoryMiddleware(options = {}) {
     .add(downloadRoutes({ hub, guard }))
     .add(qualityRoutes({ sources, sizeLimits }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
-    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }));
+    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }))
+    .add(peopleRoutes({ viewers, viewerProfiles, remoteSetup }))
+    .add(couchdeckRoutes({ couchdeck }))
+    .add(setupRoutes({ installer, executor }))
+    .add(systemRoutes({
+      hub, state, installer, executor, operations, audit, activity, notifications, appUpdates, couchdeck,
+      // Ein laufender Inventarlauf wird von gleichzeitigen Anfragen mitbenutzt
+      inventorySnapshot: () => (pending ??= inventory().finally(() => { pending = null; })),
+      collectDevelopmentReport, developmentUploadStatus, uploadDevelopmentReport,
+    }));
   const middleware = async (req, res, next) => {
     if (!req.url?.startsWith("/api/") && isPlainLoopback(req.headers.host)) {
       res.writeHead(302, {
@@ -367,23 +370,12 @@ export function inventoryMiddleware(options = {}) {
       let result;
       const getRoute = req.method === "GET" ? routes.find("GET", url.pathname) : null;
       if (getRoute) {
-        result = await routes.run(getRoute, { url, session, manager, remoteAddress });
+        result = await routes.run(getRoute, { url, session, manager, remoteAddress, host, local: vaultBackupLocal });
         if (isRawResponse(result)) {
           const raw = rawOf(result);
           for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
           return res.end(raw.bytes);
         }
-      } else if (url.pathname === "/api/vault-backup" && req.method === "GET") {
-        result = { local: vaultBackupLocal };
-      } else if (url.pathname === "/api/notifications" && req.method === "GET") {
-        result = notifications.list();
-      } else if (url.pathname === "/api/development/report" && req.method === "GET") {
-        result = await collectDevelopmentReport();
-      } else if (
-        url.pathname === "/api/development/status" &&
-        req.method === "GET"
-      ) {
-        result = await developmentUploadStatus(state);
       } else if (url.pathname === "/api/auth/status" && req.method === "GET") {
         result = {
           configured: manager.configured(),
@@ -392,42 +384,6 @@ export function inventoryMiddleware(options = {}) {
         };
       } else if (url.pathname === "/api/session" && req.method === "GET") {
         result = { token: session.csrf };
-      } else if (url.pathname === "/api/catalog" && req.method === "GET") {
-        result = catalog;
-      } else if (url.pathname === "/api/stack" && req.method === "GET") {
-        const current = installer().current();
-        result = current
-          ? {
-              planId: current.plan.id,
-              status: current.job.status,
-              spec: current.plan.spec,
-              networkUpgrade: current.job.status === "completed" && needsNetworkUpgrade(current.plan),
-              vpnProfileId: current.plan.vpnProfileId || null,
-            }
-          : null;
-      } else if (
-        url.pathname === "/api/operations/overview" &&
-        req.method === "GET"
-      ) {
-        result = await operations.inspect(
-          url.searchParams.get("force") === "1",
-        );
-      } else if (url.pathname === "/api/audit" && req.method === "GET") {
-        result = audit.list(url.searchParams.get("page") || 1);
-      } else if (url.pathname === "/api/activity" && req.method === "GET") {
-        result = await activity.get();
-      } else if (url.pathname === "/api/managed" && req.method === "GET") {
-        result = await managedServices(installer(), host, appUpdates);
-      } else if (url.pathname === "/api/viewer-profiles" && req.method === "GET") {
-        result = await viewerProfiles.list();
-      } else if (url.pathname === "/api/viewers" && req.method === "GET") {
-        result = await viewers.list();
-      } else if (url.pathname === "/api/remote-setup" && req.method === "GET") {
-        result = remoteSetup.summary();
-      } else if (url.pathname === "/api/couchdeck" && req.method === "GET") {
-        result = await couchdeck.status();
-      } else if (url.pathname === "/api/operations" && req.method === "GET") {
-        result = { operations: executor().list() };
       } else if (req.method === "POST") {
         const vaultRestore = url.pathname === "/api/vault-backup/restore";
         if (vaultRestore && !vaultBackupLocal)
@@ -477,143 +433,18 @@ export function inventoryMiddleware(options = {}) {
           throw Error("Dieser Auftrag gehört nicht zur Installation.");
         const postRoute = routes.find("POST", url.pathname);
         if (postRoute) {
-          result = await routes.run(postRoute, { url, body, session, manager, remoteAddress });
+          result = await routes.run(postRoute, { url, body, session, manager, remoteAddress, host, local: vaultBackupLocal });
           if (isRawResponse(result)) {
             const raw = rawOf(result);
             try { audit.finish(auditId, true); } catch {}
             for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
             return res.end(raw.bytes);
           }
-        } else if (vaultRestore) {
-          await manager.reauthenticate(body.password, remoteAddress);
-          result = await hub.mutate([], () => stageVaultRestore(state, body.archive, body.passphrase));
-        } else if (url.pathname === "/api/vault-backup") {
-          if (!vaultBackupLocal) throw Error("Öffne StackPilot am Server oder über einen SSH-Tunnel.");
-          if (body.password === body.passphrase) throw Error("Verwende eine eigene Sicherungspassphrase.");
-          await manager.reauthenticate(body.password, remoteAddress);
-          const bytes = await hub.mutate([], () => createVaultBackup(state, installer().vault, body.passphrase));
-          audit.finish(auditId, true);
-          res.setHeader("Content-Type", "application/octet-stream");
-          res.setHeader("Content-Disposition", `attachment; filename="stackpilot-tresor-${new Date().toISOString().slice(0, 10)}.spvault"`);
-          return res.end(bytes);
-        } else if (url.pathname === "/api/notifications/read") {
-          result = notifications.mark(body.ids);
-        } else if (url.pathname === "/api/development/consent") {
-          if (
-            body.enabled &&
-            !(await developmentUploadStatus(state)).policyEnabled
-          )
-            throw Error("Die Entwicklungspolicy gibt keinen Upload frei.");
-          setReportConsent(state, body.enabled);
-          result = await developmentUploadStatus(state);
-        } else if (url.pathname === "/api/development/report/publish") {
-          if (!(await developmentUploadStatus(state)).enabled)
-            throw Error("Entwicklungsupload ist deaktiviert.");
-          result = await uploadDevelopmentReport();
         }
-        else if (url.pathname === "/api/deployment/plan")
-          result = await installer().createPlan(body);
-        else if (url.pathname === "/api/deployment/confirm")
-          result = await installer().confirm(body.planId, body.confirmation);
-        else if (url.pathname === "/api/deployment/pause")
-          result = installer().pause(body.operationId);
-        else if (url.pathname === "/api/deployment/resume")
-          result = await installer().resume(body.operationId);
-        else if (url.pathname === "/api/deployment/end")
-          result = installer().end(body.operationId, body.confirmation);
-        else if (/^\/api\/credentials\/rotate-(bazarr|lidarr|sonarr|radarr|prowlarr|seerr|jellyfin-(couchdeck|seerr|streamystats))$/.test(url.pathname)) {
-          if (body.confirmation !== "OK")
-            throw Error("Schlüsselwechsel zuerst bestätigen.");
-          await manager.reauthenticate(body.password, remoteAddress);
-          const slug = url.pathname.slice("/api/credentials/rotate-".length);
-          const service = slug.startsWith("jellyfin-") ? "Jellyfin" : slug[0].toUpperCase() + slug.slice(1);
-          const required = slug === "jellyfin-seerr" ? [service, "Seerr"]
-            : slug === "jellyfin-streamystats" ? [service, "Streamystats"] : [service];
-          result = await hub.mutate(required, ({ plan, s }) => {
-            if (body.planId !== plan.id)
-              throw Error("Der Stack hat sich geändert. Bitte öffne die Anwendung erneut.");
-            if (slug === "seerr") return rotateSeerrKey(s, installer(), couchdeck);
-            if (slug === "jellyfin-couchdeck") return rotateCouchdeckToken(s, couchdeck);
-            if (slug === "jellyfin-seerr") return rotateSeerrJellyfinToken(s);
-            if (slug === "jellyfin-streamystats") return rotateStreamystatsJellyfinToken(s, installer());
-            return service === "Bazarr" ? rotateBazarrKey(s) : rotateArrKey(s, installer().docker, service);
-          });
-        } else if (url.pathname === "/api/credentials/reveal")
-          result = await revealCredentials(installer(), body, manager, remoteAddress);
-        else if (url.pathname === "/api/viewer-profiles")
-          result = await viewerProfiles.change(body);
-        else if (url.pathname === "/api/viewers/action") {
-          if (body.action === "invite") result = await viewers.invite(body.name, body.displayName);
-          else if (body.action === "reset") result = await viewers.reset(body.name);
-          else if (body.action === "remove") result = await viewers.remove(body.name);
-          else if (["add-passkey", "cancel-passkey"].includes(body.action))
-            result = await viewers.passkey(body.action, body.name);
-          else if (["enable-recovery", "improve-login"].includes(body.action)) {
-            await manager.reauthenticate(body.password, remoteAddress);
-            result = await viewers.updateLogin(body.action);
-          }
-          else throw new Error("Unbekannte Zuschauer-Aktion.");
-        } else if (url.pathname === "/api/remote-setup/start")
-          result = await remoteSetup.start({ viewer: typeof body.viewer === "string" ? body.viewer : "" });
-        else if (url.pathname === "/api/remote-setup/acknowledge")
-          result = remoteSetup.acknowledge();
-        else if (url.pathname === "/api/couchdeck/action") {
-          const actions = {
-            start: () => couchdeck.start(),
-            stop: () => couchdeck.stop(),
-            link: () => couchdeck.link(),
-            install: () => couchdeck.install(false),
-            update: async () => {
-              await couchdeck.update(body.version);
-              return couchdeck.status();
-            },
-            "install-youtube": () => couchdeck.install(true),
-            remove: () => couchdeck.remove(),
-          };
-          if (!Object.hasOwn(actions, body.action))
-            throw new Error("Unbekannte Couchdeck-Aktion.");
-          result = await actions[body.action]();
-        } else if (url.pathname === "/api/managed/check")
-          result = await checkManaged(installer(), body.operationId);
-        else if (url.pathname === "/api/retirement/plan")
-          result = await e.createPlan(body.project);
-        else if (url.pathname === "/api/retirement/confirm")
-          result = await e.confirm(
-            body.planId,
-            body.confirmation,
-            body.autostartAcknowledged,
-          );
-        else if (url.pathname === "/api/retirement/pause")
-          result = e.pause(body.operationId);
-        else if (url.pathname === "/api/retirement/end")
-          result = e.end(body.operationId, body.confirmation);
-        else if (url.pathname === "/api/retirement/resume")
-          result = await e.resume(body.operationId);
         else {
           res.writeHead(404);
           return res.end(JSON.stringify({ error: "Unbekannte Aktion." }));
         }
-      } else if (url.pathname === "/api/identity") {
-        const release = await readFile("/etc/os-release", "utf8").catch(
-          () => "",
-        );
-        result = {
-          username: session.username,
-          suggestedDataPath: path.join(os.homedir(), "stackpilot-data"),
-          host: os.hostname(),
-          release: release.match(/^PRETTY_NAME="?([^"\n]+)/m)?.[1] || os.type(),
-        };
-      } else if (
-        url.pathname === "/api/inventory" ||
-        url.pathname === "/api/report"
-      ) {
-        pending ??= inventory().finally(() => {
-          pending = null;
-        });
-        result = await pending;
-        if (url.pathname === "/api/report") result = makeReport(result);
-      } else if (url.pathname === "/api/storage") {
-        result = await inspectPath(url.searchParams.get("path"));
       } else {
         res.writeHead(404);
         return res.end(JSON.stringify({ error: "Unbekannte Schnittstelle." }));

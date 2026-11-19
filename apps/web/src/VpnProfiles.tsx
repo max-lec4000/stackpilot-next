@@ -8,6 +8,8 @@ type Profile = {
   endpoint: string;
   address: string;
   addedAt: string | null;
+  keyGroup: number;
+  sameKeyAsQbit: boolean;
   qbittorrent: boolean;
   youtube: boolean;
 };
@@ -30,7 +32,8 @@ export function VpnProfiles() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [confirmRemove, setConfirmRemove] = useState<Profile | null>(null),
-    [switchTo, setSwitchTo] = useState<Profile | null>(null);
+    [switchTo, setSwitchTo] = useState<Profile | null>(null),
+    [importResult, setImportResult] = useState<{ done: string[]; failed: string[] } | null>(null);
   async function load() {
     try {
       setData(await get<Data>("/api/vpn/profiles"));
@@ -56,6 +59,7 @@ export function VpnProfiles() {
   }
   async function importFiles(files: FileList | null) {
     if (!files?.length) return;
+    setImportResult(null);
     await run("import", async () => {
       const done: string[] = [],
         failed: string[] = [];
@@ -68,17 +72,19 @@ export function VpnProfiles() {
           failed.push(`${file.name}: ${(e as Error).message}`);
         }
       }
-      if (failed.length) setError(failed.join(" · "));
-      return done.length ? `Importiert: ${done.join(", ")}` : "";
+      setImportResult({ done, failed });
+      return "";
     });
   }
   const profiles = data?.profiles || [];
   const qbit = profiles.find((p) => p.qbittorrent);
-  const free = profiles.filter((p) => !p.qbittorrent);
+  const free = profiles.filter((p) => p.youtube);
+  const sameKey = profiles.filter((p) => p.sameKeyAsQbit);
+  const keys = new Set(profiles.map((p) => p.keyGroup)).size;
   const yt = data?.youtube.status;
   const ytValue = !yt ? "auto" : yt.mode === "profile" && yt.profileId ? `p:${yt.profileId}` : yt.mode;
   const usedBy = (p: Profile) =>
-    p.qbittorrent ? "qBittorrent" : yt && yt.mode !== "shared" && yt.poolIds.includes(p.id) ? "YouTube" : "frei";
+    p.qbittorrent ? "qBittorrent" : p.sameKeyAsQbit ? "Standort-Alternative" : yt && yt.mode !== "shared" && yt.poolIds.includes(p.id) ? "YouTube" : "frei";
   return (
     <>
       <div className="tile vpn-profiles">
@@ -139,12 +145,15 @@ export function VpnProfiles() {
                 <option value="auto">Automatisch: alle freien Configs ({free.length}), wechselt bei Sperre</option>
                 {free.map((p) => <option key={p.id} value={`p:${p.id}`}>Nur {p.name}</option>)}
                 {qbit && <option value="" disabled>{qbit.name} (nutzt qBittorrent)</option>}
+                {sameKey.map((p) => <option key={p.id} value="" disabled>{p.name} (gleicher Schlüssel wie qBittorrent)</option>)}
                 <option value="shared">qBittorrent-Tunnel mitnutzen</option>
               </select>
               <p className="muted">
                 {!qbit
                   ? "Ohne VPN im Stack gibt es keinen VPN-Weg für YouTube."
-                  : yt?.mode === "shared" || !free.length
+                  : !free.length
+                    ? `YouTube nutzt den Tunnel von qBittorrent mit. Für einen eigenen YouTube-Tunnel braucht es eine Config mit einem zweiten Mullvad-Schlüssel (im Mullvad-Konto „Neuen Schlüssel erzeugen“, bis zu 5 Geräte).`
+                    : yt?.mode === "shared"
                     ? "YouTube nutzt den Tunnel von qBittorrent mit (über den Prüfcontainer)."
                     : !data.youtube.program
                       ? "Für den eigenen YouTube-Tunnel fehlt das Programm wireproxy (kommt mit dem StackPilot-Update)."
@@ -158,13 +167,18 @@ export function VpnProfiles() {
       </div>
       <div className="tile vpn-profiles">
         <h2>WireGuard-Configs</h2>
+        <p className="muted">
+          {profiles.length} Config{profiles.length === 1 ? "" : "s"} mit {keys} Mullvad-Schlüssel{keys === 1 ? "" : "n"}. Configs mit
+          gleichem Schlüssel sind andere Standorte desselben Mullvad-Geräts: qBittorrent kann zwischen ihnen wechseln,
+          gleichzeitig verbunden sein können sie aber nicht.
+        </p>
         {data && (
           <ul className="vpn-profile-list">
             {profiles.map((p) => (
               <li key={p.id}>
                 <span className="vpn-profile-name">
                   <b>{p.name}</b>
-                  <span className="muted">{p.endpoint}</span>
+                  <span className="muted">{p.endpoint} · Schlüssel {p.keyGroup}</span>
                 </span>
                 <span className={"badge " + (p.qbittorrent ? "badge-qbit" : "badge-yt")}>{usedBy(p)}</span>
                 {!p.qbittorrent &&
@@ -192,6 +206,12 @@ export function VpnProfiles() {
             onChange={(e) => { void importFiles(e.target.files); e.target.value = ""; }} />
         </label>
         {busy === "import" && <p role="status">Import läuft …</p>}
+        {importResult && (
+          <div role="status" className="vpn-import-result">
+            {!!importResult.done.length && <p className="success">Importiert: {importResult.done.join(", ")}</p>}
+            {importResult.failed.map((f) => <p key={f} className="error">{f}</p>)}
+          </div>
+        )}
         <p className="muted">
           Erstelle die Dateien im Mullvad-Konto (WireGuard-Konfiguration, Linux), gern für verschiedene Länder oder
           Städte. Die privaten Schlüssel werden verschlüsselt gespeichert und nicht angezeigt.

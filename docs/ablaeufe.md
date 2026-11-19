@@ -133,7 +133,10 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   (WireGuard im Benutzerraum, nur lokaler Proxy mit Zugang). Die Config von qBittorrent
   steht für YouTube nicht zur Wahl – zwei Tunnel mit demselben Schlüssel stören sich.
 - WireGuard-Configs: darunter mehrere `.conf` auf einmal importieren (Name aus dem
-  Dateinamen, Doppelungen werden abgelehnt) und nicht genutzte entfernen.
+  Dateinamen) und nicht genutzte entfernen. Mullvad erzeugt je Geräteschlüssel Configs
+  für viele Standorte; die Liste zeigt „Schlüssel 1, 2, …“. Configs mit dem Schlüssel von
+  qBittorrent sind Standort-Alternativen für qBittorrent. Ein eigener YouTube-Tunnel
+  braucht einen zweiten Schlüssel (im Mullvad-Konto neuen Schlüssel erzeugen, bis 5).
 - Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
   „OK“ oder „Abbrechen“.
 - Neue Quelle (Indexer): **Verwaltung → Quellen** → Anbieter wählen → testen → speichern.

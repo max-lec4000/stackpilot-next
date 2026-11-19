@@ -67,11 +67,11 @@ export class YouTubeTunnel {
     return this.settings();
   }
 
-  /** Profile, die YouTube überhaupt nutzen darf: alle außer dem von qBittorrent. */
+  /** Profile, die YouTube nutzen darf: anderer Geräteschlüssel als qBittorrent. */
   free() {
     const current = this.engine.current?.();
     const plan = current?.job?.status === "completed" ? current.plan : null;
-    return listVpnProfiles(this.engine.vault, plan).filter((p) => !p.qbittorrent);
+    return listVpnProfiles(this.engine.vault, plan).filter((p) => p.youtube);
   }
 
   /** Profile für den eigenen YouTube-Tunnel gemäß Auswahl. */

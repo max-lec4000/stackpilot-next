@@ -27,10 +27,18 @@ test("VPN-Profile: Liste mit Namen, Verwendung und Schutz vor Doppelungen", asyn
   assert.equal(a.name, "mullvad-at-vie-wg-001");
   assert.equal(b.name, "Mullvad 185.213.154.2:51820");
   assert.throws(() => importVpn(vault, text, "nochmal"), /schon importiert/);
+  // Gleicher Schlüssel, anderer Server (Mullvad-Standort) ist erlaubt
+  const sameKey = text.replace(/Endpoint = [^\n]+/, "Endpoint = 185.65.134.9:51820");
+  const c = importVpn(vault, sameKey, "mullvad-de-fra-wg-002.conf");
   const plan = { spec: { vpn: true }, vpnProfileId: a.id };
   const list = listVpnProfiles(vault, plan);
-  assert.equal(list.length, 2);
-  assert.deepEqual(list.map((p) => [p.name, p.qbittorrent, p.youtube]), [["mullvad-at-vie-wg-001", true, false], [b.name, false, true]]);
+  assert.equal(list.length, 3);
+  assert.deepEqual(list.map((p) => [p.name, p.keyGroup, p.qbittorrent, p.sameKeyAsQbit, p.youtube]), [
+    ["mullvad-at-vie-wg-001", 1, true, false, false],
+    [b.name, 2, false, false, true],
+    ["mullvad-de-fra-wg-002", 1, false, true, false],
+  ]);
+  removeVpnProfile(vault, plan, c.id);
   assert.ok(!JSON.stringify(list).includes("PrivateKey"));
   assert.throws(() => removeVpnProfile(vault, plan, a.id), /qBittorrent/);
   removeVpnProfile(vault, plan, b.id);
@@ -47,9 +55,11 @@ test("wireproxy-Konfiguration: Mullvad-DNS, Prüfung über den Tunnel, Proxy nur
   assert.match(conf, /AllowedIPs = 0\.0\.0\.0\/0/);
 });
 
-test("YouTube-Tunnel: nie das qBittorrent-Profil, Wechsel zum nächsten, Schlüsseldatei wird gelöscht", async () => {
+test("YouTube-Tunnel: nie die qBittorrent-Config oder deren Schlüssel, Wechsel zum nächsten, Schlüsseldatei wird gelöscht", async () => {
   const { dir, store, vault } = await setup();
-  const q = importVpn(vault, wg(4), "qbit");
+  const qText = wg(4);
+  const q = importVpn(vault, qText, "qbit");
+  importVpn(vault, qText.replace(/Endpoint = [^\n]+/, "Endpoint = 193.32.127.4:51820"), "qbit-anderer-standort");
   const y1 = importVpn(vault, wg(5), "yt-1");
   const y2 = importVpn(vault, wg(6), "yt-2");
   const bin = path.join(dir, "wireproxy");

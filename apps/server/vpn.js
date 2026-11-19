@@ -86,12 +86,12 @@ export function profileName(name, endpoint) {
 export function importVpn(vault, text, name) {
   const parsed = parseWireGuard(text),
     id = randomUUID();
-  // Derselbe Schlüssel darf nicht zweimal vorkommen: zwei gleichzeitige Tunnel mit einem
-  // WireGuard-Schlüssel stören sich gegenseitig.
+  // Mullvad liefert je Geräteschlüssel Configs für viele Standorte (gleicher Schlüssel,
+  // anderer Server). Die sind erlaubt; nur exakt dieselbe Config (Schlüssel + Server) nicht.
   for (const n of vault.names("vpn-profile:")) {
     const other = vault.get(n);
-    if (other?.config && wgKey(other.config) === wgKey(parsed.config))
-      throw new Error("Diese WireGuard-Konfiguration ist schon importiert.");
+    if (other?.config && wgKey(other.config) === wgKey(parsed.config) && other.endpoint === parsed.endpoint)
+      throw new Error("Diese Config (gleicher Schlüssel und Server) ist schon importiert.");
   }
   vault.set(`vpn-profile:${id}`, {
     ...parsed,
@@ -110,25 +110,34 @@ export function importVpn(vault, text, name) {
 }
 const wgKey = (config) => /PrivateKey = (\S+)/.exec(config)?.[1] || "";
 
-/** Alle Profile (ohne Schlüssel) mit Verwendung: qBittorrent (Gluetun) bzw. YouTube-Reserve. */
+/**
+ * Alle Profile (ohne Schlüssel). keyGroup nummeriert die Geräteschlüssel (1, 2, …): Configs mit
+ * gleichem Schlüssel sind nur andere Standorte desselben Mullvad-Geräts und können nicht
+ * gleichzeitig verbunden sein. youtube = darf den eigenen YouTube-Tunnel bilden (anderer
+ * Schlüssel als qBittorrent).
+ */
 export function listVpnProfiles(vault, plan) {
   const qbit = plan?.spec?.vpn ? plan.vpnProfileId : null;
-  return vault
-    .names("vpn-profile:")
-    .map((n) => {
-      const id = n.slice("vpn-profile:".length);
-      const p = vault.get(n) || {};
-      return {
-        id,
-        name: p.name || `Mullvad ${p.endpoint}`,
-        endpoint: p.endpoint,
-        address: p.address,
-        addedAt: p.addedAt || null,
-        qbittorrent: id === qbit,
-        youtube: id !== qbit,
-      };
-    })
-    .sort((a, b) => Number(b.qbittorrent) - Number(a.qbittorrent) || (a.addedAt || "").localeCompare(b.addedAt || ""));
+  const rows = vault.names("vpn-profile:").map((n) => {
+    const id = n.slice("vpn-profile:".length);
+    const p = vault.get(n) || {};
+    return { id, p, key: p.config ? wgKey(p.config) : id };
+  });
+  rows.sort((a, b) => Number(b.id === qbit) - Number(a.id === qbit) || (a.p.addedAt || "").localeCompare(b.p.addedAt || ""));
+  const groups = new Map();
+  for (const r of rows) if (!groups.has(r.key)) groups.set(r.key, groups.size + 1);
+  const qbitKey = rows.find((r) => r.id === qbit)?.key;
+  return rows.map(({ id, p, key }) => ({
+    id,
+    name: p.name || `Mullvad ${p.endpoint}`,
+    endpoint: p.endpoint,
+    address: p.address,
+    addedAt: p.addedAt || null,
+    keyGroup: groups.get(key),
+    qbittorrent: id === qbit,
+    sameKeyAsQbit: id !== qbit && key === qbitKey,
+    youtube: id !== qbit && key !== qbitKey,
+  }));
 }
 
 export function removeVpnProfile(vault, plan, id) {

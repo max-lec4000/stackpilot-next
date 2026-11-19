@@ -253,7 +253,7 @@ class Player extends EventEmitter {
       const botCheck = resolveError.code === 'YOUTUBE_BOT_CHECK';
       this.emit('log', botCheck ? 'YouTube: Bot-Prüfung mit Anmeldeaufforderung.' : 'YouTube: Anmeldung erforderlich.');
       await this.finish('error');
-      if (botCheck) this.emit('youtube-bot-check', entry.id);
+      if (botCheck) this.emit('youtube-bot-check', entry.id, entry);
       else this.emit('error', 'YouTube verlangt für diesen Abruf eine Anmeldung.');
       return;
     }
@@ -273,6 +273,9 @@ class Player extends EventEmitter {
     } else {
       const opts = cur.titleOpts + (resume ? `,start=${resume}` : '');
       await this.mpv.set('ytdl-format', this.yt.formatString()).catch(() => {});
+      // Nach einer Anmeldung in Couchdeck auch auf diesem Weg mit Cookies abrufen
+      const raw = await this.yt.ytdlRawOptions().catch(() => '');
+      if (raw) await this.mpv.set('ytdl-raw-options', raw).catch(() => {});
       await this.mpv.command('loadfile', entry.url, 'replace', opts);
     }
     this.emit('log', `YouTube: Adressen ${direct?.video ? (cur.trim ? 'direkt, gekürzte Playlist' : 'direkt') : 'über ytdl-Hook'} nach ${Date.now() - t0} ms${resume ? `, Start bei ${resume} s` : ''}`);

@@ -8,6 +8,9 @@ const crypto = require('crypto');
 const config = require('./config');
 
 const BIN = process.env.COUCHDECK_YTDLP || '/opt/couchdeck/bin/yt-dlp';
+// Von der YouTube-Anmeldung in Couchdeck geschrieben (siehe youtube-login.js)
+const COOKIE_FILE = require('path').join(config.DIR, 'youtube-cookies.txt');
+const hasCookies = () => { try { return fs.statSync(COOKIE_FILE).size > 0; } catch { return false; } };
 // yt-dlp braucht für YouTube eine JS-Laufzeit: Electron dient als Node (ELECTRON_RUN_AS_NODE)
 const NODE_WRAPPER = process.env.COUCHDECK_NODE || '/opt/couchdeck/bin/node';
 
@@ -94,21 +97,36 @@ class YouTube {
         this.jsArgs = help.includes('--js-runtimes') && fs.existsSync(NODE_WRAPPER) ? ['--js-runtimes', `node:${NODE_WRAPPER}`] : [];
       } catch { this.jsArgs = []; }
     }
-    return [...this.jsArgs, '--no-warnings', '--ignore-config'];
+    return [...this.jsArgs, ...(hasCookies() ? ['--cookies', COOKIE_FILE] : []), '--no-warnings', '--ignore-config'];
+  }
+
+  /** Nach einer Anmeldung: Sperrpause und zwischengespeicherte Fehlversuche verwerfen. */
+  resetBotCheck() {
+    this.lastBotCheck = -Infinity;
+    this.resolved?.clear();
+  }
+
+  get signedIn() { return hasCookies(); }
+
+  /** ytdl-raw-options für mpv (Fallback-Weg über den ytdl-Hook). */
+  async ytdlRawOptions() {
+    const base = await this.baseArgs();
+    const raw = [];
+    for (let i = 0; i < base.length; i++) {
+      if (base[i] === '--js-runtimes') { raw.push(`js-runtimes=${base[i + 1]}`); i++; }
+      else if (base[i] === '--cookies') { raw.push(`cookies=${base[i + 1]}`); i++; }
+    }
+    return raw.join(',');
   }
 
   /** mpv-Optionen, damit mpv dieselbe yt-dlp-Installation nutzt. */
   async mpvArgs() {
     if (!this.available) return [];
-    const base = await this.baseArgs();
-    const raw = [];
-    for (let i = 0; i < base.length; i++) {
-      if (base[i] === '--js-runtimes') { raw.push(`js-runtimes=${base[i + 1]}`); i++; }
-    }
+    const raw = await this.ytdlRawOptions();
     return [
       `--script-opts=ytdl_hook-ytdl_path=${BIN}`,
       `--ytdl-format=${this.formatString()}`,
-      ...(raw.length ? [`--ytdl-raw-options=${raw.join(',')}`] : []),
+      ...(raw ? [`--ytdl-raw-options=${raw}`] : []),
     ];
   }
 
@@ -321,4 +339,4 @@ class YouTube {
   }
 }
 
-module.exports = { YouTube };
+module.exports = { COOKIE_FILE, YouTube };

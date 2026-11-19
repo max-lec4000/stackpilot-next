@@ -687,3 +687,16 @@ img.logo { max-height: 7.5rem; max-width: 34rem; object-fit: contain; object-pos
 .more-card .fallback { font-size: 1.3rem; font-weight: 800; color: var(--text); }
 
 .seerr-season-content { margin-inline-start: 2rem; padding-block: 0.5rem; }
+
+/* YouTube-Anmeldung: Seite oben (eigene Ansicht im Hauptprozess), Leiste unten */
+#overlay.yt-login { background: transparent; align-items: flex-end; justify-content: stretch; }
+.yt-login-bar { width: 100%; height: 12vh; box-sizing: border-box; padding: 1rem 3.2rem; background: linear-gradient(in oklch 180deg, var(--panel-a), var(--panel-b)); box-shadow: inset 0 0.25rem 0 var(--accent); display: flex; flex-direction: column; justify-content: center; gap: 0.6rem; }
+.yt-login-bar.with-kb { height: 46vh; justify-content: flex-start; }
+.yt-login-status { margin: 0; font-size: 1.15rem; }
+.yt-login-kb[hidden] { display: none; }
+.yt-login-kb .osk { padding-left: 0; }
+.yt-share .muted { opacity: 0.75; margin-bottom: 0.4rem; }
+/* In der Anmeldeleiste breit statt hoch, damit alle Tasten unter die Seite passen */
+.yt-login-kb .keys { grid-template-columns: repeat(16, 3.6rem); }
+.yt-login-kb .key { height: 2.8rem; }
+.yt-login-kb .osk .field { margin-bottom: 0.5rem; }

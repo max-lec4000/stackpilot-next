@@ -46,6 +46,9 @@ angemeldeten Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** lö
 - Läuft nur, wenn ein Bildschirm angeschlossen und eingeschaltet ist.
 - Neu verbinden (z. B. nach Neuinstallation von Jellyfin): **Verbindung erneuern**.
 - Aktualisieren: erscheint als Knopf, wenn eine neuere Couchdeck-Version mitgeliefert wird.
+- YouTube verlangt eine Bestätigung: im Dialog **Bei YouTube anmelden** wählen, mit einem
+  Google-Konto anmelden (Kreuz = nächstes Feld, A = bestätigen, Y = Tastatur, ☰ = fertig).
+  Danach läuft das Video weiter. An-/Abmelden auch unter Einstellungen → YouTube.
 
 ## Verwaltung
 

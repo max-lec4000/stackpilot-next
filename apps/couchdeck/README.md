@@ -25,6 +25,32 @@ yt-dlp wird beim Installieren nur nach Rückfrage von den offiziellen GitHub-Rel
 geladen und gegen die SHA-256-Prüfsumme geprüft. SponsorBlock erhält nur einen
 4-stelligen Hash-Anfang der Video-ID.
 
+### Wenn YouTube eine Bestätigung verlangt
+
+YouTube verlangt von Servern manchmal „Bestätige, dass du kein Bot bist“. Couchdeck zeigt
+dann **Bei YouTube anmelden**: Die echte Google-Anmeldeseite erscheint oben auf dem
+Bildschirm, unten die Couchdeck-Leiste.
+
+| Controller | Wirkung |
+|---|---|
+| Kreuz | nächstes / voriges Feld oder Knopf auf der Seite |
+| A | bestätigen (wie Enter) |
+| Y | Bildschirmtastatur ein/aus (mit @ . _ + ! ? # usw.) |
+| X | bei offener Tastatur: Zeichen löschen |
+| ☰ Start | Anmeldung übernehmen |
+| B | Tastatur schließen bzw. abbrechen |
+
+Eine Tastatur am Server funktioniert direkt auf der Seite. Ist die Anmeldung erkannt,
+übernimmt Couchdeck sie selbst und spielt das Video weiter. Die Sitzung bleibt
+gespeichert; yt-dlp nutzt sie über eine Cookiedatei
+(`~couchdeck/.config/couchdeck/youtube-cookies.txt`, nur für Couchdeck lesbar).
+Verwalten unter **Einstellungen → YouTube → Google-Anmeldung** (an/abmelden).
+
+Hinweise: Am besten ein eigenes Google-Konto nur für Couchdeck verwenden – YouTube kann
+Konten, die mit Werkzeugen wie yt-dlp genutzt werden, einschränken. Die Anmeldeseite
+darf nur Google/YouTube-Adressen öffnen und hat keinen Zugriff auf Couchdeck. Der
+QR-Code zum Ansehen auf dem Handy bleibt als Ausweichweg.
+
 ## Anfragen über Seerr
 
 Unter **＋ Anfragen** auf der Startseite: Trends, Suche und „Meine Anfragen“. Filme oder

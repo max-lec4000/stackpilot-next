@@ -10,6 +10,7 @@ const system = require('./system');
 const { Seerr } = require('./seerr');
 const { YouTube } = require('./youtube');
 const { youtubeShare } = require('./youtube-share');
+const { YouTubeLogin } = require('./youtube-login');
 const sound = require('./sound');
 
 const windowed = process.argv.includes('--windowed');
@@ -23,6 +24,9 @@ const player = new Player(jf, yt);
 const pads = new Gamepads();
 const seerr = new Seerr(jf);
 let win = null;
+const ytLogin = new YouTubeLogin(() => win);
+// Video, das zuletzt an der Bot-Bestätigung scheiterte: nach der Anmeldung weiter abspielen
+let ytBlocked = null;
 
 function log(...a) { console.log('[couchdeck]', ...a); }
 function send(channel, payload) {
@@ -54,6 +58,7 @@ function createWindow() {
   // Keine Navigation weg von der App
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.on('resize', () => ytLogin.layout());
 }
 
 // ---------- Eingaben ----------
@@ -275,7 +280,22 @@ function cycleSleep() {
 player.on('ended', () => {
   if (SLEEP_STEPS[sleep.step] === 'end') { sleep.step = 0; } send('player-state', player.publicState()); send('refresh'); if (win) win.focus(); });
 player.on('error', (msg) => toast(msg, 'error'));
-player.on('youtube-bot-check', (id) => send('youtube-bot-check', id));
+player.on('youtube-bot-check', (id, entry) => {
+  ytBlocked = entry ? { entry, at: Date.now() } : null;
+  send('youtube-bot-check', { id, signedIn: yt.signedIn });
+});
+ytLogin.on('ready', () => send('youtube-login', { state: 'ready' }));
+ytLogin.on('blocked', () => toast('Diese Seite ist in der YouTube-Anmeldung nicht erlaubt.', 'error'));
+ytLogin.on('closed', () => { send('youtube-login', { state: 'closed' }); win?.webContents.focus(); });
+ytLogin.on('done', ({ loggedIn }) => {
+  send('youtube-login', { state: 'done', loggedIn });
+  if (!loggedIn) return;
+  yt.resetBotCheck();
+  // Rückkehr zur Wiedergabe: das zuletzt blockierte Video (innerhalb von 30 min) neu starten
+  const pending = ytBlocked && Date.now() - ytBlocked.at < 30 * 60000 ? ytBlocked.entry : null;
+  ytBlocked = null;
+  if (pending) player.playYouTube([pending], 0).catch((e) => toast('YouTube: ' + e.message, 'error'));
+});
 player.on('loading', (l) => send('player-loading', l));
 player.on('notice', (msg) => { toast(msg); player.osd(msg, 4000); });
 player.on('log', (l) => { if (l) log('mpv:', l); });
@@ -441,6 +461,15 @@ const handlers = {
   'yt:play': ({ entries, startIndex }) => player.playYouTube(entries, startIndex),
   'yt:share': (id) => youtubeShare(id),
   'yt:prefetch': (entry) => { yt.prefetch(entry); },
+  'yt:login-status': async () => ({ ...(await ytLogin.status()), signedIn: yt.signedIn, open: ytLogin.isOpen }),
+  'yt:login-open': (opts) => ytLogin.open({ autoFinish: !!opts?.autoFinish }),
+  'yt:login-key': (action) => { ytLogin.input(String(action || '')); },
+  'yt:login-text': (text) => { ytLogin.type(text); },
+  'yt:login-backspace': (n) => { ytLogin.backspace(Number(n) || 1); },
+  'yt:login-keyboard': (open) => { ytLogin.setKeyboard(open); },
+  'yt:login-finish': () => ytLogin.finish(),
+  'yt:login-cancel': () => { ytLogin.close(); },
+  'yt:login-logout': async () => { const r = await ytLogin.logout(); yt.resetBotCheck(); return r; },
   'seerr:status': () => seerr.status(),
   'seerr:trending': (page) => seerr.trending(page || 1),
   'seerr:search': ({ query, page }) => seerr.search(query, page || 1),

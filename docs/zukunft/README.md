@@ -100,7 +100,14 @@ Ursprünglicher Umfang:
 
 ### Phase 4 · Direkte YouTube-Wiedergabe in Couchdeck
 
-- **YouTube-Bestätigung vom Sofa aus ermöglichen.** Wenn der offizielle
+- **Umgesetzt in Couchdeck 0.2.7, persönliche Abnahme offen.** Bei einer Bot-Meldung
+  bietet Couchdeck „Bei YouTube anmelden“: echte Google-Seite oben, Bedienung mit
+  Controller und Bildschirmtastatur, Sitzung bleibt gespeichert und wird über eine
+  Cookiedatei an yt-dlp übergeben; nach erkannter Anmeldung läuft das Video weiter.
+  In der Test-VM ohne Bildschirm geprüft (echte Google-Anmeldeseite, Tippen, Feldwechsel,
+  Navigationssperre, Cookie-Übergabe mit Testcookie). Nicht geprüft: echte Anmeldung,
+  ob YouTube danach die Bestätigung tatsächlich nicht mehr verlangt, Controller am Fernseher.
+- Ursprünglicher Auftrag: **YouTube-Bestätigung vom Sofa aus ermöglichen.** Wenn der offizielle
   Player eine Anmeldung oder Bestätigung anzeigt, die Seite in Couchdeck
   sichtbar machen und mit Controller oder Tastatur bedienbar machen.
   Prüfen, ob Couchdeck eine regulär bestätigte Sitzung wiederverwenden

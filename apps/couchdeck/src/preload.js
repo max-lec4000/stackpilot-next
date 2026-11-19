@@ -10,7 +10,7 @@ async function call(channel, arg) {
 contextBridge.exposeInMainWorld('cd', {
   call,
   on(channel, fn) {
-    const allowed = ['input', 'toast', 'player-state', 'auth', 'socket', 'refresh', 'volume', 'activity', 'raw-input', 'player-loading', 'sound-profiles', 'youtube-bot-check'];
+    const allowed = ['input', 'toast', 'player-state', 'auth', 'socket', 'refresh', 'volume', 'activity', 'raw-input', 'player-loading', 'sound-profiles', 'youtube-bot-check', 'youtube-login'];
     if (!allowed.includes(channel)) return;
     ipcRenderer.on(channel, (_e, payload) => fn(payload));
   },

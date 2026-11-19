@@ -420,9 +420,9 @@ function passwordScreen() {
 
 // ---------- Bildschirmtastatur ----------
 
-function keyboard(onChange, getValue, { secretField = false } = {}) {
+function keyboard(onChange, getValue, { secretField = false, extraKeys = [] } = {}) {
   const field = h('div', { class: 'field' });
-  const keys = 'abcdefghijklmnopqrstuvwxyzäöüß1234567890'.split('');
+  const keys = [...'abcdefghijklmnopqrstuvwxyzäöüß1234567890'.split(''), ...extraKeys];
   let value = '';
   let upper = false;
   const grid = h('div', { class: 'keys' });
@@ -1761,6 +1761,7 @@ function settingsScreen() {
     h('h3', {}, 'YouTube'),
     settingRow({ label: 'Höchste Qualität', section: 'youtube', key: 'maxHeight', values: [[480, '480p (sparsam)'], [720, '720p'], [1080, '1080p'], [1440, '1440p'], [2160, '2160p (4K)']] }),
     settingRow({ label: 'Sponsor-Abschnitte automatisch überspringen', section: 'youtube', key: 'sponsorAuto', values: [[false, 'Aus (Knopf)'], [true, 'An']] }),
+    ytLoginRow(),
     h('h3', {}, 'Oberfläche'),
     settingRow({ label: 'Bildschirmschoner nach', section: 'ui', key: 'screensaverMin', values: [[0, 'Aus'], [2, '2 min'], [5, '5 min'], [10, '10 min'], [15, '15 min'], [30, '30 min']] }),
     h('h3', {}, 'Controller'),
@@ -2049,16 +2050,22 @@ async function ytPlay(entries, startIndex = 0) {
   try { await cd.call('yt:play', { entries: entries.filter((x) => x.kind === 'video'), startIndex: Math.max(0, startIndex) }); } catch (e) { toast('YouTube: ' + e.message, 'error'); }
 }
 
-function showYouTubeLink(id, blocked = false) {
+function showYouTubeLink(id, blocked = false, signedIn = false) {
   const result = h('div', { class: 'yt-share-result' }, 'Link wird vorbereitet …');
+  const login = blocked ? h('button', { class: 'action primary focusable', 'data-autofocus': true,
+    oncdselect: () => { closeOverlay(); openYouTubeLogin({ autoFinish: true }); } },
+  signedIn ? 'Anmeldung erneuern' : 'Bei YouTube anmelden') : null;
   const panel = h('div', { class: 'dialog yt-share' },
-    h('h2', {}, 'Auf YouTube ansehen'),
-    blocked ? h('p', {}, 'YouTube verlangt auf diesem Server eine Bot-Bestätigung.') : null,
+    h('h2', {}, blocked ? 'YouTube möchte eine Bestätigung' : 'Auf YouTube ansehen'),
+    blocked ? h('p', {}, signedIn
+      ? 'YouTube verlangt trotz Anmeldung eine neue Bestätigung. Melde dich erneut an – danach geht es mit dem Video weiter.'
+      : 'YouTube verlangt auf diesem Server eine Bestätigung. Melde dich einmal mit einem Google-Konto an – danach geht es mit dem Video weiter.') : null,
+    blocked ? h('p', { class: 'muted' }, 'Oder auf dem Handy ansehen:') : null,
     result,
-    h('div', { class: 'actions' },
-      h('button', { class: 'action primary focusable', 'data-autofocus': true, oncdselect: closeOverlay }, 'Schließen')));
+    h('div', { class: 'actions' }, login,
+      h('button', { class: blocked ? 'action focusable' : 'action primary focusable', 'data-autofocus': !blocked || undefined, oncdselect: closeOverlay }, 'Schließen')));
   showOverlay(panel, { centered: true, onAction: (a) => a === 'back' ? (closeOverlay(), true) : false,
-    hints: () => [['A', 'a', 'Schließen'], ['B', 'b', 'Zurück']] });
+    hints: () => [['A', 'a', blocked ? 'Auswählen' : 'Schließen'], ['B', 'b', 'Zurück']] });
   cd.call('yt:share', id).then(({ url, image }) => {
     if (!result.isConnected) return;
     result.textContent = '';
@@ -2066,6 +2073,95 @@ function showYouTubeLink(id, blocked = false) {
       h('img', { class: 'yt-share-code', src: image, alt: 'QR-Code zum YouTube-Video', width: 264, height: 264 }));
     result.append(h('p', {}, h('code', {}, url)));
   }).catch(() => { result.textContent = 'Der YouTube-Link konnte nicht erstellt werden.'; });
+}
+
+// ---------- YouTube-Anmeldung ----------
+// Die echte Google/YouTube-Seite liegt oben über der Oberfläche (eigene Sitzung, im
+// Hauptprozess). Hier unten: Bedienhinweise und auf Wunsch die Bildschirmtastatur.
+let ytLoginState = null;
+async function openYouTubeLogin({ autoFinish = false } = {}) {
+  if (ytLoginState) return;
+  let typed = '';
+  const kb = keyboard((v) => {
+    // Nur die Änderung an die Seite schicken: neue Zeichen tippen, gelöschte zurücknehmen
+    if (v.startsWith(typed)) { const add = v.slice(typed.length); if (add) cd.call('yt:login-text', add).catch(() => {}); }
+    else if (typed.startsWith(v)) cd.call('yt:login-backspace', typed.length - v.length).catch(() => {});
+    else cd.call('yt:login-backspace', typed.length).then(() => v && cd.call('yt:login-text', v)).catch(() => {});
+    typed = v;
+  }, null, { secretField: true, extraKeys: ['@', '.', '_', '+', '!', '?', '#', '$', '%', '&', '*'] });
+  const status = h('p', { class: 'yt-login-status' }, 'Google-Anmeldung wird geladen …');
+  const kbWrap = h('div', { class: 'yt-login-kb', hidden: true }, kb.node);
+  const bar = h('div', { class: 'yt-login-bar' }, status, kbWrap);
+  const state = { keyboard: false, autoFinish };
+  ytLoginState = state;
+  const setKeyboard = (open) => {
+    state.keyboard = open;
+    kbWrap.hidden = !open;
+    bar.classList.toggle('with-kb', open);
+    if (open) {
+      typed = ''; kb.set(''); typed = '';
+      const first = focusables(kbWrap)[0];
+      if (first) setFocus(first, { scroll: false });
+    }
+    cd.call('yt:login-keyboard', open).catch(() => {});
+    updateHints();
+  };
+  const finish = async () => {
+    status.textContent = 'Anmeldung wird übernommen …';
+    try { await cd.call('yt:login-finish'); } catch (e) { toast('YouTube-Anmeldung: ' + e.message, 'error'); }
+  };
+  showOverlay(bar, {
+    destroy() { ytLoginState = null; },
+    onAction(a) {
+      if (a === 'menu') { finish(); return true; }
+      if (a === 'north') { setKeyboard(!state.keyboard); return true; }
+      if (state.keyboard) {
+        if (a === 'back') { setKeyboard(false); return true; }
+        if (a === 'west') { kb.backspace(); return true; }
+        return false; // Kreuz/A bedienen die Bildschirmtastatur
+      }
+      if (a === 'back') { cd.call('yt:login-cancel').catch(() => {}); return true; }
+      cd.call('yt:login-key', a).catch(() => {}); // Kreuz: nächstes/voriges Feld, A: bestätigen
+      return true;
+    },
+    hints: () => state.keyboard
+      ? [['A', 'a', 'Taste'], ['X', 'x', 'Löschen'], ['Y', 'y', 'Tastatur zu'], ['☰', 'menu', 'Fertig'], ['B', 'b', 'Tastatur zu']]
+      : [['✚', 'dir', 'Nächstes Feld'], ['A', 'a', 'Bestätigen'], ['Y', 'y', 'Tastatur'], ['☰', 'menu', 'Fertig'], ['B', 'b', 'Abbrechen']],
+  });
+  bar.classList.add('yt-login-open');
+  $('#overlay').classList.add('yt-login');
+  try {
+    const r = await cd.call('yt:login-open', { autoFinish });
+    status.textContent = r.loggedIn
+      ? 'Du bist bei YouTube angemeldet. Zeigt die Seite eine Bestätigung, folge ihr. ☰ übernimmt die Anmeldung.'
+      : 'Mit einem Google-Konto anmelden (am besten ein eigenes nur für Couchdeck). Y öffnet die Tastatur, ✚ springt zum nächsten Feld.';
+  } catch (e) {
+    toast('YouTube-Anmeldung: ' + e.message, 'error');
+    closeOverlay();
+  }
+}
+
+function ytLoginEvent(p) {
+  if (!p) return;
+  if (p.state === 'ready' && ytLoginState) {
+    const s = document.querySelector('.yt-login-status');
+    if (s) s.textContent = ytLoginState.autoFinish ? 'Angemeldet – das Video wird gleich fortgesetzt …' : 'Angemeldet. ☰ drücken, um zu übernehmen.';
+  }
+  if (p.state === 'done') toast(p.loggedIn ? 'YouTube-Anmeldung übernommen.' : 'Keine YouTube-Anmeldung erkannt.', p.loggedIn ? 'info' : 'error');
+  if ((p.state === 'closed' || p.state === 'done') && ytLoginState) { $('#overlay').classList.remove('yt-login'); closeOverlay(); }
+}
+
+function ytLoginRow() {
+  const val = h('span', { class: 'val' }, '…');
+  const b = h('button', { class: 'setting focusable', oncdselect: async () => {
+    const st = await cd.call('yt:login-status').catch(() => null);
+    if (st?.signedIn) confirmDialog('YouTube abmelden?', 'Couchdeck vergisst die Google-Anmeldung. Danach kann YouTube wieder eine Bestätigung verlangen.', 'Abmelden',
+      async () => { await cd.call('yt:login-logout').catch(() => {}); refresh(); });
+    else openYouTubeLogin();
+  } }, h('span', {}, 'Google-Anmeldung für YouTube'), val);
+  const refresh = () => cd.call('yt:login-status').then((st) => { val.textContent = st.signedIn ? 'angemeldet · abmelden' : 'nicht angemeldet · anmelden'; }).catch(() => { val.textContent = '–'; });
+  refresh();
+  return b;
 }
 
 function ytRow(title, entries, { list } = {}) {
@@ -2799,7 +2895,8 @@ document.addEventListener('click', (e) => {
 // ---------- Ereignisse aus dem Hauptprozess ----------
 
 cd.on('toast', ({ text, kind }) => toast(text, kind));
-cd.on('youtube-bot-check', (id) => showYouTubeLink(id, true));
+cd.on('youtube-bot-check', (p) => (typeof p === 'object' && p ? showYouTubeLink(p.id, true, p.signedIn) : showYouTubeLink(p, true)));
+cd.on('youtube-login', (p) => ytLoginEvent(p));
 cd.on('auth', (a) => {
   const was = S.auth.loggedIn;
   S.auth = a;

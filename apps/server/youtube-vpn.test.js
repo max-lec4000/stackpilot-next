@@ -45,6 +45,7 @@ test("VPN-Weiterleitung erlaubt nur YouTube-/Google-Ziele auf 443", () => {
 });
 
 test("VPN-Weiterleitung: Übergabe an Couchdeck und Tunnel über vpn-probe", async () => {
+  const oldMask = process.umask(0o077); // wie der StackPilot-Dienst
   const linkDir = await mkdtemp(path.join(tmpdir(), "sp-ytvpn-"));
   const calls = [];
   const relay = new YouTubeVpnRelay(hub(), { linkDir, port: 0, exec: fakeExec(calls) });
@@ -69,6 +70,7 @@ test("VPN-Weiterleitung: Übergabe an Couchdeck und Tunnel über vpn-probe", asy
     assert.equal((await connect(port, "evil.com:443", data.token)).status, 403);
     assert.equal(calls.length, 1);
   } finally {
+    process.umask(oldMask);
     relay.stop();
   }
 });

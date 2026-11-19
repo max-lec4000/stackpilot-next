@@ -8,7 +8,7 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { writeFile, rename, unlink, access, constants } from "node:fs/promises";
+import { writeFile, rename, unlink, access, chmod, constants } from "node:fs/promises";
 import path from "node:path";
 
 export const YOUTUBE_VPN_PORT = 4417;
@@ -116,6 +116,9 @@ export class YouTubeVpnRelay {
     const temp = `${this.file}.${randomBytes(6).toString("hex")}.tmp`;
     try {
       await writeFile(temp, JSON.stringify(data, null, 2), { mode: 0o640, flag: "wx" });
+      // Ausdrücklich setzen: die umask des Dienstes (0077) würde sonst 0600 ergeben und
+      // Couchdeck (Gruppe couchdeck-link) könnte die Datei nicht lesen.
+      await chmod(temp, 0o640);
       await rename(temp, this.file);
     } finally {
       await unlink(temp).catch(() => {});

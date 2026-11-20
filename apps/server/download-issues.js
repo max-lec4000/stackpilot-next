@@ -61,8 +61,13 @@ export function issueOf(row, service, plan, secrets = []) {
     messages,
     progress: size > 0 && left >= 0 ? Math.max(0, Math.min(1, 1 - left / size)) : null,
     size: size > 0 ? size : null,
+    // Fertig geladen und einem Film bzw. einer Serie zugeordnet: Dateien lassen sich von Hand importieren
+    importable: (left === 0 || ["importPending", "importBlocked", "importFailed"].includes(row.trackedDownloadState)) &&
+      typeof row.downloadId === "string" && Number.isSafeInteger(service === "Radarr" ? row.movie?.id ?? row.movieId : row.series?.id ?? row.seriesId),
   };
 }
+const fileToken = (p) => createHash("sha256").update(String(p)).digest("hex").slice(0, 16);
+const SxE = (e) => `S${pad(e.seasonNumber)}E${pad(e.episodeNumber)}`;
 
 export class DownloadIssues {
   constructor(hub) {
@@ -136,6 +141,85 @@ export class DownloadIssues {
       if (after.some((row) => row.id === hit.row.id))
         throw Error("Die ARR-App hat das Entfernen noch nicht bestätigt. Gleich erneut laden.");
       return { ok: true, message: `„${issueOf(hit.row, hit.service, plan).title}“: Treffer gesperrt, ${hit.service} sucht automatisch nach Ersatz.` };
+    });
+  }
+  ready() {
+    const current = this.hub.engine.current();
+    if (current?.job.status !== "completed") throw Error("Kein eingerichteter Stack.");
+    const names = this.services(current.plan);
+    if (!names.length) throw Error("Weder Radarr noch Sonarr sind eingerichtet.");
+    return names;
+  }
+  async findIssue(s, plan, id) {
+    if (!/^[a-f0-9]{32}$/.test(id || "")) throw Error("Ungültige Auswahl.");
+    const { rows } = await this.rows(s, plan);
+    const hit = rows.find(({ row, service }) => digest([plan.id, service, row.id, row.downloadId]) === id);
+    if (!hit) throw Error("Der Download steht nicht mehr in der Warteschlange. Neu laden.");
+    const issue = issueOf(hit.row, hit.service, plan);
+    if (!issue.importable) throw Error("Dieser Download lässt sich (noch) nicht von Hand importieren.");
+    return { ...hit, issue, targetId: hit.service === "Radarr" ? hit.row.movie?.id ?? hit.row.movieId : hit.row.series?.id ?? hit.row.seriesId };
+  }
+  async candidates(s, hit) {
+    const list = await s.arr(hit.service, `/manualimport?downloadId=${encodeURIComponent(hit.row.downloadId)}&filterExistingFiles=false`);
+    if (!Array.isArray(list)) throw Error("Importvorschau nicht lesbar.");
+    return list.filter((f) => typeof f.path === "string" && f.path.startsWith("/data/")).slice(0, 100);
+  }
+  /** Dateien im Download mit Vorschlag und Ablehnungsgründen; bei Serien die Folgen zur Auswahl. */
+  async importPreview(id) {
+    const { s, plan } = await this.hub.context(this.ready());
+    const hit = await this.findIssue(s, plan, id);
+    const files = await this.candidates(s, hit);
+    let episodes = null;
+    if (hit.service === "Sonarr") {
+      const all = await s.arr("Sonarr", `/episode?seriesId=${hit.targetId}`);
+      episodes = (Array.isArray(all) ? all : []).filter((e) => Number.isSafeInteger(e.id)).slice(0, 3000)
+        .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber)
+        .map((e) => ({ id: e.id, label: `${SxE(e)} – ${text(e.title, 80)}`, hasFile: !!e.hasFile }));
+    }
+    return {
+      kind: hit.issue.kind, title: hit.issue.title,
+      files: files.map((f) => ({
+        token: fileToken(f.path), name: text(f.relativePath || f.name || f.path.split("/").pop(), 200), size: Number(f.size) || null,
+        quality: text(f.quality?.quality?.name, 40) || null,
+        rejections: (Array.isArray(f.rejections) ? f.rejections : []).map((r) => text(r.reason || r, 200)).slice(0, 6),
+        suggestedEpisodeIds: Array.isArray(f.episodes) ? f.episodes.map((e) => e.id).filter(Number.isSafeInteger) : [],
+        suggestion: hit.service === "Radarr" ? (f.movie?.title ? text(f.movie.title, 120) : null)
+          : Array.isArray(f.episodes) && f.episodes.length ? f.episodes.map(SxE).join(", ") : null,
+      })),
+      episodes,
+    };
+  }
+  /** Ausgewählte Dateien dem Film bzw. den gewählten Folgen zuordnen und importieren. */
+  async importApply(body) {
+    if (body.confirmation !== "OK") throw Error("Import mit OK bestätigen.");
+    const chosen = Array.isArray(body.files) ? body.files.slice(0, 50) : [];
+    if (!chosen.length) throw Error("Mindestens eine Datei auswählen.");
+    return this.hub.mutate(this.ready(), async ({ s, plan }) => {
+      const hit = await this.findIssue(s, plan, body.id);
+      const files = await this.candidates(s, hit);
+      let episodeIds = null;
+      if (hit.service === "Sonarr") {
+        const all = await s.arr("Sonarr", `/episode?seriesId=${hit.targetId}`);
+        episodeIds = new Set((Array.isArray(all) ? all : []).map((e) => e.id));
+      }
+      const commandFiles = chosen.map((c) => {
+        const f = files.find((x) => fileToken(x.path) === c.token);
+        if (!f) throw Error("Eine gewählte Datei ist nicht mehr im Download. Neu laden.");
+        const base = { path: f.path, quality: f.quality, languages: f.languages, releaseGroup: f.releaseGroup, downloadId: hit.row.downloadId };
+        if (hit.service === "Radarr") return { ...base, movieId: hit.targetId };
+        const ids = Array.isArray(c.episodeIds) ? [...new Set(c.episodeIds)] : [];
+        if (!ids.length || ids.length > 10 || !ids.every((x) => episodeIds.has(x))) throw Error("Für jede Datei eine Folge dieser Serie wählen.");
+        return { ...base, seriesId: hit.targetId, episodeIds: ids };
+      });
+      const cmd = await s.arr(hit.service, "/command", { method: "POST", body: { name: "ManualImport", importMode: "auto", files: commandFiles } });
+      if (!Number.isSafeInteger(cmd?.id)) throw Error("Import wurde nicht angenommen.");
+      for (let i = 0; i < 60; i++) {
+        const st = await s.arr(hit.service, `/command/${cmd.id}`);
+        if (st?.status === "completed") return { ok: true, message: `${commandFiles.length} ${commandFiles.length === 1 ? "Datei" : "Dateien"} für „${hit.issue.title}“ importiert.` };
+        if (["failed", "aborted", "cancelled"].includes(st?.status)) throw Error(`${hit.service} meldet: Import fehlgeschlagen${st.message ? ` (${text(st.message, 160)})` : ""}.`);
+        await new Promise((r) => setTimeout(r, this.pollMs ?? 1500));
+      }
+      return { ok: true, message: `Import angestoßen; ${hit.service} arbeitet noch daran.` };
     });
   }
   /** Zuordnung Download-Hash → Titel für die Downloadliste (Fehler werden ignoriert). */

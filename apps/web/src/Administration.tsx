@@ -21,6 +21,7 @@ import { SourceHealth } from "./SourceHealth";
 import { QualityDefaults } from "./QualityDefaults";
 import { StorageView } from "./StorageView";
 import { LibrariesView } from "./LibrariesView";
+import { SeriesMonitoring } from "./SeriesMonitoring";
 import { CouchdeckRemote } from "./CouchdeckRemote";
 const areas = [
   { id: "media-files", group: "Betrieb", icon: "▤", title: "Medienbestand", description: "Bibliotheksdateien prüfen und gezielt löschen.", color: "sage" },
@@ -184,7 +185,7 @@ export function Administration({
   /** Nur den Inhalt des Bereichs zeigen (neue Navigation, Phase 7.0b) */
   bare?: boolean;
 }) {
-  const extra = ["viewer-requests", "people", "couchdeck", "subtitles", "storage", "libraries"];
+  const extra = ["viewer-requests", "people", "couchdeck", "subtitles", "storage", "libraries", "series"];
   const panel = areas.some((a) => a.id === area) || (bare && extra.includes(area)) ? area : "";
   const [menuOpen, setMenuOpen] = useState(false);
   const [networkUpgrade, setNetworkUpgrade] = useState(false);
@@ -226,6 +227,7 @@ export function Administration({
     if (panel === "profiles") return <><QualityDefaults /><SizeSettings /></>;
     if (panel === "storage") return <StorageView />;
     if (panel === "libraries") return <LibrariesView />;
+    if (panel === "series") return <SeriesMonitoring />;
     if (panel === "media-files") return <SeriesRemoval />;
     if (panel === "sources") return <><SourceHealth /><SourcesView /></>;
     if (panel === "subtitles") return <SubtitleSettings />;

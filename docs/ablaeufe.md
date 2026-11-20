@@ -174,6 +174,14 @@ Scanstatus und **Diese Bibliothek einlesen** (neue/geänderte Dateien, Metadaten
 **Alles einlesen und abgleichen** (Jellyfin-Scan, danach Seerr-Abgleich) und der letzte Scan.
 Darunter **Neu hinzugekommen**. Falsch erkannte Titel weiter in Jellyfin „Identifizieren“.
 
+## Medien → Serien
+
+Alle Serien aus Sonarr mit „überwacht“, „beendet“ und fehlenden Folgen; Suchfeld oben. Serie
+aufklappen: **Serie überwachen**, **Neue Staffeln automatisch überwachen** und je Staffel ein
+Schalter (vorhanden von gesamt). **Ausschalten** wirkt sofort; **einschalten** fragt nach
+**OK**, weil Sonarr danach fehlende Folgen selbständig lädt. **Fehlende suchen** (je Staffel)
+bzw. **Alle fehlenden Folgen suchen** → **OK** startet die Suche sofort (nur mit VPN).
+
 ## Speicher
 
 **Speicher → Belegung**: je Laufwerk belegt/frei (gemeinsame Laufwerke einmal), dazu wofür:
@@ -244,6 +252,10 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   **Anderen Treffer suchen** → **OK** (nur mit VPN): Download entfernen, Treffer sperren,
   automatisch Ersatz suchen – Dateien dieses Downloads werden gelöscht, schon Importiertes
   bleibt. Jeder Download in der Liste zeigt außerdem, zu welchem Film bzw. welcher Serie er gehört.
+  Ist ein Download fertig, aber nicht importiert (z. B. „Nur ein Beispielvideo“, falsch erkannte
+  Folge), gibt es **Dateien zuordnen …**: Dateien des Downloads mit Größe, Qualität und Meldung
+  der ARR-App; bei Serien je Datei die Folge wählen (Vorschlag ist vorausgewählt) →
+  **Importieren …** → **OK**. Radarr/Sonarr übernehmen, benennen um und melden an Jellyfin.
 - **Downloads → Seeding und Geschwindigkeit**: Seedingziel (Verhältnis und/oder Stunden; leer =
   kein Ziel), danach **anhalten** oder **aus qBittorrent entfernen (Dateien bleiben)**;
   Download-/Upload-Limit in KiB/s (0 = unbegrenzt); **Zeitplan** zum Drosseln (Von/Bis,

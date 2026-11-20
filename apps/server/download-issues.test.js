@@ -85,3 +85,74 @@ test("Anderen Treffer suchen nur mit VPN und nur für echte Probleme", async () 
   healed.queue.Radarr[0].trackedDownloadState = "downloading";
   await assert.rejects(healed.issues.act({ action: "replace", id: again.id, confirmation: "OK" }), /läuft wieder normal/);
 });
+
+function importSetup({ status = "completed" } = {}) {
+  const posts = [];
+  const queue = {
+    Radarr: [row({ movie: { id: 5, title: "Ein Film" } })],
+    Sonarr: [row({ id: 21, downloadId: "TV1", movie: undefined, series: { id: 9, title: "Eine Serie" }, episode: { seasonNumber: 1, episodeNumber: 1 } })],
+  };
+  const file = (path, extra = {}) => ({ path, relativePath: path.split("/").pop(), size: 900, quality: { quality: { name: "WEBDL-1080p" } }, languages: [{ id: 1 }], releaseGroup: "GRP", rejections: [{ reason: "Unknown Movie" }], ...extra });
+  const s = {
+    arr: async (service, route, options = {}) => {
+      if (route.startsWith("/queue?")) return { records: queue[service], totalRecords: queue[service].length };
+      if (route.startsWith("/manualimport?")) return service === "Radarr"
+        ? [file("/data/downloads/complete/Film/film.mkv"), file("/etc/passwd")]
+        : [file("/data/downloads/complete/Serie/s01e01.mkv", { episodes: [{ id: 101, seasonNumber: 1, episodeNumber: 1 }] }), file("/data/downloads/complete/Serie/s01e02.mkv")];
+      if (route.startsWith("/episode?seriesId=9")) return [{ id: 102, seasonNumber: 1, episodeNumber: 2, title: "Zwei" }, { id: 101, seasonNumber: 1, episodeNumber: 1, title: "Eins", hasFile: true }];
+      if (route === "/command" && options.method === "POST") { posts.push([service, options.body]); return { id: 77 }; }
+      if (route === "/command/77") return { status, message: status === "failed" ? "Datei gesperrt" : undefined };
+      return {};
+    },
+  };
+  const hub = {
+    engine: { current: () => ({ job: { status: "completed" }, plan }) },
+    context: async () => ({ s, plan }),
+    mutate: async (_n, fn) => fn({ s, plan }),
+  };
+  const issues = new DownloadIssues(hub);
+  issues.pollMs = 1;
+  return { issues, posts };
+}
+
+test("Importdateien von Hand zuordnen: Film", async () => {
+  const { issues, posts } = importSetup();
+  const [movie] = (await issues.list()).issues.filter((i) => i.kind === "movie");
+  assert.equal(movie.importable, true);
+  const preview = await issues.importPreview(movie.id);
+  assert.equal(preview.files.length, 1, "nur Dateien im Datenordner");
+  assert.deepEqual([preview.files[0].name, preview.files[0].quality, preview.files[0].rejections], ["film.mkv", "WEBDL-1080p", ["Unknown Movie"]]);
+  assert.ok(!JSON.stringify(preview).includes("/data/"), "keine internen Pfade");
+  assert.equal(preview.episodes, null);
+  await assert.rejects(issues.importApply({ id: movie.id, files: [{ token: preview.files[0].token }] }), /mit OK/);
+  await assert.rejects(issues.importApply({ id: movie.id, files: [], confirmation: "OK" }), /Mindestens eine Datei/);
+  await assert.rejects(issues.importApply({ id: movie.id, files: [{ token: "0".repeat(16) }], confirmation: "OK" }), /nicht mehr im Download/);
+  const done = await issues.importApply({ id: movie.id, files: [{ token: preview.files[0].token }], confirmation: "OK" });
+  assert.match(done.message, /1 Datei für „Ein Film“ importiert/);
+  assert.deepEqual(posts[0], ["Radarr", { name: "ManualImport", importMode: "auto", files: [{
+    path: "/data/downloads/complete/Film/film.mkv", quality: { quality: { name: "WEBDL-1080p" } }, languages: [{ id: 1 }], releaseGroup: "GRP", downloadId: "ABC", movieId: 5 }] }]);
+});
+
+test("Importdateien von Hand zuordnen: Serie mit Folgenauswahl, Fehler der ARR-App", async () => {
+  const { issues, posts } = importSetup();
+  const [tv] = (await issues.list()).issues.filter((i) => i.kind === "tv");
+  const preview = await issues.importPreview(tv.id);
+  assert.deepEqual(preview.episodes.map((e) => e.label), ["S01E01 – Eins", "S01E02 – Zwei"]);
+  assert.deepEqual(preview.files.map((f) => [f.suggestion, f.suggestedEpisodeIds]), [["S01E01", [101]], [null, []]]);
+  const [a, b] = preview.files;
+  await assert.rejects(issues.importApply({ id: tv.id, files: [{ token: b.token }], confirmation: "OK" }), /eine Folge/);
+  await assert.rejects(issues.importApply({ id: tv.id, files: [{ token: b.token, episodeIds: [999] }], confirmation: "OK" }), /eine Folge/);
+  const done = await issues.importApply({ id: tv.id, files: [{ token: a.token, episodeIds: [101] }, { token: b.token, episodeIds: [102, 102] }], confirmation: "OK" });
+  assert.match(done.message, /2 Dateien/);
+  assert.deepEqual(posts[0][1].files.map((f) => [f.seriesId, f.episodeIds]), [[9, [101]], [9, [102]]]);
+  const failing = importSetup({ status: "failed" });
+  const [tv2] = (await failing.issues.list()).issues.filter((i) => i.kind === "tv");
+  const p2 = await failing.issues.importPreview(tv2.id);
+  await assert.rejects(failing.issues.importApply({ id: tv2.id, files: [{ token: p2.files[0].token, episodeIds: [101] }], confirmation: "OK" }), /Import fehlgeschlagen \(Datei gesperrt\)/);
+});
+
+test("Von Hand importieren nur für fertige, zugeordnete Downloads", () => {
+  assert.equal(issueOf(row({ sizeleft: 500, trackedDownloadState: "downloading", movie: { id: 5 } }), "Radarr", plan).importable, false);
+  assert.equal(issueOf(row({ movie: { title: "x" } }), "Radarr", plan).importable, false, "ohne Film-ID");
+  assert.equal(issueOf(row({ movie: { id: 5 } }), "Radarr", plan).importable, true);
+});

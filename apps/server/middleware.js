@@ -11,6 +11,7 @@ import { SourceHealth } from "./source-health.js";
 import { QualityDefaults } from "./quality-defaults.js";
 import { StorageOverview } from "./storage-overview.js";
 import { LibraryOverview } from "./library-overview.js";
+import { SeriesMonitoring } from "./series-monitoring.js";
 import { StackBackupJob } from "./stack-backup-job.js";
 import { stackBackupRoutes } from "./domains/system/stack-backup.routes.js";
 import { storageRoutes } from "./domains/storage/storage.routes.js";
@@ -255,7 +256,7 @@ export function inventoryMiddleware(options = {}) {
     .add(downloadRoutes({ hub, guard, downloadIssues, downloadSettings }))
     .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub), sourceHealth: operations.sourceHealth, qualityDefaults: new QualityDefaults(hub) }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
-    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview: new LibraryOverview(hub) }))
+    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview: new LibraryOverview(hub), seriesMonitoring: new SeriesMonitoring(hub) }))
     .add(peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }))
     .add(couchdeckRoutes({ couchdeck }))
     .add(setupRoutes({ installer, executor }))

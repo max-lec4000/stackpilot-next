@@ -25,7 +25,7 @@ async function poster(path) {
   return rawResponse(Buffer.concat(chunks), { "Content-Type": type });
 }
 
-export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview }) {
+export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview, seriesMonitoring }) {
   const get = (path, handler) => ({ method: "GET", path, guard: "session", handler });
   const post = (path, handler) => ({ method: "POST", path, guard: "session", handler });
   const ok = (path, confirm, handler) => ({ method: "POST", path, guard: "ok", confirm, handler });
@@ -49,6 +49,10 @@ export function libraryRoutes({ hub, installer, importedReplacement, seriesRemov
     get("/api/media/replacements", () => importedReplacement.jobs()),
     get("/api/media/series-inventory", () => seriesRemoval.list()),
     get("/api/media/libraries", () => libraryOverview.read()),
+    // Medien → Serien (Paket 7.2): Einschalten prüft OK im Modul, Ausschalten nicht
+    get("/api/media/series-monitoring", () => seriesMonitoring.list()),
+    post("/api/media/series-monitoring", ({ body }) => seriesMonitoring.change(body)),
+    ok("/api/media/series-monitoring/search", "Suche mit OK bestätigen.", ({ body }) => seriesMonitoring.search(body)),
 
     post("/api/media/library/refresh", () => hub.library.run(true)),
     // Medien → Bibliotheken (7.4b)

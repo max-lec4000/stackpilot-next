@@ -495,6 +495,21 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
 - sp-test: 410 Tests; Browser gegen echte Seerr-/Jellyfin-Konten des Test-Zuschauers, danach
   Ausgangszustand.
 
+### Nachzug 7.2 – Importdateien zuordnen, Serienüberwachung (20.11.2026)
+
+- `download-issues.js`: `importable` je Problem (fertig bzw. Import blockiert, Film/Serie
+  bekannt), `importPreview(id)` (ManualImport-Kandidaten nur unter `/data/`, ohne Pfade an die
+  Oberfläche; Folgenliste bei Serien), `importApply` (OK, Token je Datei, Folgen nur dieser
+  Serie, Befehl `ManualImport` mit `importMode: auto`, Ergebnis abfragen). Routen
+  GET/POST `/api/downloads/issues/import` (POST ok). UI „Dateien zuordnen …“.
+- `series-monitoring.js` + Seite **Medien → Serien** (`#/medien/serien`): Serie, neue
+  Staffeln, einzelne Staffeln an/aus über `PUT /series/{id}?moveFiles=false` mit Rücklesen;
+  Einschalten braucht OK (Downloads möglich), Ausschalten nicht; Suche (Serie/Staffel) mit OK
+  und VPN, nur für überwachte Staffeln. Routen `/api/media/series-monitoring` (+`/search` ok).
+- sp-test: 417 Tests. Browser: Testserie (unüberwacht angelegt) Schalter an/aus, Suche nur bis
+  zur Bestätigung; Import mit privatem Test-Torrent ohne Tracker (Zufallsdaten, Sonarr-Push) →
+  „Nur ein Beispielvideo“ → zugeordnet und importiert. Danach Serie, Torrent und Dateien entfernt.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

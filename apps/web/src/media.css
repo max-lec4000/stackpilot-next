@@ -448,3 +448,12 @@
 .library-latest { padding-left: 1.1rem; display: grid; gap: 0.3rem; }
 .library-latest b { overflow-wrap: anywhere; }
 .libraries-view .success { color: var(--success); }
+.series-monitoring-list { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.5rem; }
+.series-monitoring-list > li { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.series-monitoring-row { width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; text-align: left; border: 0; background: none; padding: 0.6rem 0.8rem; }
+.series-monitoring-row b { overflow-wrap: anywhere; }
+.series-monitoring-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.series-monitoring-detail { display: grid; gap: 0.6rem; padding: 0 0.8rem 0.8rem; }
+.series-monitoring-detail > button { justify-self: start; }
+.series-monitoring-seasons { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
+.series-monitoring-seasons > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }

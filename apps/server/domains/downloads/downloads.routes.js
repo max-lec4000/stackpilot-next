@@ -17,6 +17,8 @@ export function downloadRoutes({ hub, guard, downloadIssues, downloadSettings })
     { method: "GET", path: "/api/downloads/settings", guard: "session", handler: () => downloadSettings.read() },
     { method: "POST", path: "/api/downloads/settings", guard: "ok", confirm: "Einstellungen mit OK bestätigen.",
       handler: ({ body }) => downloadSettings.change(body) },
+    { method: "GET", path: "/api/downloads/issues/import", guard: "session", handler: ({ url }) => downloadIssues.importPreview(url.searchParams.get("id")) },
+    { method: "POST", path: "/api/downloads/issues/import", guard: "ok", confirm: "Import mit OK bestätigen.", handler: ({ body }) => downloadIssues.importApply(body) },
     { method: "POST", path: "/api/downloads/issues/replace", guard: "ok",
       confirm: "Anderen Treffer suchen mit OK bestätigen.", handler: ({ body }) => downloadIssues.act({ ...body, action: "replace" }) },
   ];

@@ -394,6 +394,19 @@ Standardqualität.
   zurückgesetzt. „Vorhandene zuweisen“ nur im Komponententest (Bazarr kennt in der VM noch
   keine Titel).
 
+### Fortschritt 7.3b – Zustand der Quellen (20.11.2026)
+
+- `source-health.js`: Prowlarr `/indexer`, `/indexerstatus` (gesperrt bis), `/indexerstats`,
+  `/health` (ohne Update-Hinweise), `/applications`; je ARR-App angekommene Quellen und
+  Indexer-Warnungen. Aktionen: **Alle testen** (`/indexer/testall`; Prowlarr antwortet bei
+  Fehlern mit 400 + Liste – `service-api` hängt den Inhalt jetzt als `error.body` an) und
+  **An die Apps übertragen** (`ApplicationIndexerSync`). Meldungen ohne Adressen/Schlüssel.
+- Oberfläche `SourceHealth.tsx` über der Quellenliste; Zuhause-Aufgabe „Suchquelle fällt aus“.
+- sp-test: 385 Tests; mit einem Schein-Torznab-Indexer (nginx im ARR-Netz, erfundener
+  Treffer): Quelle „In Ordnung“, an Radarr übertragen (1 angekommen), Schein-Indexer
+  angehalten → „Alle testen“ → Fehler mit Grund, Prowlarr sperrt sie zeitweise. Danach
+  Testquelle und Schein-Indexer entfernt, Abgleich, Warteschlange leer.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

@@ -7,6 +7,7 @@ import { ViewerRatings } from "./viewer-ratings.js";
 import { DownloadIssues } from "./download-issues.js";
 import { DownloadSettings } from "./download-settings.js";
 import { Subtitles } from "./subtitles.js";
+import { SourceHealth } from "./source-health.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { RouteRegistry, isRawResponse, rawOf } from "./routes.js";
@@ -115,6 +116,7 @@ export function inventoryMiddleware(options = {}) {
   const dockerGuard = new DockerGuardStatus(state);
   operations.downloadIssues = downloadIssues;
   operations.dockerGuard = dockerGuard;
+  operations.sourceHealth = new SourceHealth(hub);
   // Docker-Wächter: Datenordner der Stacks melden (nur wenn StackPilot über ihn läuft)
   try { writeGuardRoots(state); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
   const appUpdates = new AppUpdates(installer());
@@ -240,7 +242,7 @@ export function inventoryMiddleware(options = {}) {
     }))
     .add(safetyRoutes({ safety }))
     .add(downloadRoutes({ hub, guard, downloadIssues, downloadSettings }))
-    .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub) }))
+    .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub), sourceHealth: operations.sourceHealth }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
     .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }))
     .add(peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }))

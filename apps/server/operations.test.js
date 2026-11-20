@@ -97,6 +97,9 @@ test("Zuhause: Freigaben, Download-Probleme, angehaltener Client und Docker-Wäc
   });
   ops.downloadIssues = { list: async () => ({ total: 2, issues: [{ cause: "Nur ein Beispielvideo" }, { cause: "Nur ein Beispielvideo" }] }) };
   ops.dockerGuard = { status: async () => ({ mode: "observe", denied: 1 }) };
+  ops.sourceHealth = { read: async () => ({ summary: { blocked: 1 }, sources: [{ name: "Quelle A", state: "blocked" }, { name: "Quelle B", state: "ok" }] }) };
+  current.plan.spec.selected.push("Prowlarr");
+  hub.context = async () => ({ s: { arr: async () => [{ enable: true }] } });
   const { tasks } = await ops.inspect(true);
   const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
   assert.ok(!byId.connections, "angehaltenes qBittorrent ist keine allgemeine Verbindungsstörung");
@@ -106,6 +109,8 @@ test("Zuhause: Freigaben, Download-Probleme, angehaltener Client und Docker-Wäc
   assert.equal(byId["download-issues"].title, "2 Downloads brauchen Aufmerksamkeit");
   assert.equal(byId["download-issues"].reason, "Nur ein Beispielvideo.");
   assert.match(byId["docker-guard"].title, /hätte 1 Aufruf gesperrt/);
+  assert.equal(byId["sources-failing"].title, "1 Suchquelle fällt aus");
+  assert.equal(byId["sources-failing"].href, "#/qualitaet/quellen");
   // Fehler einzelner Prüfungen blenden nur diese aus
   hub.pendingCount = async () => { throw Error("Seerr weg"); };
   ops.dockerGuard = { status: async () => ({ mode: "observe", denied: 0 }) };

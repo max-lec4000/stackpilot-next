@@ -101,9 +101,10 @@ export class Services {
       text = await r.text();
     }
     if (status < 200 || status >= 300) {
-      let detail = "";
+      let detail = "", parsed;
       try {
         const errors = JSON.parse(text);
+        if (text.length < 200000) parsed = errors;
         if (Array.isArray(errors))
           detail = errors
             .slice(0, 3)
@@ -119,6 +120,8 @@ export class Services {
         `${name}: Dienstanfrage ${route.split("?")[0]} fehlgeschlagen (HTTP ${status}${transportError ? " · " + transportError : ""}). ${detail}`,
       );
       error.status = status;
+      // Manche Apps liefern Ergebnisse auch bei Fehlercodes (z. B. Prowlarr testall: 400 + Liste)
+      if (parsed !== undefined) Object.defineProperty(error, "body", { value: parsed, enumerable: false });
       throw error;
     }
     if (raw)

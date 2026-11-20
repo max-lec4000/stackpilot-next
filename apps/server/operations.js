@@ -257,6 +257,19 @@ export class Operations {
         } catch {}
       })(),
       (async () => {
+        if (!this.sourceHealth || !plan.spec.selected.includes("Prowlarr")) return;
+        try {
+          const { summary, sources } = await this.sourceHealth.read();
+          const bad = sources.filter((x) => x.state === "blocked" || x.state === "failing");
+          if (bad.length)
+            tasks.push({
+              id: "sources-failing", state: "attention", title: n(bad.length, "Suchquelle fällt", "Suchquellen fallen") + " aus",
+              reason: bad.slice(0, 3).map((x) => x.name).join(", ") + (summary.blocked ? " – Prowlarr hat sie zeitweise gesperrt." : "."),
+              action: "Quellen öffnen", target: "manage", href: "#/qualitaet/quellen",
+            });
+        } catch {}
+      })(),
+      (async () => {
         if (!this.dockerGuard) return;
         try {
           const g = await this.dockerGuard.status();

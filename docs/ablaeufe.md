@@ -199,6 +199,12 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 - Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
   „OK“ oder „Abbrechen“.
 - Neue Quelle (Indexer): **Qualität & Quellen → Quellen** → Anbieter wählen → testen → speichern.
+- **Zustand der Quellen** (oben unter **Qualität & Quellen → Quellen**): je Quelle „In Ordnung“,
+  „Zuletzt Fehler“, „Zeitweise gesperrt bis …“ (Prowlarr pausiert ausfallende Quellen) oder
+  „Ausgeschaltet“, dazu Suchen, genommene Treffer, Fehlschläge und Antwortzeit; je App, wie
+  viele Quellen dort angekommen sind, und deren Warnungen. **Alle testen** prüft jede aktive
+  Quelle und zeigt den Grund bei Fehlern; **An Radarr/Sonarr übertragen** stößt den Abgleich
+  von Prowlarr an. Ausfallende Quellen erscheinen auch auf **Zuhause → Braucht Aufmerksamkeit**.
 - **Untertitel**: **Qualität & Quellen → Untertitel** → Sprachen ankreuzen (z. B. Deutsch,
   Englisch) → Anbieter wählen (ohne Konto: eingebettete Untertitel, Gestdown für Serien,
   YIFY für Filme; **OpenSubtitles.com** mit kostenlosem Konto hat die meisten deutschen) →

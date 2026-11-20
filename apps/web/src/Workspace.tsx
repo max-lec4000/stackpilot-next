@@ -7,6 +7,8 @@ import { Disclosure } from "./ui";
 import { ServiceUpdates } from "./ServiceUpdates";
 import { DockerGuard } from "./DockerGuard";
 import { StackBackupPanel } from "./StackBackupPanel";
+import { StackRestorePanel } from "./StackRestorePanel";
+import { UpdateWindowPanel } from "./UpdateWindowPanel";
 import { ContainerMaintenance } from "./ContainerMaintenance";
 import { VaultBackup } from "./VaultBackup";
 import { type Inventory, type Storage } from "./ServerCheck";
@@ -80,11 +82,13 @@ export function Workspace({
         <ServiceUpdates />
         <Disclosure title="Gesamtsicherung">
           <StackBackupPanel />
+          <StackRestorePanel />
         </Disclosure>
         <Disclosure title="Docker-Wächter">
           <DockerGuard />
         </Disclosure>
         <Disclosure title="Container-Updates und Rückkehr">
+          <UpdateWindowPanel />
           <ContainerMaintenance />
         </Disclosure>
         <Disclosure title="StackPilot-Tresor sichern">

@@ -155,6 +155,7 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw Error("Ungültiges Wiederherstellungslimit.");
   const source = await open(archive, constants.O_RDONLY | constants.O_NOFOLLOW);
   let created = false, key, manifest, count = 0, totalBytes = 0;
+  const apps = new Set(); // oberste Ordner unter appdata/ (für die Vorschau der Wiederherstellung)
   const expectedDirectories = new Set(), completed = new Set();
   try {
     const st = await source.stat();
@@ -213,6 +214,7 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
             if (entry.type !== "directory") throw Error("Ungültige Archivwurzel.");
           } else if (++count > maxEntries) throw Error("Zu viele Archiveinträge.");
           if (entry.type === "directory") {
+            if (/^appdata\/[^/]+$/.test(relative)) apps.add(relative.slice("appdata/".length));
             if (!dryRun) await mkdir(target, { mode: 0o700 });
             expectedDirectories.add(relative);
           } else if (entry.type === "file") {
@@ -234,7 +236,7 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
         }
       },
     );
-    return { state: "verified", destination: dryRun ? null : destination, manifest, entries: count, totalBytes, productionImport: false };
+    return { state: "verified", destination: dryRun ? null : destination, manifest, entries: count, totalBytes, apps: [...apps].sort(), productionImport: false };
   } catch {
     if (created) await rm(destination, { recursive: true, force: true });
     throw Error("Wiederherstellung nicht bestätigt: Passphrase, Integrität, Format oder Platz prüfen. Keine bestehende Installation wurde überschrieben.");

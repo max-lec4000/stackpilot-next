@@ -1,5 +1,5 @@
 // System → Updates: StackPilot selbst und die Mediencontainer.
-export function updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }) {
+export function updateRoutes({ serviceUpdates, containerMaintenance, couchdeck, updateWindow }) {
   return [
     { method: "GET", path: "/api/updates/job", guard: "session", handler: () => serviceUpdates.job() },
     { method: "POST", path: "/api/updates/preview", guard: "session", handler: () => serviceUpdates.preview() },
@@ -13,5 +13,8 @@ export function updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }
     { method: "POST", path: "/api/container-maintenance/batch", guard: "ok",
       confirm: "Anwendungen und Bestätigung fehlen oder sind ungültig.",
       handler: ({ body }) => containerMaintenance.applyBatch(body, couchdeck) },
+    // Wartungsfenster für automatische App-Updates (Paket 7.5)
+    { method: "GET", path: "/api/update-window", guard: "session", handler: () => updateWindow.status() },
+    { method: "POST", path: "/api/update-window", guard: "ok", confirm: "Wartungsfenster mit OK bestätigen.", handler: ({ body }) => updateWindow.save(body) },
   ];
 }

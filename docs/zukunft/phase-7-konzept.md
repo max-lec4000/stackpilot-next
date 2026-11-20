@@ -550,6 +550,27 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   Wiedergaben/Transcoding nur in Tests (keine abspielbaren Medien in der VM). Danach
   Testdateien, Papierkorb-Ordner entfernt, Radarr-Aufbewahrungstage auf 7 zurück.
 
+### Nachzug 7.5 – Wiederherstellung per Knopf, Wartungsfenster (20.11.2026)
+
+- `stack-restore-job.js` + `StackRestorePanel.tsx`: prüfen (`verifyStackArchive`, jetzt mit
+  Liste der App-Ordner), Wiederherstellung im Hintergrund mit Sperre und Journal
+  (`stack-restore:journal`): entpacken → Schlüsselvergleich (Radarr/Sonarr/Lidarr/Prowlarr
+  config.xml, Bazarr config.yaml; Seerr vergibt seinen eigenen) → Besitzprüfung → Ausgangslage
+  (`s.verify()`) → `freezeStackForBackup` mit Ordnertausch → gemerkte Anmeldungen verwerfen →
+  `s.wait`/`s.verify` bis 12 Versuche → sonst automatisch zurück. StackPilot-Zustand und
+  Streamystats bleiben. Zurückrollen nach Absturz, vorherigen Stand löschen.
+- `update-window.js` + `UpdateWindowPanel.tsx`: Tag/Stunde, minütlicher Takt, nur ohne
+  Wiedergabe/Sicherung/Auftrag, `containerMaintenance.applyBatch` (ohne Couchdeck); Fehler auf
+  Zuhause.
+- sp-test: 443 Tests. Echter Durchlauf mit frischer Sicherung (2,5 GiB, ~5 min): Lauf 1 brach
+  korrekt beim Schlüsselvergleich ab (Seerr fälschlich verglichen → behoben); Lauf 2/3 kehrten
+  automatisch zurück (gemerkte Seerr-Sitzung → behoben; vorbestehende Seerr→Sonarr-Abweichung
+  der VM); Lauf 4 erfolgreich, Testwert zurück, Hinweis auf die vorbestehende Abweichung.
+  Danach Abweichung repariert, aufgehobener Stand gelöscht, Wartungsfenster ein/aus.
+- Offen: Ursache der Seerr→Sonarr-Abweichung in der VM (vermutlich frühere Seerr-Rückkehr auf
+  älteren Datenstand nach einer Schlüsselerneuerung) – Container-Rückkehr von Seerr sollte die
+  ARR-Schlüssel danach abgleichen.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

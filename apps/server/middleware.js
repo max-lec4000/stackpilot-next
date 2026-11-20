@@ -18,6 +18,8 @@ import { Playback } from "./playback.js";
 import { TitleIdentify } from "./title-identify.js";
 import { LibraryCare } from "./library-care.js";
 import { StackBackupJob } from "./stack-backup-job.js";
+import { StackRestoreJob } from "./stack-restore-job.js";
+import { UpdateWindow } from "./update-window.js";
 import { stackBackupRoutes } from "./domains/system/stack-backup.routes.js";
 import { storageRoutes } from "./domains/storage/storage.routes.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
@@ -132,6 +134,8 @@ export function inventoryMiddleware(options = {}) {
   const stackBackup = new StackBackupJob(hub);
   operations.stackBackup = stackBackup;
   if (options.background !== false && !process.env.NODE_TEST_CONTEXT) stackBackup.start();
+  const stackRestore = new StackRestoreJob(hub, stackBackup);
+  operations.stackRestore = stackRestore;
   // Docker-Wächter: Datenordner der Stacks melden (nur wenn StackPilot über ihn läuft)
   try { writeGuardRoots(state); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
   const appUpdates = new AppUpdates(installer());
@@ -147,6 +151,10 @@ export function inventoryMiddleware(options = {}) {
   const containerMaintenance = new ContainerMaintenance(hub, {
     jellyfin: new JellyfinMaintenance(jellyfinProtection, ssoConnection, connectionCheck),
   });
+  // Wartungsfenster (Paket 7.5): bereitstehende App-Updates automatisch zur gewählten Zeit
+  const updateWindow = new UpdateWindow(hub, containerMaintenance, { busy: () => !!stackBackup.running || !!stackRestore.running });
+  operations.updateWindow = updateWindow;
+  if (options.background !== false && !process.env.NODE_TEST_CONTEXT) updateWindow.start();
   const oidcBackchannel = new OidcBackchannel(
     hub,
     identity,
@@ -246,10 +254,10 @@ export function inventoryMiddleware(options = {}) {
   // Routen-Verzeichnis (Phase 7.0a): umgezogene Bereiche mit deklarierter Schutzstufe.
   // Alles andere läuft noch über die Bedingungskette unten.
   const routes = new RouteRegistry()
-    .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
+    .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck, updateWindow }))
     .add(dockerGuardRoutes({ dockerGuard }))
     .add(storageRoutes({ storageOverview: new StorageOverview(hub), libraryCare: new LibraryCare(hub) }))
-    .add(stackBackupRoutes({ stackBackup }))
+    .add(stackBackupRoutes({ stackBackup, stackRestore }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
     .add(viewerRequestRoutes({ viewerRequests }))
     .add(remoteRoutes({
@@ -527,6 +535,7 @@ export function inventoryMiddleware(options = {}) {
   middleware.shutdown = async (timeoutMs = 240000) => {
     draining = true;
     appUpdates.close();
+    updateWindow.close();
     notifications.close();
     publicFunnel.close();
     oidcBackchannel.close();

@@ -65,6 +65,8 @@ test("Umgezogene Routen behalten ihre Schutzstufen", () => {
     "POST /api/container-maintenance/update": "ok",
     "POST /api/container-maintenance/rollback": "ok",
     "POST /api/container-maintenance/batch": "ok",
+    "GET /api/update-window": "session",
+    "POST /api/update-window": "ok",
     "GET /api/vpn/profiles": "session",
     "POST /api/vpn/import": "session",
     "POST /api/vpn/profiles/remove": "session",
@@ -228,6 +230,8 @@ test("Gesamtsicherung: Lesen/Herunterladen mit Sitzung, Ändern nur mit OK", asy
   assert.deepEqual(Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard])), {
     "GET /api/stack-backup": "session", "GET /api/stack-backup/download": "session",
     "POST /api/stack-backup/setup": "ok", "POST /api/stack-backup/run": "ok", "POST /api/stack-backup/resume": "ok",
+    "GET /api/stack-restore": "session", "POST /api/stack-restore/check": "session", "POST /api/stack-restore/start": "ok",
+    "POST /api/stack-restore/recover": "ok", "POST /api/stack-restore/previous/remove": "ok",
   });
 });
 

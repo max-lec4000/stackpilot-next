@@ -238,7 +238,25 @@ Serien, Musik und Downloads.
 - Bricht eine Sicherung ab, während Apps angehalten sind, zeigt die Seite **Apps wieder
   starten**; Zuhause meldet unterbrochene, fehlgeschlagene oder überfällige Sicherungen.
 
-### Gesamtsicherung wiederherstellen (noch begleitet, kein Knopf)
+### Gesamtsicherung wiederherstellen – per Knopf (gleicher Server)
+
+**System → Sicherungen & Updates → Gesamtsicherung → Wiederherstellen**: Sicherung wählen →
+**Prüfen** (entschlüsselt alles probeweise, zeigt Datum, Größe und welche Apps zurückkommen) →
+**Wiederherstellen …** → `WIEDERHERSTELLEN` eintippen → **OK**. Ablauf (einige Minuten, die
+Apps sind dabei nicht erreichbar): entpacken neben die App-Daten → Dienstschlüssel vergleichen
+(seit der Sicherung erneuert → Abbruch, nichts angefasst) → Besitzrechte prüfen → Ausgangslage
+prüfen → Apps anhalten → Ordner tauschen → Apps starten → Dienste prüfen (bis ~2 Minuten).
+Startet danach etwas nicht richtig, tauscht StackPilot automatisch zurück. Ein Fehler, der
+schon vorher bestand, wird nur als Hinweis gemeldet.
+
+- Zurück kommen die Einstellungen und Datenbanken aller Apps. **Nicht** zurück: StackPilot
+  selbst (Anmeldungen, Tresor, Zuschauer) und die Streamystats-Statistik.
+- Der Stand davor bleibt als `<Datenordner>-appdata-vorher-<Zeit>` liegen (nur der jüngste);
+  **Löschen …** gibt den Platz frei.
+- Abbruch mitten im Tausch (Stromausfall o. Ä.): Zuhause meldet es; **Zurückrollen** stellt den
+  Stand davor her.
+
+### Gesamtsicherung auf einem neuen Server (begleitet, kein Knopf)
 1. Archiv entpacken – geht auch ohne laufendes StackPilot, schreibt nur in einen **neuen** Ordner:
    `/opt/stackpilot/node/bin/node /opt/stackpilot/app/deploy/stack-restore.mjs <archiv.spstack> <neuer-ordner>`
    (fragt das Sicherungspasswort).
@@ -399,6 +417,13 @@ automatische Limit zuerst aus. Danach kannst du es mit dem neuen
 Profil wieder aktivieren.
 
 ## Mediencontainer aktualisieren und zurückwechseln
+
+**Wartungsfenster** (Sicherungen & Updates → Container-Updates und Rückkehr): **Automatisch
+einspielen** ankreuzen, Tag (jede Nacht oder ein Wochentag) und Stunde wählen → **Speichern …**
+→ **OK**. Bereitstehende App-Updates laufen dann dort über denselben geprüften Weg wie per Knopf
+(je App mit Rückweg) – nur wenn nichts abgespielt wird und keine Sicherung oder anderer Auftrag
+läuft; sonst innerhalb der Stunde erneut, danach übersprungen. Couchdeck bleibt beim Knopf.
+Fehlgeschlagene Updates erscheinen auf Zuhause.
 
 Unter **System → Updates & Sicherungen → Container-Updates und
 Rückkehr** zeigt StackPilot für Sonarr, Radarr, Lidarr, Prowlarr, Bazarr

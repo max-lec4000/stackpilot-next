@@ -287,6 +287,23 @@ export class Operations {
         } catch {}
       })(),
       (async () => {
+        const link = { action: "Sicherung öffnen", target: "manage", href: "#/system/updates" };
+        try {
+          const r = this.stackRestore ? await this.stackRestore.status() : null;
+          if (r?.recoveryRequired)
+            tasks.push({ id: "stack-restore", state: "attention", title: "Wiederherstellung wurde unterbrochen", reason: "„Zurückrollen“ stellt den vorherigen Stand her.", ...link });
+          else if (r?.last && !r.last.ok && !r.running && Date.now() - Date.parse(r.last.at) < 7 * 86400000)
+            tasks.push({ id: "stack-restore", state: "attention", title: "Wiederherstellung nicht abgeschlossen", reason: String(r.last.error || "").slice(0, 200), ...link });
+        } catch {}
+        try {
+          const w = this.updateWindow ? this.updateWindow.engine.vault.get("update-window:last") : null;
+          if (w?.failed && Date.now() - Date.parse(w.at) < 7 * 86400000)
+            tasks.push({ id: "update-window", state: "attention", title: "Automatische Updates teilweise fehlgeschlagen",
+              reason: (w.error || w.results.filter((x) => x.phase === "failed").map((x) => `${x.name}: ${x.error || "fehlgeschlagen"}`).join("; ")).slice(0, 200),
+              action: "Updates öffnen", target: "manage", href: "#/system/updates" });
+        } catch {}
+      })(),
+      (async () => {
         if (!this.dockerGuard) return;
         try {
           const g = await this.dockerGuard.status();

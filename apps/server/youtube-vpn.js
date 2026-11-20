@@ -13,6 +13,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { writeFile, rename, unlink, access, chmod, constants } from "node:fs/promises";
 import path from "node:path";
 import { YouTubeTunnel } from "./youtube-tunnel.js";
+import { DOCKER_HOST } from "./docker-io.js";
 
 export const YOUTUBE_VPN_PORT = 4417;
 const ALLOWED = /(^|\.)(youtube\.com|googlevideo\.com|ytimg\.com|ggpht\.com|google\.com|googleapis\.com|gstatic\.com|youtube-nocookie\.com|youtu\.be)$/i;
@@ -44,7 +45,7 @@ function dockerExec(container, host) {
     delete env[key];
   return spawn(
     "docker",
-    ["--host=unix:///var/run/docker.sock", "exec", "-i", container, "node", "-e", TUNNEL, host],
+    [`--host=${DOCKER_HOST}`, "exec", "-i", container, "node", "-e", TUNNEL, host],
     { env, stdio: ["pipe", "pipe", "ignore"] },
   );
 }

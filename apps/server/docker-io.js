@@ -1,4 +1,8 @@
 import { spawn } from "node:child_process";
+// Docker-Zugang: standardmäßig der Socket des Hosts. Im Container (Phase 7.0c) zeigt
+// STACKPILOT_DOCKER_HOST auf den Docker-Wächter, der nur erlaubte Aufrufe weiterreicht.
+export const DOCKER_HOST = process.env.STACKPILOT_DOCKER_HOST || "unix:///var/run/docker.sock";
+if (!/^unix:\/\/\/[A-Za-z0-9_./-]+$/.test(DOCKER_HOST)) throw new Error("STACKPILOT_DOCKER_HOST muss ein Unix-Socket sein.");
 export function dockerInput(
   args,
   input,
@@ -16,7 +20,7 @@ export function dockerInput(
       delete env[key];
     const child = spawn(
       "docker",
-      ["--host=unix:///var/run/docker.sock", ...args],
+      [`--host=${DOCKER_HOST}`, ...args],
       { env, stdio: ["pipe", "pipe", "pipe"] },
     );
     let output = "";

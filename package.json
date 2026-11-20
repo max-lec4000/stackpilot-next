@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "vite apps/web --config apps/web/vite.config.js --host 127.0.0.1",
     "build": "tsc --noEmit && vite build apps/web --config apps/web/vite.config.js",
-    "test": "node --test packages/domain/*.test.js apps/server/*.test.js apps/server/identity/*.test.js apps/server/adapters/*.test.js apps/couchdeck/src/main/*.test.js",
+    "test": "node --test packages/domain/*.test.js apps/server/*.test.js apps/server/identity/*.test.js apps/server/adapters/*.test.js apps/docker-guard/*.test.js apps/couchdeck/src/main/*.test.js",
     "test:ui": "node apps/web/testing/ux-smoke.cjs",
     "start": "node apps/server/start.js",
     "test:docker": "node --test --test-concurrency=1 apps/server/docker.integration.js apps/server/retirement.integration.js apps/server/vpn-compose.integration.js apps/server/relay.integration.js",

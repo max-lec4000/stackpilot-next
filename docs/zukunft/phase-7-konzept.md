@@ -184,6 +184,82 @@ vorhandenen Tests und einer VM-Abnahme.
   Zuschauern (Trennung in 7.1); System hat zehn Reiter (ggf. bündeln); Server-Hinweise
   verlinken noch alte Adressen (werden umgeleitet).
 
+### Fortschritt 7.0c – Container-Probe (20.11.2026)
+
+**Docker-Wächter** (`apps/docker-guard/`, Prototyp): kleiner Node-Dienst als root auf dem
+Host, Unix-Socket für StackPilot, reicht nur erlaubte Docker-API-Aufrufe an den echten Socket
+weiter. Modus `observe` (nur protokollieren) oder `enforce` (Verstöße mit 403 ablehnen).
+
+- Erlaubnisliste nach Methode und Pfad (Container, Exec, Images ziehen, Netzwerke, Volumes,
+  Ereignisse). Gesperrt sind u. a. Build, Plugins, Swarm, Secrets, `docker cp`, Commit.
+- Inhaltsprüfung neuer Container: nicht privilegiert, keine Host-Namensräume (Netz, PID, IPC,
+  UTS, Userns, Cgroupns), nur Rechte aus fester Liste (NET_ADMIN, CHOWN, DAC_OVERRIDE,
+  FOWNER, SETUID, SETGID), nur `/dev/net/tun` als Gerät, keine GPU-/Geräteregeln,
+  `VolumesFrom`, fremde Laufzeiten, `CgroupParent` oder abgeschaltete Schutzprofile.
+  Einbindungen nur unter den erlaubten Ordnern (Zustand, App-Daten, Medien), Pfade wie Docker
+  bereinigt (`..`) **und** mit aufgelösten Verknüpfungen geprüft; nie der Docker-Socket.
+  Benannte Volumes mit Host-Ordner (`type=none,o=bind,device=…`, auch inline im Mount) nur
+  innerhalb der erlaubten Ordner, nur der lokale Treiber. Netzwerke nur als Bridge.
+  `exec` nicht privilegiert.
+- StackPilot nutzt den Wächter über `STACKPILOT_DOCKER_HOST` (nur Unix-Socket erlaubt). Alle
+  Docker-Aufrufe laufen jetzt über diesen einen Zugang – auch die Systemübersicht, die vorher
+  den Standard-Socket direkt nahm.
+- Fehler im Wächter gefunden und behoben: `docker run` hing, weil die Kopfzeilen der
+  `/wait`-Antwort erst mit dem Inhalt (beim Containerende) weitergingen; `exec` hing, weil
+  der Inhalt der Upgrade-Anfrage erst nach dem Umschalten kam.
+
+**Nachweise in sp-test** (Wächter auf dem Host, StackPilot einmal als Host-Dienst, einmal als
+Container):
+
+| Prüfung | Ergebnis |
+|---|---|
+| Beobachten: Start, Ansichten, Zuschauer-Anmeldung, Schutztest, Streamyfin zurück/vor | 4693 Aufrufe, 0 Verstöße |
+| Sperren: Neustart, Streamyfin zurück/vor, Schutztest | 1348 Aufrufe, 0 gesperrt, alles erfolgreich |
+| StackPilot **im Container** (ohne Socket, nur Wächter): Ansichten, Streamyfin zurück/vor, Schutztest, Tailscale-Status, Couchdeck-Status | 1236 Aufrufe, 0 gesperrt, keine Fehler im Log |
+| Angriffe über den Wächter: privilegiert, `/` bzw. `/etc` einbinden, Docker-Socket, Host-PID/-Netz, SYS_ADMIN, `/dev/sda`, privilegiertes exec, Plugins, Swarm, Build, Verknüpfung nach `/`, `../../../etc`, Bind-Volume auf `/`, Volume-Optionen im Mount, macvlan, VolumesFrom | alle abgelehnt |
+| Erlaubtes bleibt: Einbindung unter Daten-Ordner, normales Volume, normales exec | erlaubt |
+| Nach der Härtung erneut: Streamyfin zurück/vor, Schutztest | 1120 Aufrufe, 0 gesperrt |
+
+Nicht geprüft: VPN-Wechsel (VM hat nur eine Config; nutzt dieselben Compose-Aufrufe wie die
+geprüften Abläufe), vollständige Erstinstallation und App-Updates über den Wächter (vor
+einem Umzug im Beobachtungsmodus nachholen).
+
+**Container-Prototyp** (`scripts/testvm/container-probe.sh`): Ubuntu 24.04 mit Git, OpenSSL,
+iproute2, util-linux, systemd-Client, Docker-CLI/Compose und tailscale; Host-Netz (Tailnet,
+lokale Weiterleitungen wie 127.0.0.1:4417), Benutzer 1000, schreibgeschütztes Dateisystem, alle
+Rechte entzogen, `no-new-privileges`. Daten unter **denselben Pfaden** wie auf dem Host
+(Compose-Einbindungen löst der Docker-Dienst auf dem Host auf). Was im Container fehlt:
+
+1. **systemctl** (Couchdeck starten/stoppen, StackPilot-Update, Root-Hilfe-Aufträge): Über den
+   D-Bus-Socket kommt die Anfrage an, aber Dockers AppArmor-Standardprofil sperrt D-Bus.
+   Ohne das Profil entscheidet polkit wie auf dem Host (unbekannte Aufträge und
+   `docker restart` abgelehnt). Lösung für 7.7: eigenes AppArmor-Profil (Docker-Standard plus
+   nur D-Bus zu `org.freedesktop.systemd1`) – polkit bleibt die einzige Regelstelle. Alternative:
+   kleine Host-Brücke mit festen Aufträgen.
+2. **Pfade/Umgebung:** `HOME` muss der Host-Pfad sein (sonst falscher Datenpfad-Vorschlag);
+   Einhängepunkte und `ss`/`findmnt` zeigen die Sicht des Containers – Speicher- und
+   Port-Diagnose müssen dafür über den Wächter bzw. Host-Angaben laufen.
+3. **Wächter selbst** muss als Host-Dienst installiert werden (systemd-Einheit, Gruppe für den
+   Socket, erlaubte Ordner aus dem Stack-Plan, Update zusammen mit StackPilot).
+
+Restrisiken des Wächters: Eine Verknüpfung könnte zwischen Prüfung und Anlegen getauscht
+werden (StackPilot gehört der Daten-Ordner); Container dürfen weiterhin beliebige Abbilder
+ziehen und NET_ADMIN bekommen (Gluetun). Gegenüber heute (StackPilot-Benutzer in der Gruppe
+`docker` = root-gleich) ist es trotzdem eine deutliche Einschränkung.
+
+**Couchdeck – Einschätzung:** Couchdeck braucht den Bildschirm als Kiosk (cage auf tty1 mit
+Autologin, DRM-Master über logind), GPU mit VA-API (`/dev/dri`), Controller mit Hotplug
+(`/dev/input`, udev), PipeWire mit AirPlay-Ausgabe (Avahi über D-Bus) und Bluetooth-Einstellungen
+des Hosts. Im Container hieße das: tty-, DRM-, input- und udev-Zugriff plus eigener Seat-Dienst –
+der Container wäre kaum enger als der heutige eigene Benutzer `couchdeck` (ohne sudo, ohne
+docker). Der YouTube-Token-Dienst läuft bereits als stark abgeschotteter systemd-Dienst.
+**Empfehlung: Couchdeck bleibt nativ**; Installation und Updates weiter über die Root-Hilfe.
+
+**Entscheidungsvorschlag:** (a) Docker-Wächter weiterentwickeln und schon **vor** dem
+Container-Umzug auf dem Host einsetzen (erst beobachten, dann sperren) – das bringt den
+Sicherheitsgewinn ohne Umzug; (b) StackPilot-Container in 7.7 mit eigenem AppArmor-Profil für
+systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |
@@ -191,7 +267,7 @@ vorhandenen Tests und einer VM-Abnahme.
 | StackPilot | Container **mit** Docker-Socket | Abgelehnt: Socket = volle Root-Macht im Container. |
 | StackPilot | Container **ohne** Socket + kleiner Docker-Wächter auf dem Host mit fester Erlaubnisliste (heutige Root-Hilfe als Vorbild) | **Empfohlen.** Gleiche Rechte wie heute, sauber getrennt, eigenes Update/Rollback möglich. |
 | Tailscale | eigener Container mit Host-Netz | Kein Sicherheitsgewinn, Serve/Funnel hängen am Host. **Empfehlung: auf dem Host lassen.** |
-| Couchdeck | Container mit Bildschirm, GPU, Controller, Audio | Machbar, aber viele Gerätefreigaben (Wayland/cage, DRM, evdev, PipeWire, VA-API) – im Container kaum sicherer als heute. **Empfehlung: zuerst Machbarkeitsprobe in der VM, Entscheidung danach.** |
+| Couchdeck | Container mit Bildschirm, GPU, Controller, Audio | Machbar, aber viele Gerätefreigaben (Wayland/cage, DRM, evdev, PipeWire, VA-API) – im Container kaum sicherer als heute. **Nach Probe 7.0c: bleibt nativ** (siehe Fortschritt 7.0c). |
 
 Bis zur Entscheidung gilt für neue Funktionen: keine neuen direkten Host-Aufrufe aus der
 Fachlogik, sondern über die bestehende Root-Hilfe bzw. den späteren Wächter.

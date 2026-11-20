@@ -1,3 +1,4 @@
+import { DOCKER_HOST } from "./docker-io.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID, createHash } from "node:crypto";
@@ -19,7 +20,7 @@ export async function localDocker(args, options = {}) {
   try {
     const { stdout } = await execute(
       "docker",
-      ["--host=unix:///var/run/docker.sock", ...args],
+      [`--host=${DOCKER_HOST}`, ...args],
       {
         env,
         timeout: options.timeout || 60000,

@@ -9,14 +9,21 @@ import {
   mountCapacity,
   retirementCandidates,
 } from "./system-details.js";
+import { DOCKER_HOST } from "./docker-io.js";
 const execute = promisify(execFile);
 export async function command(binary, args) {
+  const env = { ...process.env, LC_ALL: "C" };
+  // Docker immer über denselben Zugang wie der Rest (Host-Socket oder Docker-Wächter)
+  if (binary === "docker") {
+    for (const key of ["DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"]) delete env[key];
+    args = [`--host=${DOCKER_HOST}`, ...args];
+  }
   try {
     const { stdout } = await execute(binary, args, {
       timeout: 8000,
       maxBuffer: 2 * 1024 * 1024,
       encoding: "utf8",
-      env: { ...process.env, LC_ALL: "C" },
+      env,
     });
     return { ok: true, output: stdout };
   } catch (e) {

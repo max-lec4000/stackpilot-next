@@ -9,6 +9,8 @@ import { DownloadSettings } from "./download-settings.js";
 import { Subtitles } from "./subtitles.js";
 import { SourceHealth } from "./source-health.js";
 import { QualityDefaults } from "./quality-defaults.js";
+import { QualityProfiles } from "./quality-profiles.js";
+import { SubtitleTitles } from "./subtitle-titles.js";
 import { StorageOverview } from "./storage-overview.js";
 import { LibraryOverview } from "./library-overview.js";
 import { SeriesMonitoring } from "./series-monitoring.js";
@@ -254,7 +256,7 @@ export function inventoryMiddleware(options = {}) {
     }))
     .add(safetyRoutes({ safety }))
     .add(downloadRoutes({ hub, guard, downloadIssues, downloadSettings }))
-    .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub), sourceHealth: operations.sourceHealth, qualityDefaults: new QualityDefaults(hub) }))
+    .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub), sourceHealth: operations.sourceHealth, qualityDefaults: new QualityDefaults(hub), qualityProfiles: new QualityProfiles(hub), subtitleTitles: new SubtitleTitles(hub) }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
     .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview: new LibraryOverview(hub), seriesMonitoring: new SeriesMonitoring(hub) }))
     .add(peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }))

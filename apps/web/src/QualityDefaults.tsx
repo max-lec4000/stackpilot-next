@@ -25,7 +25,7 @@ export function QualityDefaults() {
       <h3>Standardqualität für neue Anfragen</h3>
       <p className="muted">
         Welches Qualitätsprofil neue Film- und Serienanfragen bekommen (auch aus Streamyfin und Couchdeck). Einzelne
-        Titel änderst du in den Anfrage-Details. Profile selbst bearbeitest du in Radarr bzw. Sonarr.
+        Titel änderst du in den Anfrage-Details, die Profile selbst unter „Profile bearbeiten“.
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="success" role="status">{notice}</p>}

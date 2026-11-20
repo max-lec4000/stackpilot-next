@@ -11,7 +11,7 @@ import { isSeriesLimitProfile } from "./series-limits.js";
 const SERVICES = ["Radarr", "Sonarr"];
 const text = (v, n = 120) => (typeof v === "string" ? v.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, n) : "");
 // Interne Profile von StackPilot (Film-/Serienlimits, Größenregel) sind kein wählbarer Standard
-const internal = (p) => isFilmLimitProfile(p) || isSeriesLimitProfile(p) ||
+export const internal = (p) => isFilmLimitProfile(p) || isSeriesLimitProfile(p) ||
   /^StackPilot 1080p ≤ [0-9.]+ GiB$/.test(p?.name ?? "") || /^StackPilot · /.test(p?.name ?? "");
 const managedServer = (servers, service) => (Array.isArray(servers) ? servers : []).find((v) =>
   v.isDefault && !v.is4k && v.hostname === service.toLowerCase() && Number(v.port) === (service === "Radarr" ? 7878 : 8989) &&

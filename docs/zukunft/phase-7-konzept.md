@@ -510,6 +510,24 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   zur Bestätigung; Import mit privatem Test-Torrent ohne Tracker (Zufallsdaten, Sonarr-Push) →
   „Nur ein Beispielvideo“ → zugeordnet und importiert. Danach Serie, Torrent und Dateien entfernt.
 
+### Nachzug 7.3 – Profile bearbeiten, Untertitel je Titel, Quellenzugang (20.11.2026)
+
+- `quality-profiles.js` + `ProfileEditor.tsx` (Medienprofile): Auflösungsstufen (SD/720p/1080p/
+  4K; Unbekannt, CAM, BR-DISK, Raw-HD bleiben unverändert), Remux, Upgrades + Ziel, Sprache.
+  Radarr über `profile.language`, Sonarr über eigene Custom Formats „StackPilot · Sprache …“
+  (Wertung 1000, Mindestwertung 1000; fremde Formatwertung → nicht änderbar). Rücklesen.
+  Routen GET/POST `/api/quality/profiles` (POST ok).
+- `subtitle-titles.js` + `SubtitleTitles.tsx`: Titelsuche (Bazarr movies/series), Detail mit
+  Untertiteln/fehlenden Sprachen je Film bzw. Folge, Aktionen search-missing, search,
+  replace (Bazarr-Sperrliste mit Anbieter/ID aus dem Verlauf → löschen + neu suchen; ohne
+  Herkunft nur neu suchen), delete. Pfade nur als Kennung. Routen `/api/subtitles/titles`,
+  `/api/subtitles/title` (Ersetzen/Löschen mit OK im Modul).
+- Quellen: „Zugang erneuern“ in Zustand der Quellen öffnet den vorhandenen Bearbeiten-Dialog.
+- sp-test: 425 Tests. Browser: Radarr- und Sonarr-Profil „HD - 720p/1080p“ geändert (Remux aus,
+  Upgrades bis WEB 1080p, Deutsch) und in den Apps nachgeprüft, danach Ausgangszustand und
+  Testformat entfernt. Untertitel: Suche/Leerlauf und Bazarr-Aufruf geprüft; Ersetzen/Löschen
+  nur in Tests (keine Titel in der VM). „Zugang erneuern“ nicht im Browser (keine Quelle in der VM).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

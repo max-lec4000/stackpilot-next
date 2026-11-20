@@ -457,3 +457,15 @@
 .series-monitoring-detail > button { justify-self: start; }
 .series-monitoring-seasons { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
 .series-monitoring-seasons > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.profile-editor-list { list-style: none; padding: 0; margin: 0.5rem 0 1rem; display: grid; gap: 0.5rem; }
+.profile-editor-list > li { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.profile-editor-form { display: grid; gap: 0.6rem; padding: 0 0.8rem 0.8rem; }
+.profile-editor-form fieldset { border: 1px solid var(--border); border-radius: 8px; display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+.profile-editor-form .primary, .profile-editor-form > span button { justify-self: start; }
+.subtitle-titles form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.subtitle-title-hits { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.35rem; }
+.subtitle-title-hits button { width: 100%; text-align: left; }
+.subtitle-title-detail { display: grid; gap: 0.5rem; }
+.subtitle-title-subs { list-style: none; padding: 0; margin: 0.3rem 0; display: grid; gap: 0.35rem; }
+.subtitle-title-subs > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; }
+.subtitle-title-subs > li span { overflow-wrap: anywhere; }

@@ -58,6 +58,30 @@ export function SourcesView() {
   useEffect(() => {
     void refresh();
   }, []);
+  async function openEditor(id: number) {
+    setBusy(true);
+    setError("");
+    try {
+      const source = await get<Schema & { id: number }>("/api/sources/detail?id=" + id);
+      setEditing(source);
+      setName(source.name);
+      setValues({});
+      setDraft(null);
+      setMessage("");
+      setAdvanced(false);
+      setTimeout(() => document.querySelector(".source-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  // „Zugang erneuern“ aus dem Zustand der Quellen (Paket 7.3) öffnet hier den Bearbeiten-Dialog
+  useEffect(() => {
+    const onEdit = (e: Event) => void openEditor(Number((e as CustomEvent<number>).detail));
+    window.addEventListener("stackpilot:edit-source", onEdit);
+    return () => window.removeEventListener("stackpilot:edit-source", onEdit);
+  }, []);
   function choose(key: string) {
     setEditing(null);
     setSelected(key);
@@ -138,38 +162,7 @@ export function SourcesView() {
                   </p>
                 </div>
                 <div className="button-group">
-                  <button
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      setError("");
-                      try {
-                        const source = await get<Schema & { id: number }>(
-                          "/api/sources/detail?id=" + v.id,
-                        );
-                        setEditing(source);
-                        setName(source.name);
-                        setValues({});
-                        setDraft(null);
-                        setMessage("");
-                        setAdvanced(false);
-                        setTimeout(
-                          () =>
-                            document
-                              .querySelector(".source-editor")
-                              ?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start",
-                              }),
-                          0,
-                        );
-                      } catch (e) {
-                        setError((e as Error).message);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
+                  <button disabled={busy} onClick={() => void openEditor(v.id)}>
                     Bearbeiten
                   </button>
 

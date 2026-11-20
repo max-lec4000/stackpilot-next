@@ -52,6 +52,10 @@ export function SourceHealth() {
                   {s.failedQueries ? `, ${s.failedQueries} fehlgeschlagen` : ""}{s.averageMs !== null ? ` · ⌀ ${s.averageMs} ms` : ""}
                 </span>
                 {t && <span className={t.ok ? "success" : "error"}> {t.ok ? "Test bestanden" : `Test fehlgeschlagen${t.message ? `: ${t.message}` : ""}`}</span>}
+                {(s.state === "failing" || s.state === "blocked" || (t && !t.ok)) && (
+                  <button className="source-renew" disabled={!!busy} title="Zugangsdaten (Passwort, API-Schlüssel, Cookie) neu eingeben und testen"
+                    onClick={() => window.dispatchEvent(new CustomEvent("stackpilot:edit-source", { detail: s.id }))}>Zugang erneuern</button>
+                )}
               </li>
             );
           })}

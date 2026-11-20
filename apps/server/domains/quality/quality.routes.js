@@ -1,6 +1,6 @@
 // Qualität & Quellen: gemeinsame Größenregeln (Filmstandard) und Suchquellen (Prowlarr).
 // Quellen-Aktionen (Test, Ein/Aus, Entfernen) prüfen ihre Bestätigung im Fachteil.
-export function qualityRoutes({ sources, sizeLimits, subtitles, sourceHealth, qualityDefaults }) {
+export function qualityRoutes({ sources, sizeLimits, subtitles, sourceHealth, qualityDefaults, qualityProfiles, subtitleTitles }) {
   return [
     { method: "GET", path: "/api/media/size-settings", guard: "session", handler: () => sizeLimits.settings() },
     { method: "POST", path: "/api/media/size-settings", guard: "ok", confirm: "Größenregel mit OK bestätigen.",
@@ -19,6 +19,15 @@ export function qualityRoutes({ sources, sizeLimits, subtitles, sourceHealth, qu
     { method: "GET", path: "/api/quality/defaults", guard: "session", handler: () => qualityDefaults.read() },
     { method: "POST", path: "/api/quality/defaults", guard: "ok", confirm: "Standardqualität mit OK bestätigen.",
       handler: ({ body }) => qualityDefaults.setDefault(body) },
+    // Profile bearbeiten (Paket 7.3)
+    { method: "GET", path: "/api/quality/profiles", guard: "session", handler: () => qualityProfiles.read() },
+    { method: "POST", path: "/api/quality/profiles", guard: "ok", confirm: "Profiländerung mit OK bestätigen.",
+      handler: ({ body }) => qualityProfiles.change(body) },
+    // Untertitel je Titel (Paket 7.3): Suchen ohne OK, Ersetzen/Löschen prüft OK im Modul
+    { method: "GET", path: "/api/subtitles/titles", guard: "session", handler: ({ url }) => subtitleTitles.search(url.searchParams.get("q")) },
+    { method: "GET", path: "/api/subtitles/title", guard: "session",
+      handler: ({ url }) => subtitleTitles.detail(url.searchParams.get("kind"), url.searchParams.get("id")) },
+    { method: "POST", path: "/api/subtitles/title", guard: "session", handler: ({ body }) => subtitleTitles.act(body) },
     // Untertitel (Bazarr, 7.3a)
     { method: "GET", path: "/api/subtitles", guard: "session", handler: () => subtitles.read() },
     { method: "POST", path: "/api/subtitles", guard: "ok", confirm: "Untertitel-Einstellungen mit OK bestätigen.",

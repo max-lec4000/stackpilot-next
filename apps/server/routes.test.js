@@ -137,6 +137,11 @@ test("Qualität & Quellen: Schutzstufen", () => {
     "POST /api/sources/test-all": "session",
     "POST /api/sources/sync": "session",
     "POST /api/subtitles": "ok",
+    "GET /api/quality/profiles": "session",
+    "POST /api/quality/profiles": "ok",
+    "GET /api/subtitles/titles": "session",
+    "GET /api/subtitles/title": "session",
+    "POST /api/subtitles/title": "session",
   });
 });
 

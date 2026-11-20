@@ -283,6 +283,12 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   und Couchdeck; bestehende Titel bleiben). Darunter aufklappbar alle Profile mit erlaubten
   Qualitäten, Upgrades und Sprache. Ist die Größenregel für Filme aktiv, steuert sie den
   Filmstandard. Interne StackPilot-Profile (Größe, Limits) stehen nicht zur Wahl.
+- **Profile bearbeiten** (darunter): Profil aufklappen → erlaubte Auflösungen (SD, 720p, 1080p,
+  4K), **Remux erlauben**, **Upgrades** mit „Verbessern bis“ und **Sprache** (Egal, Originalton,
+  Deutsch, Englisch) → **Speichern …** → **OK**. Gilt für alle Titel mit diesem Profil;
+  vorhandene Dateien bleiben. Radarr speichert die Sprache im Profil; in Sonarr legt StackPilot
+  dafür ein Format „StackPilot · Sprache …“ an und verlangt es per Mindestwertung. Profile mit
+  eigener Formatwertung ändern ihre Sprache weiter in Sonarr selbst.
 - Neue Quelle (Indexer): **Qualität & Quellen → Quellen** → Anbieter wählen → testen → speichern.
 - **Zustand der Quellen** (oben unter **Qualität & Quellen → Quellen**): je Quelle „In Ordnung“,
   „Zuletzt Fehler“, „Zeitweise gesperrt bis …“ (Prowlarr pausiert ausfallende Quellen) oder
@@ -290,12 +296,19 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   viele Quellen dort angekommen sind, und deren Warnungen. **Alle testen** prüft jede aktive
   Quelle und zeigt den Grund bei Fehlern; **An Radarr/Sonarr übertragen** stößt den Abgleich
   von Prowlarr an. Ausfallende Quellen erscheinen auch auf **Zuhause → Braucht Aufmerksamkeit**.
+  Bei gestörten oder gesperrten Quellen öffnet **Zugang erneuern** den Bearbeiten-Dialog: neues
+  Passwort, neuen API-Schlüssel oder Cookie eintragen (leere Felder behalten den alten Wert) →
+  testen → speichern → **OK**.
 - **Untertitel**: **Qualität & Quellen → Untertitel** → Sprachen ankreuzen (z. B. Deutsch,
   Englisch) → Anbieter wählen (ohne Konto: eingebettete Untertitel, Gestdown für Serien,
   YIFY für Filme; **OpenSubtitles.com** mit kostenlosem Konto hat die meisten deutschen) →
   optional „auch für vorhandene ohne Untertitelprofil“ → **Speichern** → **OK**. StackPilot
   legt in Bazarr ein eigenes Sprachprofil „StackPilot“ an und macht es zum Standard für neue
   Filme und Serien; andere Profile und Anbieter bleiben. Der Vorzustand wird einmalig gesichert.
+- **Untertitel je Titel** (darunter): Titel suchen → vorhandene Untertitel (Datei oder
+  eingebettet) und fehlende Sprachen. **Suchen** holt eine fehlende Sprache, **Alle fehlenden
+  suchen** den ganzen Titel. **Ersetzen** (→ OK) sperrt einen schlechten Untertitel bei seinem
+  Anbieter, löscht ihn und lässt Bazarr einen anderen suchen; **Löschen** (→ OK) entfernt ihn.
 
 ## Neue App ins Projekt aufnehmen (Entwicklung)
 1. Image mit Digest in `packages/catalog/services.json`.

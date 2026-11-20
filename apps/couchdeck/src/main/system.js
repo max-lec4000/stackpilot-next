@@ -93,6 +93,27 @@ async function toggleMute() {
   return getVolume();
 }
 
+/** Kurzer, leiser Testton (440 Hz, 1,2 s, sanft ein-/ausgeblendet) als WAV. */
+function testToneWav(seconds = 1.2, rate = 44100) {
+  const n = Math.round(seconds * rate), data = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) {
+    const fade = Math.min(1, i / (rate * 0.05), (n - i) / (rate * 0.05));
+    data.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 0.25 * fade * 32767), i * 2);
+  }
+  const h = Buffer.alloc(44);
+  h.write('RIFF', 0); h.writeUInt32LE(36 + data.length, 4); h.write('WAVE', 8); h.write('fmt ', 12);
+  h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(rate, 24);
+  h.writeUInt32LE(rate * 2, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(data.length, 40);
+  return Buffer.concat([h, data]);
+}
+
+/** Testton gezielt auf einem Ausgang abspielen (ändert den Standardausgang nicht). */
+async function playTestTone(sink) {
+  const file = require('path').join(os.tmpdir(), `couchdeck-testton-${process.pid}.wav`);
+  fs.writeFileSync(file, testToneWav(), { mode: 0o600 });
+  try { await run('paplay', ['--device=' + sink, file], 15000); } finally { fs.rmSync(file, { force: true }); }
+}
+
 // ---------- Bluetooth (über bluetoothctl) ----------
 
 const MAC_RE = /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i;
@@ -258,6 +279,8 @@ function power(action) {
 }
 
 module.exports = {
+  playTestTone,
+  testToneWav,
   listSinks, setDefaultSink, applyPreferredSink,
   getVolume, setVolume, changeVolume, toggleMute,
   btDevices, btScan, btConnect, btDisconnect, btRemove,

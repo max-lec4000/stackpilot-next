@@ -80,6 +80,15 @@ angemeldet – deshalb vorher auf derselben Karte unter **Geräte** abmelden.
   (Kreuz = nächstes Feld, A = bestätigen, Y = Tastatur, ☰ = fertig). An-/Abmelden auch
   unter Einstellungen → YouTube.
 
+
+### Bedienung und Diagnose aus StackPilot (ab Couchdeck 0.2.11)
+**Couchdeck → Bedienung und Diagnose** (nur solange Couchdeck läuft): Verbindungen zu Jellyfin
+(angemeldet als …, Antwortzeit) und Seerr, YouTube bereit, ob gerade etwas läuft; alle
+Audioausgänge mit **Testton** (kurzer, leiser Ton nur auf diesem Ausgang) und **Hierhin
+wechseln** (wird gemerkt), **Lautstärke**, **Jetzt prüfen**, **Oberfläche neu starten** (OK; eine
+laufende Wiedergabe endet). Couchdeck meldet seinen Zustand alle 15 s über den gemeinsamen
+Steuerordner und führt nur diese Befehle aus. Couchdeck vorher in derselben Ansicht auf 0.2.11
+aktualisieren.
 ## Verwaltung
 
 ### Admin-Arbeiten in den Diensten

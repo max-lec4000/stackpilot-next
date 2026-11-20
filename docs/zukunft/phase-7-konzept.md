@@ -470,6 +470,20 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   Streamystats-Export, App-Datenbanken), falsches Passwort abgelehnt; Notfall-Skript getestet.
 - Offen: Wiederherstellung auf den laufenden Server per Knopf (heute begleitet, Doku-Schritte).
 
+### Fortschritt 7.6 – Couchdeck: Bedienung und Diagnose (20.11.2026)
+
+- Couchdeck 0.2.11: `src/main/remote.js` schreibt `control/status.json` (alle 15 s:
+  Audioausgänge, Standard, Lautstärke, Jellyfin-/Seerr-Verbindung, YouTube, Wiedergabe) und
+  bearbeitet `request-<uuid>.json` → `response-<uuid>.json`; nur `set-sink`, `tone`, `volume`,
+  `restart`, `check`; Ausgänge nur aus der aktuellen Liste, Befehle höchstens 2 min alt.
+  Testton: 440 Hz, 1,2 s, leise, per `paplay --device` nur auf dem gewählten Ausgang.
+- StackPilot: `couchdeck.remoteStatus()`/`remoteCommand()` (Anfrage 0660 trotz UMask 0077),
+  Routen `/api/couchdeck/remote` (Neustart mit OK); Oberfläche `CouchdeckRemote.tsx`.
+- sp-test: 407 Tests (inkl. Zusammenspiel StackPilot ↔ echtes remote.js); Browser mit
+  nachgestelltem Couchdeck als Benutzer `couchdeck` (echte Dateirechte, erfundene Ausgänge,
+  **keine Tonausgabe**): Testton, Wechsel, Lautstärke, Prüfen, Neustart. Echter Ton am
+  Fernseher/WiiM: persönliche Abnahme.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

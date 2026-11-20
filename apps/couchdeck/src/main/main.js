@@ -12,6 +12,7 @@ const { YouTube } = require('./youtube');
 const { youtubeShare } = require('./youtube-share');
 const { YouTubeLogin } = require('./youtube-login');
 const sound = require('./sound');
+const { Remote } = require('./remote');
 
 const windowed = process.argv.includes('--windowed');
 // Wayland-Backend wird im Startskript per --ozone-platform=wayland gesetzt
@@ -670,8 +671,39 @@ const watchdog = {
 };
 setInterval(() => watchdog.check(), 10000);
 
+// ---------- Fernsteuerung und Diagnose durch StackPilot (Phase 7.6) ----------
+
+async function connectionChecks() {
+  const short = (e) => String(e?.message || e).replace(/https?:\/\/\S+/g, '[Adresse]').slice(0, 160);
+  const out = {};
+  const t0 = Date.now();
+  try {
+    await jf.publicInfo();
+    out.jellyfin = { ok: true, ms: Date.now() - t0, signedIn: jf.loggedIn, user: jf.cfg.auth?.userName || null };
+    if (jf.loggedIn) {
+      try { await jf.request('GET', `/Users/${jf.userId}`); } catch (e) { out.jellyfin = { ...out.jellyfin, ok: false, error: 'Anmeldung abgelehnt: ' + short(e) }; }
+    }
+  } catch (e) { out.jellyfin = { ok: false, error: short(e) }; }
+  if (seerr.configured) {
+    try { const st = await seerr.status(); out.seerr = { ok: true, user: st.user?.name || null }; } catch (e) { out.seerr = { ok: false, error: short(e) }; }
+  } else out.seerr = { ok: false, error: 'Nicht verbunden' };
+  out.youtube = { available: !!yt.available };
+  out.player = { active: !!player.active };
+  return out;
+}
+const remote = new Remote({
+  dir: config.CONTROL_DIR, system, log, version: app.getVersion(), checks: connectionChecks,
+  restart: () => restartSession('Neustart über StackPilot'),
+  // Wahl merken, damit sie nach einem Neustart wieder greift (wie in der Oberfläche)
+  onSinkChosen: (s) => config.update({ audio: { preferredSink: s.description } }),
+});
+
 app.whenReady().then(async () => {
   createWindow();
+  // StackPilot-Steuerordner vorhanden und beschreibbar? Dann Zustand melden und Befehle annehmen.
+  if (!windowed) {
+    try { require('fs').accessSync(config.CONTROL_DIR, require('fs').constants.W_OK); remote.start(); log('StackPilot-Fernsteuerung aktiv'); } catch { /* ohne StackPilot */ }
+  }
   pads.start();
   if (jf.loggedIn) jf.connectSocket();
   player.ensureMpv().catch((e) => toast('mpv konnte nicht gestartet werden: ' + e.message, 'error'));

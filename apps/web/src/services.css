@@ -192,3 +192,14 @@
 .stack-backup-list { list-style: none; padding: 0; display: grid; gap: 0.35rem; }
 .stack-backup-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.75rem; }
 .stack-backup .success { color: var(--success); }
+
+/* Couchdeck → Bedienung und Diagnose (Phase 7.6) */
+.couchdeck-remote { margin-top: 1rem; display: grid; gap: 0.4rem; }
+.couchdeck-remote-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.couchdeck-remote h4 { margin: 0.4rem 0 0; }
+.couchdeck-remote-list { padding-left: 1.1rem; display: grid; gap: 0.3rem; margin: 0.2rem 0; }
+.couchdeck-sinks { list-style: none; padding: 0; display: grid; gap: 0.35rem; margin: 0.2rem 0; }
+.couchdeck-sinks li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.75rem; }
+.couchdeck-sinks b { overflow-wrap: anywhere; }
+.couchdeck-remote .success { color: var(--success); }
+.couchdeck-remote .person-field label { display: inline-flex; align-items: center; gap: 0.6rem; }

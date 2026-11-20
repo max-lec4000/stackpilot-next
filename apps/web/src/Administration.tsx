@@ -21,6 +21,7 @@ import { SourceHealth } from "./SourceHealth";
 import { QualityDefaults } from "./QualityDefaults";
 import { StorageView } from "./StorageView";
 import { LibrariesView } from "./LibrariesView";
+import { CouchdeckRemote } from "./CouchdeckRemote";
 const areas = [
   { id: "media-files", group: "Betrieb", icon: "▤", title: "Medienbestand", description: "Bibliotheksdateien prüfen und gezielt löschen.", color: "sage" },
   {
@@ -115,7 +116,7 @@ const areas = [
 /** Couchdeck als eigener Bereich (bisher nur in der App-Liste). */
 function CouchdeckView() {
   const controller = useCouchdeck();
-  return <CouchdeckPanel controller={controller} />;
+  return <><CouchdeckPanel controller={controller} /><CouchdeckRemote /></>;
 }
 
 /** Anstehende Netztrennung (früher auf der Verwaltungs-Startseite). */

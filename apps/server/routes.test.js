@@ -220,3 +220,14 @@ test("Gesamtsicherung: Lesen/Herunterladen mit Sitzung, Ändern nur mit OK", asy
     "POST /api/stack-backup/setup": "ok", "POST /api/stack-backup/run": "ok", "POST /api/stack-backup/resume": "ok",
   });
 });
+
+test("Couchdeck-Fernsteuerung: Neustart nur mit OK", async () => {
+  const calls = [];
+  const r = new RouteRegistry().add(couchdeckRoutes({ couchdeck: { remoteCommand: async (a, args) => { calls.push([a, args]); return { ok: true }; } } }));
+  const route = r.find("POST", "/api/couchdeck/remote");
+  await assert.rejects(r.run(route, { body: { action: "restart" } }), /mit OK/);
+  await r.run(route, { body: { action: "restart", confirmation: "OK" } });
+  await r.run(route, { body: { action: "volume", percent: 30, name: "x" } });
+  await r.run(route, { body: { action: "tone", name: "hdmi", percent: 9 } });
+  assert.deepEqual(calls, [["restart", {}], ["volume", { percent: 30 }], ["tone", { name: "hdmi" }]]);
+});

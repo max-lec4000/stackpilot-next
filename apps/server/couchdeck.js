@@ -6,7 +6,7 @@
 // die begrenzte Root-Hilfe (deploy/root-helper.sh).
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile, writeFile, rename, unlink, chmod, access, constants } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -150,6 +150,60 @@ export class Couchdeck {
       if (e.code !== "ENOENT") throw e;
     });
     return this.status();
+  }
+  /**
+   * Fernsteuerung (Phase 7.6): Zustandsbericht von Couchdeck (status.json im Steuerordner).
+   * live = höchstens 60 s alt; sonst läuft Couchdeck nicht oder ist eine ältere Fassung.
+   */
+  async remoteStatus() {
+    await this.requireControl();
+    let report = null;
+    try { report = JSON.parse(await readFile(path.join(this.controlDir, "status.json"), "utf8")); } catch {}
+    const age = report?.at ? Date.now() - Date.parse(report.at) : null;
+    const text = (v, n = 160) => (typeof v === "string" ? v.replace(/[\x00-\x1f\x7f]+/g, " ").slice(0, n) : null);
+    const conn = (c) => (c && typeof c === "object" ? { ok: c.ok === true, error: text(c.error), user: text(c.user, 80), ms: Number.isFinite(c.ms) ? c.ms : null, signedIn: c.signedIn === true } : null);
+    return {
+      live: age !== null && age >= -5000 && age < 60000,
+      at: report?.at || null,
+      version: text(report?.version, 20),
+      uptimeSeconds: Number.isFinite(report?.uptimeSeconds) ? report.uptimeSeconds : null,
+      audio: report?.audio ? {
+        default: text(report.audio.default, 200),
+        sinks: (Array.isArray(report.audio.sinks) ? report.audio.sinks : []).slice(0, 30)
+          .map((x) => ({ name: text(x.name, 200), description: text(x.description, 120), kind: text(x.kind, 20) })),
+        volume: Number.isFinite(report.audio.volume?.volume) ? report.audio.volume.volume : null,
+        mute: report.audio.volume?.mute === true,
+      } : null,
+      connections: report?.connections ? {
+        jellyfin: conn(report.connections.jellyfin), seerr: conn(report.connections.seerr),
+        youtube: report.connections.youtube ? { available: report.connections.youtube.available === true } : null,
+        playing: report.connections.player?.active === true,
+      } : null,
+    };
+  }
+  /** Befehl an Couchdeck: Anfrage-Datei ablegen und auf die Antwort warten. */
+  async remoteCommand(action, args = {}, { timeoutMs = 20000, pollMs = 500 } = {}) {
+    if (!["set-sink", "tone", "volume", "restart", "check"].includes(action)) throw userFacing("Unbekannter Befehl.");
+    await this.requireControl();
+    const status = await this.remoteStatus();
+    if (!status.live)
+      throw userFacing("Couchdeck läuft gerade nicht (oder ist eine ältere Fassung). Zuerst starten bzw. aktualisieren.");
+    const id = randomUUID();
+    const request = path.join(this.controlDir, `request-${id}.json`), response = path.join(this.controlDir, `response-${id}.json`);
+    await writeFile(request + ".tmp", JSON.stringify({ id, action, args, at: new Date().toISOString() }), { mode: 0o660 });
+    await chmod(request + ".tmp", 0o660); // der Dienst läuft mit UMask 0077 – Couchdeck muss lesen dürfen
+    await rename(request + ".tmp", request);
+    for (let waited = 0; waited < timeoutMs; waited += pollMs) {
+      await new Promise((r) => setTimeout(r, pollMs));
+      let answer = null;
+      try { answer = JSON.parse(await readFile(response, "utf8")); } catch { continue; }
+      await unlink(response).catch(() => {});
+      if (answer.id !== id) throw userFacing("Antwort von Couchdeck passt nicht.");
+      if (!answer.ok) throw userFacing(String(answer.message || "Couchdeck hat den Befehl abgelehnt.").slice(0, 300));
+      return { ok: true, message: String(answer.message || "").slice(0, 300) };
+    }
+    await unlink(request).catch(() => {});
+    throw userFacing("Couchdeck hat nicht geantwortet.");
   }
   /** Neu starten, damit Couchdeck eine geänderte Übergabe einliest. */
   async restart() {

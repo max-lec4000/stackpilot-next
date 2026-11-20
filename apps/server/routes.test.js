@@ -204,3 +204,10 @@ test("Personen: Altersfreigabe lesen mit Sitzung, ändern nur mit OK", () => {
   assert.equal(r.find("GET", "/api/viewer-ratings").guard, "session");
   assert.equal(r.find("POST", "/api/viewer-ratings").guard, "ok");
 });
+
+test("Speicher: Belegung mit Sitzung, Löschen verwaister Downloads nur mit OK", async () => {
+  const { storageRoutes } = await import("./domains/storage/storage.routes.js");
+  const r = new RouteRegistry().add(storageRoutes({}));
+  assert.equal(r.find("GET", "/api/storage/overview").guard, "session");
+  assert.equal(r.find("POST", "/api/storage/orphans/remove").guard, "ok");
+});

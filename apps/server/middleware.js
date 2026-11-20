@@ -9,6 +9,8 @@ import { DownloadSettings } from "./download-settings.js";
 import { Subtitles } from "./subtitles.js";
 import { SourceHealth } from "./source-health.js";
 import { QualityDefaults } from "./quality-defaults.js";
+import { StorageOverview } from "./storage-overview.js";
+import { storageRoutes } from "./domains/storage/storage.routes.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { RouteRegistry, isRawResponse, rawOf } from "./routes.js";
@@ -234,6 +236,7 @@ export function inventoryMiddleware(options = {}) {
   const routes = new RouteRegistry()
     .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
     .add(dockerGuardRoutes({ dockerGuard }))
+    .add(storageRoutes({ storageOverview: new StorageOverview(hub) }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
     .add(viewerRequestRoutes({ viewerRequests }))
     .add(remoteRoutes({

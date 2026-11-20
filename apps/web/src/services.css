@@ -168,3 +168,16 @@
 .quality-profile-list { margin: 0.4rem 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
 .quality-profile-list b, .quality-profile-list span { overflow-wrap: anywhere; }
 .quality-defaults .success { color: var(--success); }
+
+/* Speicher → Belegung (Phase 7.4a) */
+.storage-disks { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.storage-disk { border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; background: var(--surface); }
+.storage-disk h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.storage-disk progress { width: 100%; }
+.storage-disk p { margin: 0.3rem 0 0; }
+.storage-parts, .storage-orphans { padding-left: 1.1rem; display: grid; gap: 0.35rem; }
+.storage-orphans { list-style: none; padding: 0; }
+.storage-orphans li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.5rem 0.75rem; }
+.storage-orphans li b { overflow-wrap: anywhere; }
+.storage-orphans li .ui-confirm { flex-basis: 100%; }
+.storage-view .success { color: var(--success); }

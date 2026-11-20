@@ -147,6 +147,15 @@ Vom eigenen Rechner: `ssh -N -L 19000:127.0.0.1:19000 <benutzer>@<server>`, dann
 `http://127.0.0.1:19000`. Zugang zeigt StackPilot unter **Externer Zugriff →
 Authentik-Verwaltung**.
 
+## Speicher
+
+**Speicher → Belegung**: je Laufwerk belegt/frei (gemeinsame Laufwerke einmal), dazu wofür:
+Filme, Serien, Musik (aus Radarr/Sonarr/Lidarr), Downloads (qBittorrent; übernommene Downloads
+belegen per Hardlink keinen zusätzlichen Platz) und App-Daten (mindestens – Ordner anderer
+Container zählt StackPilot nicht mit). **Verwaiste Downloads**: fertige Downloads ohne Link in
+die Bibliothek und ohne offenen Import – **Samt Dateien löschen** → **OK**; StackPilot prüft
+vorher noch einmal. **Speicher → Aufräumen**: Serienbibliothek bereinigen (wie bisher).
+
 ## Sicherungen
 
 ### Authentik

@@ -423,6 +423,21 @@ Standardqualität.
   bestätigt; Endstand wie vorher.
 - Phase 7.3 damit abgeschlossen.
 
+### Fortschritt 7.4a – Speicher: Belegung und verwaiste Downloads (20.11.2026)
+
+Zuschnitt: **7.4a** Speicher (Belegung, Verwaistes), **7.4b** Medien (Bibliotheken, Scans,
+Bestand), **7.5** Gesamtsicherung anschließen (`stack-backup.js`/`stack-archive.js` sind fertig
+und getestet, aber ohne Route/Oberfläche – Speicherort und Häufigkeit mit Max klären).
+
+- `storage-overview.js`: statfs je Laufwerk (gemeinsame zusammengefasst), Bibliotheksgrößen aus
+  ARR (`sizeOnDisk`), qBittorrent-Summen, App-Daten per `du` (10 min zwischengespeichert;
+  fehlende Leserechte → Mindestwert). Verwaist = fertig, nicht in ARR-Warteschlange, alle Dateien
+  Linkzahl 1 (kein Hardlink in die Bibliothek); Löschen nur nach erneuter Prüfung, mit OK.
+  Routen `/api/storage/overview`, `/api/storage/orphans/remove` (ok).
+- Navigation: Speicher → **Belegung** (neu) und **Aufräumen** (alte Adresse leitet dorthin).
+- sp-test: 392 Tests; echte Belegung; verwaister Download und Löschablauf mit nachgestellten
+  Daten (keine Downloads in der VM).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

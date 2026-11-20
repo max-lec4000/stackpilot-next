@@ -166,7 +166,23 @@ vorhandenen Tests und einer VM-Abnahme.
   entfernen. Fünf Stellen mit Browser-`window.confirm` (Downloads, Qualität, Folgen,
   Einrichtung) ziehen mit ihren Bereichen in 7.1–7.4 um. Nachweise in sp-test: Typprüfung,
   Build, 355 Tests, Dialoge im Browser (Fokus, Abbrechen setzt zurück, keine Fehler).
-- **7.0a abgeschlossen.** Nächster Schritt: 7.0b Zielnavigation.
+- **7.0a abgeschlossen.**
+
+### Fortschritt 7.0b (20.11.2026)
+
+- **Zielnavigation umgesetzt** (`apps/web/src/navigation.ts`): neun Bereiche in der
+  Seitenleiste, Unterseiten als Reiter, Brotkrumen „Zuhause / Bereich / Unterseite“,
+  Adressen `#/<bereich>/<unterseite>`. Jede Unterseite zeigt eine bestehende Ansicht
+  (Bausteine unverändert, `navigate(view, area)` funktioniert weiter). Neu als eigene
+  Seiten: Anfragen → Freigabe je Zuschauer, Personen → Zuschauer, Couchdeck. Die
+  Netztrennungs-Meldung steht jetzt unter System → Apps & Container. Alte Adressen leiten
+  weiter.
+- Nachweise in sp-test: Typprüfung, Build; alle 21 Unterseiten im Browser mit richtigen
+  Brotkrumen, ohne Seiten- oder Schnittstellenfehler; acht alte Adressen leiten richtig um;
+  altes Testskript mit alter Adresse besteht.
+- Bekannt/offen: Personen zeigt vorerst den bisherigen Bereich „Zugriff von unterwegs“ mit
+  Zuschauern (Trennung in 7.1); System hat zehn Reiter (ggf. bündeln); Server-Hinweise
+  verlinken noch alte Adressen (werden umgeleitet).
 
 ## 5. Container-Architektur (früh festlegen, 7.7)
 

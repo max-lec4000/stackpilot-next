@@ -49,11 +49,11 @@ Danach entstehen automatisch:
 | Was | Wo |
 | --- | --- |
 | Dienste öffnen | **Anwendungen** – Links auf die Oberflächen im Heimnetz, Zugangsdaten geschützt anzeigbar |
-| Couchdeck starten/schließen | **Anwendungen → Couchdeck** |
-| Zuschauer einladen, neu einladen, entfernen | **Verwaltung → Externer Zugriff** |
-| Öffentlich über Funnel | **Verwaltung → Externer Zugriff → Öffentlich über das Internet** |
-| Filme/Serien suchen und anfragen | **Medien entdecken**, **Meine Anfragen** |
-| StackPilot aktualisieren | **Verwaltung → Sicherungen & Updates** (holt die neue Version von GitHub) |
+| Couchdeck starten/schließen | **Couchdeck** |
+| Zuschauer einladen, neu einladen, entfernen | **System → Zugriff & Netzwerk** |
+| Öffentlich über Funnel | **System → Zugriff & Netzwerk → Öffentlich über das Internet** |
+| Filme/Serien suchen und anfragen | **Medien → Entdecken**, **Meine Anfragen** |
+| StackPilot aktualisieren | **System → Updates & Sicherungen** (holt die neue Version von GitHub) |
 
 ### Zuschauer
 

@@ -11,13 +11,13 @@ import { AuthGate } from "./AuthGate";
 import { ComponentPicker } from "./ComponentPicker";
 import { VpnImport } from "./VpnImport";
 import { DeploymentCheck } from "./DeploymentCheck";
-import { Administration, administrationTitle } from "./Administration";
+import { Administration, NetworkUpgradeNotice } from "./Administration";
 import { RemoteAccessView } from "./RemoteAccess";
 import { DownloadsView } from "./ActivityOverview";
 import { Workspace } from "./Workspace";
 import { Icon } from "./Icon";
 import { GlobalSearch } from "./GlobalSearch";
-import { useNavigation, viewHref } from "./navigation";
+import { useNavigation, viewHref, sections, sectionHref } from "./navigation";
 import { RemoteSetupPanel } from "./RemoteSetupPanel";
 import {
   ServerCheck,
@@ -56,13 +56,13 @@ function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-  const { view, area, navigate: setView } = useNavigation();
+  const { view, area, section, page: navPage, navigate: setView } = useNavigation();
   const [discoveryQuery, setDiscoveryQuery] = useState("");
   const [discoverySerial, setDiscoverySerial] = useState(0);
   const pageHeading = useRef<HTMLHeadingElement>(null);
   const previousView = useRef(view);
   useEffect(() => {
-    document.title = `${view === "Verwaltung" && area ? administrationTitle(area) : view} · StackPilot`;
+    document.title = `${section.pages.length > 1 || section.id === "" ? navPage.title : section.title} · StackPilot`;
     if (previousView.current !== view) {
       previousView.current = view;
       pageHeading.current?.focus({ preventScroll: true });
@@ -137,6 +137,23 @@ function App() {
       ),
     );
   }, [inventory, installed, mode]);
+  /** Plan für die Netztrennung öffnen (System → Apps & Container) */
+  async function openMigrationPlan() {
+    setMigrationLoading(true);
+    setMigrationError("");
+    try {
+      const stack = await loadStack();
+      if (!stack?.networkUpgrade) {
+        setMigrationError("Die Umstellung konnte nicht bestätigt werden. Lade die Verwaltung neu und prüfe den aktuellen Stand.");
+        return;
+      }
+      setMode("real");
+      setStage(5);
+      setView("Stack konfigurieren");
+    } finally {
+      setMigrationLoading(false);
+    }
+  }
   function loadStack(navigate = false) {
     return fetch("/api/stack", { cache: "no-store" })
       .then((r) => {
@@ -246,25 +263,17 @@ function App() {
         </div>
         <div className="nav-caption">DEIN MEDIENZUHAUSE</div>
         <nav aria-label="Hauptnavigation">
-          {[
-            "Übersicht",
-            "Medien entdecken",
-            "Meine Anfragen",
-            "Downloads",
-            "Anwendungen",
-            "Verwaltung",
-            "Stack konfigurieren",
-          ].map((n, i) => (
+          {sections.map((sec) => (
             <a
-              key={n}
-              href={viewHref(n)}
-              aria-current={n === view ? "page" : undefined}
-              className={"nav-link " + (n === view ? "active" : "")}
+              key={sec.id || "home"}
+              href={sectionHref(sec)}
+              aria-current={sec === section ? "page" : undefined}
+              className={"nav-link " + (sec === section ? "active" : "")}
             >
               <span className="nav-icon" aria-hidden="true">
-                <Icon name={["home", "discover", "requests", "downloads", "apps", "settings", "stack"][i]} />
+                <Icon name={sec.icon as Parameters<typeof Icon>[0]["name"]} />
               </span>
-              {n}
+              {sec.title}
             </a>
           ))}
         </nav>
@@ -276,11 +285,13 @@ function App() {
         <div className="topbar">
           <nav aria-label="Brotkrumen">
             <a href={viewHref("Übersicht")}>Zuhause</a>
-            <span className="slash" aria-hidden="true">/</span>
-            <a href={viewHref(view)} aria-current={!area ? "page" : undefined}>{view}</a>
-            {view === "Verwaltung" && area && <>
+            {section.id !== "" && <>
               <span className="slash" aria-hidden="true">/</span>
-              <span aria-current="page">{administrationTitle(area)}</span>
+              <a href={sectionHref(section)} aria-current={section.pages.length === 1 ? "page" : undefined}>{section.title}</a>
+            </>}
+            {section.pages.length > 1 && <>
+              <span className="slash" aria-hidden="true">/</span>
+              <span aria-current="page">{navPage.title}</span>
             </>}
           </nav>
           <span className="topbar-status">
@@ -302,30 +313,31 @@ function App() {
                   <>Willkommen zuhause.</>
                 ) : (
                   <>
-                    {view}
+                    {section.title}
                     <span>.</span>
                   </>
                 )}
               </h1>
               <p className="muted">
-                {view === "Stack konfigurieren"
-                  ? "Ein gemeinsamer Plan für deine Apps."
-                  : view === "Übersicht"
-                    ? "Dein Stack, deine Medien – die wichtigen Dinge auf einen Blick."
-                    : view === "Downloads"
-                      ? "Transfers, Größen und VPN-Schutz."
-                      : view === "Anwendungen"
-                        ? "Deine Apps öffnen und ihren Zustand prüfen."
-                        : view === "Verwaltung"
-                          ? "Einrichten, pflegen und nachsehen."
-                          : view === "Meine Anfragen"
-                            ? "Vom Wunsch bis zur Wiedergabe."
-                            : "Finde deinen nächsten Filmabend."}
+                {view === "Stack konfigurieren" ? "Ein gemeinsamer Plan für deine Apps." : section.description}
               </p>
             </div>
           </header>
+          {section.pages.length > 1 && (
+            <nav className="section-tabs" aria-label={`Bereich ${section.title}`}>
+              {section.pages.map((p) => (
+                <a key={p.id || "start"} href={sectionHref(section, p)}
+                  aria-current={p === navPage ? "page" : undefined} className={p === navPage ? "active" : ""}>
+                  {p.title}
+                </a>
+              ))}
+            </nav>
+          )}
           {view !== "Stack konfigurieren" ? (
             <section>
+              {view === "Anwendungen" && (
+                <NetworkUpgradeNotice loading={migrationLoading} error={migrationError} onPlan={openMigrationPlan} />
+              )}
               {view === "Medien entdecken" ? (
                 <Discover key={discoverySerial} initialSearch={discoveryQuery} onNavigate={setView} />
               ) : view === "Meine Anfragen" ? (
@@ -334,6 +346,7 @@ function App() {
                 <DownloadsView />
               ) : view === "Verwaltung" ? (
                 <Administration
+                  bare
                   area={area}
                   onAreaChange={(id) => setView("Verwaltung", id)}
                   inventory={inventory}
@@ -348,22 +361,7 @@ function App() {
                   storage={storage}
                   migrationLoading={migrationLoading}
                   migrationError={migrationError}
-                  onMigrationPlan={async () => {
-                    setMigrationLoading(true);
-                    setMigrationError("");
-                    try {
-                      const stack = await loadStack();
-                      if (!stack?.networkUpgrade) {
-                        setMigrationError("Die Umstellung konnte nicht bestätigt werden. Lade die Verwaltung neu und prüfe den aktuellen Stand.");
-                        return;
-                      }
-                      setMode("real");
-                      setStage(5);
-                      setView("Stack konfigurieren");
-                    } finally {
-                      setMigrationLoading(false);
-                    }
-                  }}
+                  onMigrationPlan={openMigrationPlan}
                   onWizard={() => {
                     setView("Stack konfigurieren");
                     setStage(

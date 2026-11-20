@@ -3,10 +3,20 @@
 Kurz und der Reihe nach: was wann wo zu tun ist. `<server>` ist die Adresse deines
 Servers im Heimnetz, `<server>.<tailnet>.ts.net` seine Tailscale-Adresse.
 
+
+## Navigation (ab Phase 7.0b)
+
+StackPilot ist nach Aufgaben gegliedert: **Zuhause**, **Medien** (Entdecken, Musik),
+**Anfragen** (Meine Anfragen, Freigabe je Zuschauer), **Downloads**, **Personen**
+(Zuschauer), **Qualität & Quellen** (Medienprofile, Quellen), **Speicher** (Aufräumen),
+**Couchdeck** und **System** (Apps & Container, Updates & Sicherungen, Zugriff & Netzwerk,
+VPN & Ausfallsperre, Verbindungen, Diagnose, Auftrags- und Änderungsverlauf, Über
+StackPilot, Stack konfigurieren). Alte Lesezeichen (`#/verwaltung/…`) leiten weiter.
+
 ## Zuschauer
 
 ### Jemanden einladen
-1. StackPilot → **Verwaltung → Externer Zugriff → Zugriff von unterwegs → Zuschauer**.
+1. StackPilot → **System → Zugriff & Netzwerk → Zugriff von unterwegs → Zuschauer**.
 2. Benutzernamen eintippen (3–32 Zeichen, Kleinbuchstaben, Ziffern, `-`, `_`) → **Einladen**.
 3. Angezeigt werden einmalig Adresse, Benutzername und Startpasswort → **Kopieren** und der
    Person schicken → **Notiert – ausblenden**. Das Passwort ist danach nirgends mehr gespeichert.
@@ -41,7 +51,7 @@ angemeldeten Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** lö
 
 ## Couchdeck (Bildschirm am Server)
 
-- Starten/Schließen: StackPilot → **Anwendungen → Couchdeck**, oder im Couchdeck-Menü
+- Starten/Schließen: StackPilot → **Couchdeck**, oder im Couchdeck-Menü
   „Ausschalten“; wieder an durch Controller einschalten oder Bildschirm aus/an.
 - Läuft nur, wenn ein Bildschirm angeschlossen und eingeschaltet ist.
 - Neu verbinden (z. B. nach Neuinstallation von Jellyfin): **Verbindung erneuern**.
@@ -61,12 +71,12 @@ StackPilot → **Anwendungen** → Dienst öffnen. Zugangsdaten: **Details → Z
 Heimnetz, nicht über die HTTPS-Adresse.
 
 ### StackPilot aktualisieren
-**Verwaltung → Sicherungen & Updates → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
+**System → Updates & Sicherungen → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
 Medien-Container laufen weiter.
 
 ### Dienstschlüssel erneuern
 
-Unter **Anwendungen → Dienst → Details → API-Schlüssel erneuern** das
+Unter **System → Apps & Container → Dienst → Details → API-Schlüssel erneuern** das
 StackPilot-Administratorpasswort eingeben. Die Aktion steht für Bazarr,
 Lidarr, Sonarr, Radarr, Prowlarr und Seerr zur Verfügung. Lidarr, Sonarr,
 Radarr und Prowlarr starten beim Wechsel kurz neu.
@@ -84,7 +94,7 @@ Meldet StackPilot einen unterbrochenen Wechsel, dieselbe Aktion
 erneut ausführen. Externe Verbraucher müssen den neuen Schlüssel
 separat erhalten.
 
-Unter **Anwendungen → Jellyfin → Details** lässt sich der Dienstzugang
+Unter **System → Apps & Container → Jellyfin → Details** lässt sich der Dienstzugang
 für Couchdeck, Seerr oder Streamystats einzeln erneuern. StackPilot
 prüft zuerst den neuen Zugang beim Dienst und widerruft anschließend
 den bisher dort verwendeten Token. Der Streamystats-Schritt gilt
@@ -93,7 +103,7 @@ Couchdeck startet nach seiner eigenen Token-Erneuerung neu.
 
 ### Zugriff von unterwegs
 - Einrichten: im Assistenten „Von unterwegs“ wählen oder später unter
-  **Verwaltung → Externer Zugriff → In einem Schritt einrichten**.
+  **System → Zugriff & Netzwerk → In einem Schritt einrichten**.
 - Öffentlich (ohne Tailscale): **Öffentlich über das Internet (Funnel)** – braucht das
   Funnel-Recht in der Tailscale-Policy, gesicherte Authentik-Verwaltung und eine geprüfte
   Sicherung. Abschalten geht dort jederzeit („privat behalten“).
@@ -123,8 +133,8 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 ## Downloads und VPN
 - Downloads laufen nur, wenn Mullvad und die Ausfallsperre nachgewiesen sind. Fällt das
   VPN aus, hält StackPilot die Torrents an; **Downloads → Geschützt fortsetzen** prüft neu.
-- VPN-Test: **Verwaltung → VPN & Ausfallsperre → Prüfauftrag starten**.
-- VPN je Dienst: **Verwaltung → VPN & Ausfallsperre → VPN je Dienst**. Pro Dienst ein
+- VPN-Test: **System → VPN & Ausfallsperre → Prüfauftrag starten**.
+- VPN je Dienst: **System → VPN & Ausfallsperre → VPN je Dienst**. Pro Dienst ein
   Auswahlmenü: **qBittorrent** (Gluetun) – Umstellen nach „OK“: neue Dateien, Gluetun/
   qBittorrent/vpn-probe neu erstellen, Mullvad-Ausgang und Ausfallsperre prüfen, sonst
   kommt die alte Config zurück (Downloads ruhen ca. 30 s bis 2 min). **YouTube in
@@ -139,7 +149,7 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   braucht einen zweiten Schlüssel (im Mullvad-Konto neuen Schlüssel erzeugen, bis 5).
 - Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
   „OK“ oder „Abbrechen“.
-- Neue Quelle (Indexer): **Verwaltung → Quellen** → Anbieter wählen → testen → speichern.
+- Neue Quelle (Indexer): **Qualität & Quellen → Quellen** → Anbieter wählen → testen → speichern.
 
 ## Neue App ins Projekt aufnehmen (Entwicklung)
 1. Image mit Digest in `packages/catalog/services.json`.
@@ -170,7 +180,7 @@ mit StackPilot verbinden. Jellyfin und seine Geräteanmeldung laufen separat.
 
 ## Bazarr-API-Schlüssel erneuern
 
-Öffne unter **Anwendungen → Bazarr → Details** den Bereich
+Öffne unter **System → Apps & Container → Bazarr → Details** den Bereich
 **Bazarr-API-Schlüssel erneuern**. Gib dein StackPilot-Administratorpasswort ein
 und bestätige den Wechsel. Die Erfolgsmeldung erscheint, sobald Bazarr den
 neuen Schlüssel akzeptiert und den bisherigen ablehnt.
@@ -204,7 +214,7 @@ Profil wieder aktivieren.
 
 ## Mediencontainer aktualisieren und zurückwechseln
 
-Unter **Verwaltung → Sicherungen & Updates → Container-Updates und
+Unter **System → Updates & Sicherungen → Container-Updates und
 Rückkehr** zeigt StackPilot für Sonarr, Radarr, Lidarr, Prowlarr, Bazarr
 und Seerr abweichende, per Digest festgelegte Versionen aus dem
 Dienstkatalog. **Update vorbereiten** und mit dem Administratorpasswort
@@ -236,7 +246,7 @@ Auswahl, wenn deren Image mit der geschützten Anmeldung abgenommen wurde.
 Öffne StackPilot direkt am Server oder über SSH. Beispielsweise leitet
 `ssh -N -L 5174:127.0.0.1:5173 benutzer@server` den Browserzugriff über
 `http://stackpilot.localhost:5174` an den Server. Im StackPilot-Menü
-**Verwaltung → Sicherungen & Updates → StackPilot-Tresor sichern**
+**System → Updates & Sicherungen → StackPilot-Tresor sichern**
 das Administratorpasswort und eine eigene Sicherungspassphrase eingeben.
 Die Datei endet auf `.spvault` und enthält eine konsistente Kopie von
 `state.sqlite` und den dazugehörigen `master.key`. Medien und die
@@ -276,8 +286,8 @@ und betroffene Dienste aus zueinander passenden Sicherungen stammen.
 ## Wiederherstellungscodes für Zuschauer
 
 Bei neu eingerichtetem Authentik werden Wiederherstellungscodes automatisch
-angeboten. Für eine bestehende Installation öffne **Verwaltung → Externer
-Zugriff → Zuschauer → Wiederherstellungscodes für Zuschauer
+angeboten. Für eine bestehende Installation öffne **System → Zugriff &
+Netzwerk → Zuschauer → Wiederherstellungscodes für Zuschauer
 aktivieren** und bestätige mit dem StackPilot-Administratorpasswort.
 Zuschauer ohne eingerichteten Wiederherstellungsfaktor bekommen nach
 erfolgreicher Anmeldung mit zweitem Faktor acht einmal verwendbare Codes
@@ -286,8 +296,8 @@ Authenticator-App aufbewahren. Bestehende Codes bleiben gültig.
 
 ## Zuschauer anmelden und eigenes Passwort wählen
 
-In einer bestehenden Installation öffnest du unter **Verwaltung → Externer
-Zugriff → Zuschauer** einmalig **Zuschauer-Anmeldung aktualisieren**.
+In einer bestehenden Installation öffnest du unter **System → Zugriff &
+Netzwerk → Zuschauer** einmalig **Zuschauer-Anmeldung aktualisieren**.
 Neue Authentik-Installationen verwenden den Ablauf automatisch.
 
 1. Beim Einladen gibt StackPilot einen Benutzernamen und ein Startpasswort aus.
@@ -306,7 +316,7 @@ zurückgesetzt werden.
 
 ### Bibliotheken pro Zuschauer freigeben
 
-1. Öffne **Verwaltung → Externer Zugriff → Zuschauer → Zuschauerprofile**.
+1. Öffne **System → Zugriff & Netzwerk → Zuschauer → Zuschauerprofile**.
 2. Erstelle ein Profil mit einem Namen und den erlaubten Jellyfin-Bibliotheken.
    Zur Auswahl stehen die Bibliotheken, die beim Einrichten von SSO freigegeben wurden.
 3. Wähle beim Konto das Profil aus und klicke auf **Profil zuweisen**.
@@ -332,7 +342,7 @@ bleiben erhalten. Die einmalige Aufforderung lässt sich bei Bedarf über
 
 ## Gemeinsamer Filmstandard, Freigaben und Bibliotheksdateien
 
-Unter **Verwaltung → Medienprofile** werden die aktuellen Werte direkt geladen.
+Unter **Qualität & Quellen → Medienprofile** werden die aktuellen Werte direkt geladen.
 Der Größenstandard gilt für neue Standardanfragen aus StackPilot, Seerr,
 Streamyfin und Couchdeck. Bereits vorhandene Dateien werden dadurch nicht ersetzt.
 Ausdrücklich gewählte Einzelprofile bleiben eigene Vorgaben.
@@ -347,7 +357,7 @@ nativen Regeln werden gemeldet; eigene Seerr-Profilregeln müssen vor einer
 Standard ausgeschaltet oder auf eine feste Grenze umgestellt wird.
 
 **Meine Anfragen → Details → Anfrage freigeben** genehmigt wartende Seerr-Anfragen.
-Unter **Verwaltung → Externer Zugriff → Zuschauer → Freigabe für Anfragen** hat
+Unter **System → Zugriff & Netzwerk → Zuschauer → Freigabe für Anfragen** hat
 jeder Zuschauer einen Schalter: an = neue Film- und Serienanfragen brauchen eine
 Freigabe, aus = sie laufen automatisch (Seerr-Rechte Anfragen + automatische
 Freigabe). Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
@@ -374,7 +384,7 @@ Grenze erneut anfragen: StackPilot nimmt die Vorbereitung wieder auf. Eine noch
 nicht zugeordnete Vorbereitung nicht in Seerr freigeben. In StackPilot bleibt ihre
 Freigabe gesperrt, bis die Zuordnung bestätigt ist.
 
-**Verwaltung → Medienbestand** zeigt auch Serien, deren Anfrage bereits entfernt
+**Speicher → Aufräumen** zeigt auch Serien, deren Anfrage bereits entfernt
 wurde. Serie, optional Staffel und anschließend eine Folge auswählen und die
 betroffenen Dateien prüfen. Zugeordnete Downloads erscheinen separat und werden
 nur bei ausdrücklicher Auswahl mitgelöscht. Gemeinsame Pakete mit weiteren Folgen
@@ -404,7 +414,7 @@ bleibt erhalten. Eine fehlende oder veränderte Sicherung wird nicht verwendet.
 
 ## StackPilot direkt im privaten Tailnet
 
-Unter **Verwaltung → Externer Zugriff → StackPilot im privaten Tailnet** auf
+Unter **System → Zugriff & Netzwerk → StackPilot im privaten Tailnet** auf
 **Privaten StackPilot-Zugriff prüfen** klicken. Die Prüfung zeigt die Serveradresse
 mit Port 5173 und eine IP-Adresse als Alternative zu MagicDNS. Die Installation
 bindet StackPilot bereits an LAN und Tailnet; ein fehlendes Tailscale-Zugriffsrecht

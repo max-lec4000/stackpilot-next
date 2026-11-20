@@ -1,4 +1,7 @@
 import { VpnProfiles } from "./VpnProfiles";
+import { ViewerRequests } from "./ViewerRequests";
+import { RemoteSetupPanel } from "./RemoteSetupPanel";
+import { CouchdeckPanel, useCouchdeck } from "./CouchdeckPanel";
 import { SeriesRemoval } from "./SeriesRemoval";
 import { AuditLog } from "./AuditLog";
 import { DevelopmentDiagnostics } from "./DevelopmentDiagnostics";
@@ -104,6 +107,36 @@ const areas = [
     color: "lilac",
   },
 ] as const;
+/** Couchdeck als eigener Bereich (bisher nur in der App-Liste). */
+function CouchdeckView() {
+  const controller = useCouchdeck();
+  return <CouchdeckPanel controller={controller} />;
+}
+
+/** Anstehende Netztrennung (früher auf der Verwaltungs-Startseite). */
+export function NetworkUpgradeNotice({ loading, error, onPlan }: { loading: boolean; error: string; onPlan: () => void }) {
+  const [needed, setNeeded] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    get<{ networkUpgrade?: boolean } | null>("/api/stack")
+      .then((stack) => { if (mounted) setNeeded(stack?.networkUpgrade === true); })
+      .catch(() => { if (mounted) setNeeded(false); });
+    return () => { mounted = false; };
+  }, []);
+  if (!needed) return null;
+  return (
+    <section className="tile" aria-labelledby="network-upgrade-title">
+      <h3 id="network-upgrade-title">Anstehende Umstellung</h3>
+      <p>Jellyfin und die Download-Dienste bekommen getrennte Docker-Netze.
+        Die betroffenen Container starten dabei kurz neu.</p>
+      <button disabled={loading} onClick={onPlan}>
+        {loading ? "Stack wird geladen …" : "Plan für Netztrennung öffnen"}
+      </button>
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 export function administrationTitle(id: string) {
   return areas.find((area) => area.id === id)?.title || "Verwaltung";
 }
@@ -124,6 +157,7 @@ export function Administration({
   onMigrationPlan,
   migrationLoading,
   migrationError,
+  bare = false,
 }: {
   area: string;
   onAreaChange: (area: string) => void;
@@ -141,8 +175,11 @@ export function Administration({
   onMigrationPlan: () => void;
   migrationLoading: boolean;
   migrationError: string;
+  /** Nur den Inhalt des Bereichs zeigen (neue Navigation, Phase 7.0b) */
+  bare?: boolean;
 }) {
-  const panel = areas.some((a) => a.id === area) ? area : "";
+  const extra = ["viewer-requests", "people", "couchdeck"];
+  const panel = areas.some((a) => a.id === area) || (bare && extra.includes(area)) ? area : "";
   const [menuOpen, setMenuOpen] = useState(false);
   const [networkUpgrade, setNetworkUpgrade] = useState(false);
   useEffect(() => {
@@ -175,6 +212,9 @@ export function Administration({
     setMenuOpen(false);
   }
   function content() {
+    if (panel === "viewer-requests") return <ViewerRequests />;
+    if (panel === "people") return <RemoteSetupPanel />;
+    if (panel === "couchdeck") return <CouchdeckView />;
     if (panel === "music") return <MusicLibrary />;
     if (panel === "remote") return <RemoteAccessView />;
     if (panel === "profiles") return <SizeSettings />;
@@ -217,6 +257,7 @@ export function Administration({
       );
     return null;
   }
+  if (bare) return <div className="administration-panel" key={panel}>{content()}</div>;
   return (
     <div className={"administration " + (active ? "has-selection" : "")}>
       {!active ? (

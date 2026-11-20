@@ -25,7 +25,7 @@ export class Notifications {
       for (const task of ops.tasks) {
         const key = "operation:" + task.id;
         keys.add(key);
-        this.observe(key, task.state, { title: task.title, message: task.reason, target: task.target === "setup" ? "#/einrichten" : "#/verwaltung" });
+        this.observe(key, task.state, { title: task.title, message: task.reason, target: task.href || (task.target === "setup" ? "#/einrichten" : "#/verwaltung") });
       }
       for (const row of this.store.db.prepare("SELECT key FROM notice_signals WHERE key LIKE 'operation:%'").all())
         if (!keys.has(row.key)) this.observe(row.key, "clear", null);

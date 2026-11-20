@@ -85,3 +85,30 @@ test("System- und Medienspeicher werden auf demselben Dateisystem nur einmal aus
   assert.equal(disks.system.state, "warning");
   assert.equal(disks.media.usedBytes, 97 * gib);
 });
+
+test("Zuhause: Freigaben, Download-Probleme, angehaltener Client und Docker-Wächter mit direkten Links", async () => {
+  const current = { job: { status: "completed" }, plan: { spec: { path: "/media", selected: ["Seerr", "Radarr", "qBittorrent"] } } };
+  const hub = { engine: { current: () => current }, context: async () => ({ s: {} }), pendingCount: async () => 3 };
+  const activity = { get: async () => ({ vpn: { state: "connected" }, downloads: { state: "unknown" }, arr: [{ service: "Radarr", state: "ready" }] }) };
+  const ops = new Operations(hub, activity, {
+    managed: async () => ({ services: [] }),
+    storage: async () => ({ freeBytes: 500 * 1024 ** 3, totalBytes: 1000 * 1024 ** 3 }),
+    systemStorage: async () => ({ freeBytes: 500 * 1024 ** 3, totalBytes: 1000 * 1024 ** 3 }),
+  });
+  ops.downloadIssues = { list: async () => ({ total: 2, issues: [{ cause: "Nur ein Beispielvideo" }, { cause: "Nur ein Beispielvideo" }] }) };
+  ops.dockerGuard = { status: async () => ({ mode: "observe", denied: 1 }) };
+  const { tasks } = await ops.inspect(true);
+  const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
+  assert.ok(!byId.connections, "angehaltenes qBittorrent ist keine allgemeine Verbindungsstörung");
+  assert.equal(byId["downloads-stopped"].href, "#/downloads");
+  assert.equal(byId.approvals.title, "3 Anfragen warten auf deine Freigabe");
+  assert.equal(byId.approvals.href, "#/anfragen");
+  assert.equal(byId["download-issues"].title, "2 Downloads brauchen Aufmerksamkeit");
+  assert.equal(byId["download-issues"].reason, "Nur ein Beispielvideo.");
+  assert.match(byId["docker-guard"].title, /hätte 1 Aufruf gesperrt/);
+  // Fehler einzelner Prüfungen blenden nur diese aus
+  hub.pendingCount = async () => { throw Error("Seerr weg"); };
+  ops.dockerGuard = { status: async () => ({ mode: "observe", denied: 0 }) };
+  const again = (await ops.inspect(true)).tasks.map((t) => t.id);
+  assert.ok(!again.includes("approvals") && !again.includes("docker-guard") && again.includes("download-issues"));
+});

@@ -377,6 +377,14 @@ export class MediaHub {
     if (this.metadata.size > 250) this.metadata.delete(this.metadata.keys().next().value);
     return value;
   }
+  /** Zahl der wartenden Anfragen (für Zuhause). */
+  async pendingCount() {
+    const { s } = await this.context(["Seerr"]);
+    const r = await s.additional.seerr("/request?take=1&skip=0&filter=pending");
+    const total = r?.pageInfo?.results;
+    if (!Number.isSafeInteger(total) || total < 0) throw Error("Anzahl wartender Anfragen nicht bestätigt.");
+    return total;
+  }
   /** Anfragen, die auf eine Freigabe warten (höchstens 50, älteste zuerst). */
   async pendingRequests() {
     const { s, plan } = await this.context(["Seerr"]);

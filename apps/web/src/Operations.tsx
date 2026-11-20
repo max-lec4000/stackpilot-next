@@ -17,6 +17,7 @@ export type OperationOverview = {
     reason: string;
     action: string;
     target: string;
+    href?: string;
   }[];
   storage: StorageUsage;
   systemStorage?: StorageUsage | null;
@@ -70,14 +71,14 @@ export function OperationNotices({
   if (!data.tasks.length)
     return (
       <p className="dashboard-check-summary">
-        <StatusBadge tone="success">Keine offenen Betriebshinweise</StatusBadge>
+        <StatusBadge tone="success">Nichts braucht gerade Aufmerksamkeit</StatusBadge>
         <small>Container- und Speicherprüfung; keine Wiedergabeabnahme.</small>
       </p>
     );
   return (
-    <details className="dashboard-notices">
+    <details className="dashboard-notices" open>
       <summary>
-        <StatusBadge tone="warning">{data.tasks.length} {data.tasks.length === 1 ? "Betriebshinweis" : "Betriebshinweise"}</StatusBadge>
+        <StatusBadge tone="warning">Braucht Aufmerksamkeit ({data.tasks.length})</StatusBadge>
         <span>{data.tasks[0].title}</span>
       </summary>
       <ul className="dashboard-task-list">
@@ -87,9 +88,13 @@ export function OperationNotices({
               <b>{task.title}</b>
               <p>{task.reason}</p>
             </div>
-            <button onClick={task.target === "setup" ? onSetup : onManage}>
-              {task.action}
-            </button>
+            {task.href ? (
+              <a className="button" href={task.href}>{task.action}</a>
+            ) : (
+              <button onClick={task.target === "setup" ? onSetup : onManage}>
+                {task.action}
+              </button>
+            )}
           </li>
         ))}
       </ul>

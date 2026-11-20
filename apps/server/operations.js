@@ -150,6 +150,19 @@ export class Operations {
             )
           )
             unavailable.push(name);
+        // qBittorrent nicht erreichbar, VPN aber geprüft: meist von der Ausfallsperre angehalten
+        if (unavailable.includes("qBittorrent") && activity.vpn?.state === "connected") {
+          unavailable.splice(unavailable.indexOf("qBittorrent"), 1);
+          tasks.push({
+            id: "downloads-stopped",
+            state: "attention",
+            title: "qBittorrent ist angehalten",
+            reason: "Meist nach einem kurzen VPN-Ausfall von der Ausfallsperre angehalten. Das VPN ist wieder geprüft – unter Downloads geschützt fortsetzen.",
+            action: "Downloads öffnen",
+            target: "manage",
+            href: "#/downloads",
+          });
+        }
         if (unavailable.length)
           tasks.push({
             id: "connections",
@@ -210,6 +223,68 @@ export class Operations {
           });
         }
     }
+    if (current?.job.status === "completed") await this.attention(current.plan, tasks);
+    // Jede Aufgabe führt direkt auf die passende Seite (Phase 7.2c)
+    for (const task of tasks)
+      if (!task.href && task.target === "manage" && LINKS[task.id]) [task.href, task.action] = LINKS[task.id];
     return base;
   }
+  /** Phase 7.2c: was im Betrieb gerade Aufmerksamkeit braucht (Fehler einzelner Prüfungen werden übersprungen). */
+  async attention(plan, tasks) {
+    const n = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+    await Promise.all([
+      (async () => {
+        if (!plan.spec.selected.includes("Seerr") || !this.hub.pendingCount) return;
+        try {
+          const count = await this.hub.pendingCount();
+          if (count > 0)
+            tasks.push({
+              id: "approvals", state: "todo", title: n(count, "Anfrage wartet", "Anfragen warten") + " auf deine Freigabe",
+              reason: "Freigeben oder ablehnen – einzeln oder gesammelt.", action: "Anfragen öffnen", target: "manage", href: "#/anfragen",
+            });
+        } catch {}
+      })(),
+      (async () => {
+        if (!this.downloadIssues) return;
+        try {
+          const { total, issues } = await this.downloadIssues.list();
+          if (total > 0)
+            tasks.push({
+              id: "download-issues", state: "attention", title: n(total, "Download braucht", "Downloads brauchen") + " Aufmerksamkeit",
+              reason: [...new Set(issues.map((i) => i.cause))].slice(0, 3).join(", ") + ".", action: "Downloads öffnen",
+              target: "manage", href: "#/downloads",
+            });
+        } catch {}
+      })(),
+      (async () => {
+        if (!this.dockerGuard) return;
+        try {
+          const g = await this.dockerGuard.status();
+          if (g.mode === "unreachable")
+            tasks.push({
+              id: "docker-guard", state: "attention", title: "Docker-Wächter antwortet nicht",
+              reason: "Ohne ihn schlagen Docker-Aufgaben fehl. Am Server: sudo /opt/stackpilot/app/deploy/docker-guard.sh status",
+              action: "Docker-Wächter öffnen", target: "manage", href: "#/system/updates",
+            });
+          else if ((g.mode === "observe" || g.mode === "enforce") && g.denied > 0)
+            tasks.push({
+              id: "docker-guard", state: "attention",
+              title: g.mode === "observe" ? `Docker-Wächter hätte ${n(g.denied, "Aufruf", "Aufrufe")} gesperrt` : `Docker-Wächter hat ${n(g.denied, "Aufruf", "Aufrufe")} gesperrt`,
+              reason: "Details und letzte Verstöße unter System → Updates & Sicherungen → Docker-Wächter.",
+              action: "Docker-Wächter öffnen", target: "manage", href: "#/system/updates",
+            });
+        } catch {}
+      })(),
+    ]);
+  }
 }
+
+const LINKS = {
+  apps: ["#/system", "Apps & Container öffnen"],
+  "system-storage": ["#/speicher", "Speicher öffnen"],
+  storage: ["#/speicher", "Speicher öffnen"],
+  connections: ["#/system/verbindungen", "Verbindungen öffnen"],
+  vpn: ["#/system/vpn", "VPN & Ausfallsperre öffnen"],
+  activity: ["#/system/diagnose", "Diagnose öffnen"],
+  sources: ["#/qualitaet/quellen", "Quellen öffnen"],
+};

@@ -112,6 +112,8 @@ export function inventoryMiddleware(options = {}) {
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
   const dockerGuard = new DockerGuardStatus(state);
+  operations.downloadIssues = downloadIssues;
+  operations.dockerGuard = dockerGuard;
   // Docker-Wächter: Datenordner der Stacks melden (nur wenn StackPilot über ihn läuft)
   try { writeGuardRoots(state); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
   const appUpdates = new AppUpdates(installer());

@@ -13,6 +13,13 @@ StackPilot ist nach Aufgaben gegliedert: **Zuhause**, **Medien** (Entdecken, Mus
 VPN & Ausfallsperre, Verbindungen, Diagnose, Auftrags- und Änderungsverlauf, Über
 StackPilot, Stack konfigurieren). Alte Lesezeichen (`#/verwaltung/…`) leiten weiter.
 
+
+### Zuhause: Braucht Aufmerksamkeit (ab 7.2c)
+Die Startseite listet, was gerade zu tun ist – jeweils mit Knopf direkt auf die passende
+Seite: wartende Freigaben, Downloads mit Problemen, angehaltenes qBittorrent, Auffälligkeiten
+des Docker-Wächters, Speicher, VPN, Verbindungen, Quellen. Dieselben Punkte erscheinen als
+Hinweis oben rechts, sobald sie neu auftauchen. Der Zähler des Docker-Wächters beginnt bei
+jedem Neustart des Wächters neu.
 ## Zuschauer
 
 ### Jemanden einladen

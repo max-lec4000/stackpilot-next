@@ -364,6 +364,18 @@ Zuschnitt 7.2: **a** Probleme/Ursachen und Zuordnung, **b** Seeding und Zeitplä
 - sp-test: 377 Tests; echtes qBittorrent: über den Browser gesetzt (2 / 72 h / entfernen,
   Upload 5000, werktags 18:00–23:30 gedrosselt), zurückgelesen, Ausgangswerte wiederhergestellt.
 
+### Fortschritt 7.2c – Zuhause „Braucht Aufmerksamkeit“ (20.11.2026)
+
+- Bestehende Betriebsaufgaben (`operations.js`) erweitert statt Neubau: wartende Freigaben
+  (`hub.pendingCount()`), Download-Probleme (7.2a), angehaltenes qBittorrent bei geprüftem
+  VPN (statt allgemeiner Verbindungsstörung), Docker-Wächter (antwortet nicht / hätte bzw.
+  hat gesperrt). Jede Aufgabe hat `href` auf die passende Seite; Hinweise nutzen ihn auch.
+- Startseite: „Braucht Aufmerksamkeit (n)“, aufgeklappt, Knöpfe als direkte Links.
+- sp-test: 378 Tests; echte Fälle (wartende Anfrage des Test-Zuschauers, beobachteter
+  `plugin ls` über den Wächter) erscheinen mit Link; Link führt zu Anfragen; Testanfrage
+  danach abgelehnt, Wächter neu gestartet.
+- Phase 7.2 damit abgeschlossen.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

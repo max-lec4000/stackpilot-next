@@ -293,3 +293,12 @@ Fachlogik, sondern über die bestehende Root-Hilfe bzw. den späteren Wächter.
   Verwaltung; Rollen so anlegen, dass eine spätere Zuschaueransicht nicht verbaut wird.
 - **Container:** StackPilot als Container ohne Docker-Socket mit kleinem Docker-Wächter auf
   dem Host; Tailscale bleibt auf dem Host; Couchdeck erst nach Machbarkeitsprobe entscheiden.
+
+## 8. Entscheidung nach der Probe 7.0c (20.11.2026)
+
+- **Wächter zuerst:** Der Docker-Wächter bleibt immer auf dem Host. Er wird eingesetzt,
+  solange StackPilot noch nativ läuft: erst im Beobachtungsmodus, nach unauffälligem
+  Echtbetrieb (inkl. Updates und Erstinstallation) im Sperrmodus.
+- **Container danach (7.7):** StackPilot zieht erst um, wenn der Wächter im Sperrmodus läuft;
+  der Container bekommt nur den Wächter-Socket, systemctl über ein eigenes AppArmor-Profil.
+- **Couchdeck und Tailscale bleiben nativ.**

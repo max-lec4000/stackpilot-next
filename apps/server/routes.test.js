@@ -131,6 +131,7 @@ test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlange
     "request/approve", "request/cancel-season", "request/cancel", "film-limit", "quality",
     "season-transfer/replace", "season-transfer/remove", "season-transfer/pause", "episodes/delete-file",
     "series-limits", "replacement/start", "replacement/restore", "series-removal/execute", "movie-removal/execute",
+    "request/decline", "request/batch",
   ].map((p) => `POST /api/media/${p}`);
   for (const key of ok) assert.equal(table[key], "ok", key);
   for (const [key, guard] of Object.entries(table)) if (key.startsWith("GET ")) assert.equal(guard, "session", key);
@@ -140,7 +141,7 @@ test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlange
     "POST /api/media/replacement/preview", "POST /api/media/request", "POST /api/media/request/archive",
     "POST /api/media/research", "POST /api/media/series-removal/preview",
   ]);
-  assert.equal(Object.keys(table).length, 39);
+  assert.equal(Object.keys(table).length, 42);
 });
 
 test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen", () => {

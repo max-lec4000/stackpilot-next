@@ -74,6 +74,47 @@ export class RequestLifecycle {
       return { ok: true, status: confirmed.status };
     });
   }
+  /** Wartende Anfrage ablehnen; die Begründung bleibt in StackPilot (Seerr kennt keine). */
+  async decline(body) {
+    if (body.confirmation !== "OK") throw Error("Ablehnen mit OK bestätigen.");
+    const id = positiveId(body.requestId);
+    const reason = typeof body.reason === "string"
+      ? body.reason.replace(/[\u0000-\u001f\u007f\s]+/g, " ").trim().slice(0, 300) : "";
+    return this.hub.mutate(["Seerr"], async ({ s, plan }) => {
+      if (!seerrServiceAdmin(await s.additional.seerr("/auth/me")))
+        throw Error("Das Seerr-Dienstkonto darf keine Anfragen ablehnen.");
+      const request = await s.additional.seerr(`/request/${id}`);
+      const kind = request?.media?.mediaType;
+      if (!["movie", "tv"].includes(kind)) throw Error("Anfrage nicht mehr vorhanden.");
+      if (request.status !== 1) throw Error("Die Anfrage wartet nicht mehr auf Freigabe. Neu laden.");
+      await s.additional.seerr(`/request/${id}/decline`, { method: "POST" });
+      const confirmed = await s.additional.seerr(`/request/${id}`);
+      if (confirmed.status !== 3) throw Error("Seerr hat die Ablehnung nicht bestätigt. Status erneut laden.");
+      this.records?.put(plan, id, {
+        type: kind, mediaId: request.media.tmdbId, createdAt: request.createdAt,
+        decision: { action: "declined", reason, at: new Date().toISOString() },
+      });
+      return { ok: true, status: 3 };
+    });
+  }
+  /** Mehrere wartende Anfragen nacheinander freigeben oder ablehnen; Ergebnis je Anfrage. */
+  async batch(body) {
+    if (body.confirmation !== "OK") throw Error("Mit OK bestätigen.");
+    if (!["approve", "decline"].includes(body.action)) throw Error("Unbekannte Sammelaktion.");
+    const ids = [...new Set((Array.isArray(body.requestIds) ? body.requestIds : []).map(positiveId))];
+    if (!ids.length || ids.length > 25) throw Error("1 bis 25 Anfragen auswählen.");
+    const results = [];
+    for (const requestId of ids) {
+      try {
+        if (body.action === "approve") await this.approve({ requestId, confirmation: "OK" });
+        else await this.decline({ requestId, reason: body.reason, confirmation: "OK" });
+        results.push({ requestId, ok: true });
+      } catch (e) {
+        results.push({ requestId, ok: false, error: String(e?.message || e).slice(0, 300) });
+      }
+    }
+    return { results, done: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length };
+  }
   key(plan, id) {
     return `request-cancel:${plan.rootId || plan.id}:${positiveId(id)}`;
   }

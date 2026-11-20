@@ -426,3 +426,13 @@
     justify-self: start;
   }
 }
+
+/* Wartende Anfragen (Phase 7.1b) */
+.pending-requests { margin-bottom: 1rem; }
+.pending-requests .success { color: var(--success); }
+.pending-all { display: inline-flex; gap: 0.5rem; align-items: center; margin: 0.25rem 0; }
+.pending-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.4rem; }
+.pending-list label { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.pending-title { overflow-wrap: anywhere; }
+.pending-reason { display: grid; gap: 0.3rem; margin-top: 0.5rem; }
+.pending-reason input { width: 100%; max-width: 32rem; }

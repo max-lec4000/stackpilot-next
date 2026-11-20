@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
+import { ConfirmBar } from "./ui";
 type Preview = {
   requestId: number;
   review: string;
@@ -27,7 +28,9 @@ export function RequestActions({
   const [preview, setPreview] = useState<Preview | null>(null),
     [season, setSeason] = useState(""),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [declining, setDeclining] = useState(false),
+    [reason, setReason] = useState("");
   async function inspect() {
     setBusy(true);
     setError("");
@@ -54,6 +57,26 @@ export function RequestActions({
         } catch (e) { setError((e as Error).message); }
         finally { setBusy(false); }
       }}>Anfrage freigeben</button>}
+      {canApprove && !declining && <button className="danger" disabled={busy} onClick={() => setDeclining(true)}>Ablehnen …</button>}
+      {canApprove && declining && (
+        <ConfirmBar label="Anfrage ablehnen" okLabel="Ablehnen" busy={busy} busyLabel="Wird abgelehnt …"
+          onCancel={() => setDeclining(false)}
+          onOk={async () => {
+            setBusy(true); setError("");
+            try {
+              await action("/api/media/request/decline", { requestId: id, confirmation: "OK", ...(reason.trim() ? { reason: reason.trim() } : {}) });
+              setDeclining(false); setReason("");
+              await onChange();
+            } catch (e) { setError((e as Error).message); }
+            finally { setBusy(false); }
+          }}>
+          <p>Diese Anfrage ablehnen?</p>
+          <label className="pending-reason">
+            Begründung (freiwillig, nur in StackPilot sichtbar – Seerr speichert keine)
+            <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />
+          </label>
+        </ConfirmBar>
+      )}
 
       <button
         disabled={busy}

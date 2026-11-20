@@ -25,6 +25,12 @@ export const mediaType = (v) => {
   if (!["movie", "tv"].includes(v)) throw Error("Film oder Serie auswählen.");
   return v;
 };
+/** Name der anfragenden Person (ohne E-Mail-Adresse; Zuschauer ohne Jellyfin-Vorsilbe „spv_“). */
+export function requesterName(u) {
+  for (const v of [u?.jellyfinUsername, u?.username, u?.plexUsername, u?.displayName])
+    if (typeof v === "string" && v.trim() && !v.includes("@")) return v.trim().replace(/^spv_(?=.)/, "").slice(0, 80);
+  return null;
+}
 export function mediaSummary(v) {
   return {
     id: v.id,
@@ -360,6 +366,45 @@ export class MediaHub {
       },
     );
   }
+  /** Titel und Poster aus Seerr, fünf Minuten zwischengespeichert. */
+  async mediaDetail(s, plan, m) {
+    const key = `${plan.id}:${m.mediaType}:${m.tmdbId}`;
+    const cached = this.metadata.get(key);
+    if (cached && cached.expires > Date.now()) return cached.value;
+    const detail = await s.additional.seerr(`/${mediaType(m.mediaType)}/${positiveId(m.tmdbId)}?language=de`);
+    const value = { title: detail.title, name: detail.name, posterPath: detail.posterPath };
+    this.metadata.set(key, { value, expires: Date.now() + 300000 });
+    if (this.metadata.size > 250) this.metadata.delete(this.metadata.keys().next().value);
+    return value;
+  }
+  /** Anfragen, die auf eine Freigabe warten (höchstens 50, älteste zuerst). */
+  async pendingRequests() {
+    const { s, plan } = await this.context(["Seerr"]);
+    const r = await s.additional.seerr("/request?take=50&skip=0&filter=pending&sort=added");
+    const items = (Array.isArray(r?.results) ? r.results : [])
+      .filter((x) => x?.status === 1 && ["movie", "tv"].includes(x.media?.mediaType))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+      .slice(0, 50);
+    const results = new Array(items.length);
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
+      while (cursor < items.length) {
+        const index = cursor++, request = items[index], m = request.media;
+        let detail = null;
+        try { detail = await this.mediaDetail(s, plan, m); } catch {}
+        results[index] = {
+          id: positiveId(request.id),
+          type: m.mediaType,
+          title: detail ? mediaSummary(detail).title : (m.mediaType === "movie" ? "Film" : "Serie") + " #" + m.tmdbId,
+          poster: detail ? mediaSummary(detail).poster : null,
+          seasons: (request.seasons || []).map((v) => v.seasonNumber).filter(Number.isSafeInteger),
+          createdAt: request.createdAt,
+          requestedBy: requesterName(request.requestedBy),
+        };
+      }
+    }));
+    return { results, total: Number.isSafeInteger(r?.pageInfo?.results) ? r.pageInfo.results : results.length };
+  }
   async requests(options = {}) {
     if (options.force === true) this.readCache.clear();
     const page = positiveId(options.page || 1),
@@ -464,25 +509,8 @@ export class MediaHub {
             request = items[index];
           const m = request.media;
           let detail = null;
-          const metadataKey = `${plan.id}:${m.mediaType}:${m.tmdbId}`;
           try {
-            const cached = this.metadata.get(metadataKey);
-            if (cached && cached.expires > Date.now()) detail = cached.value;
-            else {
-              detail = await s.additional.seerr(
-                `/${mediaType(m.mediaType)}/${positiveId(m.tmdbId)}?language=de`,
-              );
-              this.metadata.set(metadataKey, {
-                value: {
-                  title: detail.title,
-                  name: detail.name,
-                  posterPath: detail.posterPath,
-                },
-                expires: Date.now() + 300000,
-              });
-              if (this.metadata.size > 250)
-                this.metadata.delete(this.metadata.keys().next().value);
-            }
+            detail = await this.mediaDetail(s, plan, m);
           } catch {}
           const matched = queues.filter((q) =>
             m.mediaType === "movie"
@@ -618,6 +646,10 @@ export class MediaHub {
             downloadedBytes: downloaded,
             jellyfinAvailable,
             tracking: unavailable.length ? "partial" : "ready",
+            requestedBy: requesterName(request.requestedBy),
+            ...(request.status === 3 && this.records?.get(plan, request.id)?.decision
+              ? { decision: this.records.get(plan, request.id).decision }
+              : {}),
           };
         }
       }),

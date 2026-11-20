@@ -374,7 +374,12 @@ nativen Regeln werden gemeldet; eigene Seerr-Profilregeln müssen vor einer
 Übernahme geprüft werden. Ausstehende Laufzeitprüfungen zuerst klären, bevor der
 Standard ausgeschaltet oder auf eine feste Grenze umgestellt wird.
 
-**Meine Anfragen → Details → Anfrage freigeben** genehmigt wartende Seerr-Anfragen.
+Wartende Anfragen stehen oben unter **Anfragen → Meine Anfragen → Wartet auf deine Freigabe**
+(mit Name der anfragenden Person). Einzelne oder mehrere (bis 25) ankreuzen → **Freigeben** oder
+**Ablehnen** → mit **OK** bestätigen; beim Ablehnen ist eine Begründung möglich. Seerr kennt
+keine Begründung – StackPilot zeigt sie bei der abgelehnten Anfrage unter **Details**. Einzeln
+geht es auch über **Details → Anfrage freigeben** bzw. **Ablehnen …**. Klappt eine Anfrage
+nicht, nennt die Meldung sie mit Grund; die übrigen werden trotzdem bearbeitet.
 Auf der Karte unter **Personen → Zuschauer** (Schalter „Anfragen brauchen meine Freigabe“)
 oder gesammelt unter **Anfragen → Freigabe je Zuschauer** hat jeder Zuschauer einen Schalter: an = neue Film- und Serienanfragen brauchen eine
 Freigabe, aus = sie laufen automatisch (Seerr-Rechte Anfragen + automatische

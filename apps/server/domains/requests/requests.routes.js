@@ -11,6 +11,7 @@ export function requestRoutes({ hub, records, requestDiagnostics, requestLifecyc
       force: q(url, "force") === "1", page: q(url, "page") || 1,
       filter: q(url, "filter") || "all", type: q(url, "type") || "all",
     })),
+    get("/api/media/requests/pending", () => hub.pendingRequests()),
     get("/api/media/archive", async ({ url }) => {
       const { plan } = await hub.context(["Seerr"]);
       return records.history(plan, { page: q(url, "page") || 1, type: q(url, "type") || "all" });
@@ -27,6 +28,8 @@ export function requestRoutes({ hub, records, requestDiagnostics, requestLifecyc
 
     post("/api/media/request", ({ body }) => hub.request(body)),
     ok("/api/media/request/approve", "Freigabe mit OK bestätigen.", ({ body }) => requestLifecycle.approve(body)),
+    ok("/api/media/request/decline", "Ablehnen mit OK bestätigen.", ({ body }) => requestLifecycle.decline(body)),
+    ok("/api/media/request/batch", "Mit OK bestätigen.", ({ body }) => requestLifecycle.batch(body)),
     post("/api/media/request/archive", ({ body }) => requestLifecycle.archive(body)),
     ok("/api/media/request/cancel-season", "Staffelabbruch mit OK bestätigen.", ({ body }) => requestLifecycle.cancelSeason(body)),
     ok("/api/media/request/cancel", "Abbrechen mit OK bestätigen.", ({ body }) => requestLifecycle.cancel(body)),

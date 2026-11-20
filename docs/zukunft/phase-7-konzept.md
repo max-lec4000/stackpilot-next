@@ -301,6 +301,21 @@ systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
   Bekannt: `apps/web/testing/ux-smoke.cjs` passt schon seit dem Freigabe-Schalter nicht mehr
   zur Oberfläche (Zuschauerteil veraltet).
 
+### Fortschritt 7.1b – Anfragen (20.11.2026)
+
+- Kasten **Wartet auf deine Freigabe** oben in „Meine Anfragen“ (`PendingRequests.tsx`):
+  bis 50 wartende Anfragen mit anfragender Person, Auswahl (bis 25), **Freigeben** /
+  **Ablehnen** gesammelt mit OK, Ergebnis je Anfrage. Ablehnen auch einzeln in den Details.
+- Server: `GET /api/media/requests/pending`, `POST /api/media/request/decline` (OK; nur
+  wartende; Seerr-Status 3 wird bestätigt), `POST /api/media/request/batch` (OK; nacheinander,
+  Fehler je Anfrage). Begründung (max. 300 Zeichen) im StackPilot-Verlauf
+  (`request_records.decision`), Anzeige bei der abgelehnten Anfrage. Anfragende Person in der
+  Liste (ohne E-Mail, Zuschauer ohne `spv_`).
+- sp-test: 368 Tests; Browser: drei echte wartende Anfragen des Test-Zuschauers, zwei
+  gesammelt mit Begründung und eine einzeln abgelehnt, Kasten aktualisiert sich, Begründung
+  sichtbar. Freigeben gesammelt nur im Komponententest (in der VM würde es echte Downloads
+  starten).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

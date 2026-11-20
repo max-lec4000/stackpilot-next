@@ -1,4 +1,5 @@
 import { RequestActions, RequestArchive } from "./RequestActions";
+import { PendingRequests } from "./PendingRequests";
 import { requestJourney } from "../../../packages/domain/request-journey.js";
 import { MovieRemoval } from "./MovieRemoval";
 import { formatBytes } from "../../../packages/domain/format.js";
@@ -439,6 +440,8 @@ type RequestItem = {
   sizeBytes?: number | null;
   downloadedBytes?: number | null;
   jellyfinAvailable?: boolean | null;
+  requestedBy?: string | null;
+  decision?: { action: string; reason: string; at: string };
 };
 const stateText: Record<string, string> = {
   pending: "Wartet auf Freigabe",
@@ -514,10 +517,12 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
     [type, setType] = usePreference<string>("request-type", "all", oneOf("all", "movie", "tv")),
     [expanded, setExpanded] = useState<number | null>(null),
     [syncBusy, setSyncBusy] = useState(false),
-    [syncMessage, setSyncMessage] = useState("");
+    [syncMessage, setSyncMessage] = useState(""),
+    [pendingKey, setPendingKey] = useState(0);
   const version = useRef(0);
   async function refresh(force = false) {
     const sequence = ++version.current;
+    setPendingKey((k) => k + 1);
     setBusy(true);
     try {
       const result = await get<RequestPage>(
@@ -608,6 +613,7 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
           </button>
         </>}
       />
+      <PendingRequests onChange={() => refresh(true)} reloadKey={pendingKey} />
       <div className="request-toolbar">
         <label>
           Status
@@ -652,7 +658,7 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
                   </div>
                   <div className="request-metrics">
                     <span>{request.type === "movie" ? "Film" : "Serie"}{request.seasons.length ? " · Staffel " + request.seasons.join(", ") : ""}</span>
-                    <span>{new Date(request.createdAt).toLocaleDateString("de-AT")}</span>
+                    <span>{new Date(request.createdAt).toLocaleDateString("de-AT")}{request.requestedBy ? " · von " + request.requestedBy : ""}</span>
                     <span>{request.sizeBytes !== null && request.sizeBytes !== undefined
                       ? request.downloadedBytes !== null && request.downloadedBytes !== undefined && progressVisible(request)
                         ? `${formatBytes(Math.min(request.downloadedBytes, request.sizeBytes))} / ${formatBytes(request.sizeBytes)}`
@@ -679,7 +685,7 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
               <Poster path={selected.poster} title={selected.title} />
               <div>
                 <StatusBadge tone={tone(selected.state)}>{stateText[selected.state] || "Status unbekannt"}</StatusBadge>
-                <p className="muted">{selected.type === "movie" ? "Film" : "Serie"} · {new Date(selected.createdAt).toLocaleDateString("de-AT")}</p>
+                <p className="muted">{selected.type === "movie" ? "Film" : "Serie"} · {new Date(selected.createdAt).toLocaleDateString("de-AT")}{selected.requestedBy ? " · angefragt von " + selected.requestedBy : ""}</p>
                 <p>{selected.sizeBytes != null ? `Dateigröße ${formatBytes(selected.sizeBytes)}` : "Dateigröße noch nicht gemeldet"}</p>
                 {requestLinks(selected)}
               </div>
@@ -690,6 +696,12 @@ function ActiveRequests({ onNavigate, jellyfinUrl }: { onNavigate?: (view: strin
               ))}
             </ol>
             <p className="notice">{requestJourney(selected.state, selected.progress).reason}</p>
+            {selected.state === "declined" && selected.decision && (
+              <p className="muted">
+                Abgelehnt am {new Date(selected.decision.at).toLocaleDateString("de-AT")}
+                {selected.decision.reason ? <> · Begründung: {selected.decision.reason}</> : " · ohne Begründung"}
+              </p>
+            )}
             {selected.state === "library-sync" && <button disabled={syncBusy} onClick={() => void sync()}>Bibliothek jetzt abgleichen</button>}
             <div className="request-detail-tools">
               <QualityEditor requestId={selected.id} onChange={refresh} />

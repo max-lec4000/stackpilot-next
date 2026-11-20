@@ -74,6 +74,23 @@ Heimnetz, nicht über die HTTPS-Adresse.
 **System → Updates & Sicherungen → Neue Version prüfen → Installieren**. StackPilot startet kurz neu,
 Medien-Container laufen weiter.
 
+### Docker-Wächter
+StackPilot spricht Docker nur über den Docker-Wächter an (eigener Dienst
+`stackpilot-docker-guard`). Er lässt nur die nötigen Aufrufe durch; neue Container dürfen nur
+die Datenordner des Stacks einbinden. Anzeige: **System → Updates & Sicherungen →
+Docker-Wächter** (Modus, Zahl der Aufrufe, letzte Verstöße, erlaubte Ordner).
+
+- Nach Installation oder Update steht er auf **Beobachten**: Er protokolliert nur, was er
+  sperren würde. Erst wenn dort über einige Tage – mit Updates, Wartung und Sicherungen –
+  „0 wären gesperrt worden“ steht, **Jetzt sperren** drücken. StackPilot startet dabei neu,
+  und das Serverkonto von StackPilot verliert die Gruppe `docker` (`docker …` dort dann nur
+  noch mit `sudo`).
+- Lockern oder ausschalten geht nur am Server:
+  `sudo /opt/stackpilot/app/deploy/docker-guard.sh observe` bzw. `off`; Zustand:
+  `… docker-guard.sh status`. Ein ausgeschalteter Wächter bleibt auch nach Updates aus.
+- Die Zähler beginnen nach jedem Neustart des Wächters neu; Verstöße stehen zusätzlich im
+  Journal: `journalctl -u stackpilot-docker-guard`.
+
 ### Dienstschlüssel erneuern
 
 Unter **System → Apps & Container → Dienst → Details → API-Schlüssel erneuern** das

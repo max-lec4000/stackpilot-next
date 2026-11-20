@@ -116,3 +116,28 @@ export function checkNetwork(body) {
 export function checkExec(body) {
   return body?.Privileged ? ["exec privileged"] : [];
 }
+
+// Ordner, die nie (auch nicht teilweise) für Einbindungen freigegeben werden. Ein gemeldeter
+// Datenordner darf weder darin liegen noch sie enthalten.
+// /var und /opt ganz: dort liegen Paket-, System- und Programmdaten, die root ausführt.
+const SYSTEM = ["/bin", "/boot", "/dev", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/opt", "/proc", "/root", "/run",
+  "/sbin", "/snap", "/sys", "/tmp", "/usr", "/var", "/lost+found"];
+const under = (p, base) => p === base || p.startsWith(base === "/" ? "/" : base + "/");
+
+/**
+ * Ist ein von StackPilot gemeldeter Datenordner als Einbindungsziel zulässig?
+ * real: Pfad nach Auflösen von Verknüpfungen (null = existiert nicht); homes: Home-Ordner der
+ * Benutzerkonten. Liefert einen Grund oder null.
+ */
+export function rootProblem(p, { real, homes = [] }) {
+  if (typeof p !== "string" || !p.startsWith("/")) return "kein absoluter Pfad";
+  const c = clean(p);
+  if (c !== (p.replace(/\/+$/, "") || "/")) return "nicht bereinigt";
+  if (c.split("/").length < 3) return "zu weit oben";
+  if (/\/\./.test(c)) return "versteckter Ordner";
+  if (real === null) return "existiert nicht";
+  if (real !== c) return "über eine Verknüpfung";
+  for (const s of SYSTEM) if (under(c, s) || under(s, c)) return `Systemordner ${s}`;
+  for (const h of homes) if (h && h !== "/" && under(h, c)) return "Home-Ordner";
+  return null;
+}

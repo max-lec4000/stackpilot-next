@@ -119,3 +119,10 @@
 .ui-confirm { margin-top: 0.75rem; display: grid; gap: 0.5rem; }
 .ui-confirm-text p { margin: 0; }
 .vpn-profile-list .ui-confirm { flex-basis: 100%; margin-top: 0.25rem; }
+
+/* Docker-Wächter (System → Updates & Sicherungen) */
+.docker-guard .badge-ok { border-color: var(--success); color: var(--success); }
+.docker-guard .badge-warn { border-color: var(--warning); color: var(--warning); }
+.docker-guard .success { color: var(--success); }
+.docker-guard-list { margin: 0.5rem 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: var(--font-sm, 0.9rem); }
+.docker-guard-list code, .docker-guard code { overflow-wrap: anywhere; }

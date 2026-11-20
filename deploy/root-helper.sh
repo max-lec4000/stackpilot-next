@@ -23,6 +23,10 @@ case "${1:-}" in
   stackpilot-update)
     exec bash "$APP/deploy/update.sh"
     ;;
+  docker-guard-enforce)
+    # Nur verschärfen: Lockern geht ausschließlich mit sudo am Server.
+    exec bash "$APP/deploy/docker-guard.sh" enforce
+    ;;
   couchdeck-remove)
     bash "$APP/apps/couchdeck/deploy/uninstall.sh"
     ;;

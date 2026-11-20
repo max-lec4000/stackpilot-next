@@ -15,7 +15,8 @@
 #      kann ihren eigenen Code nicht verändern)
 #   4. Systemdienst stackpilot.service – läuft als normaler Benutzer, startet beim Booten
 #   5. Eng begrenzte Root-Hilfe: Der StackPilot-Benutzer darf genau die Aufträge aus
-#      deploy/root-helper.sh starten (Couchdeck installieren/entfernen), sonst nichts
+#      deploy/root-helper.sh starten (Couchdeck installieren/entfernen), sonst nichts;
+#      Docker-Wächter (deploy/docker-guard.sh): Docker nur über eine Erlaubnisliste
 #   6. Tailscale (falls vorhanden): StackPilot darf Serve/Funnel ohne sudo einrichten
 #
 # Erneutes Ausführen aktualisiert eine bestehende Installation; Zustand und Daten bleiben.
@@ -70,7 +71,9 @@ if ! docker compose version >/dev/null 2>&1; then
   apt-get install -y docker.io docker-compose-v2
 fi
 systemctl enable --now docker
-usermod -aG docker "$ADMIN"
+# Gruppe docker = direkter Docker-Zugang. Sperrt der Docker-Wächter, bleibt sie weg.
+GUARD_MODE="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("mode",""))' "$ETC/docker-guard.json" 2>/dev/null || true)"
+[ "$GUARD_MODE" = enforce ] || usermod -aG docker "$ADMIN"
 # Gemeinsame Gruppe für die Übergabe an Couchdeck. Sie entsteht schon jetzt, damit der
 # Dienst beim Start Mitglied ist – auch wenn Couchdeck erst später dazukommt.
 groupadd -f couchdeck-link
@@ -191,7 +194,7 @@ KillMode=mixed
 WantedBy=multi-user.target
 EOF
 
-echo "==> 5/6 Begrenzte Root-Hilfe"
+echo "==> 5/6 Begrenzte Root-Hilfe und Docker-Wächter"
 cat > /etc/systemd/system/stackpilot-root@.service <<EOF
 # Verwaltet von StackPilot (install.sh). Führt genau einen vordefinierten Auftrag aus.
 [Unit]
@@ -210,13 +213,17 @@ polkit.addRule(function (action, subject) {
   var unit = action.lookup("unit");
   var verb = action.lookup("verb");
   if (verb === "start" &&
-      /^stackpilot-root@(couchdeck-install|couchdeck-install-youtube|couchdeck-remove|stackpilot-update)\\.service\$/.test(unit)) {
+      /^stackpilot-root@(couchdeck-install|couchdeck-install-youtube|couchdeck-remove|stackpilot-update|docker-guard-enforce)\\.service\$/.test(unit)) {
     return polkit.Result.YES;
   }
 });
 EOF
 chmod 644 /etc/polkit-1/rules.d/49-stackpilot.rules
 systemctl daemon-reload
+# Docker-Wächter: StackPilot spricht Docker nur über ihn an (erstes Einrichten: beobachten).
+# Modus ändern: sudo /opt/stackpilot/app/deploy/docker-guard.sh status|observe|enforce|off
+chmod 755 "$PREFIX/app/deploy/docker-guard.sh"
+bash "$PREFIX/app/deploy/docker-guard.sh" apply --no-restart
 
 echo "==> 6/6 Tailscale"
 if [ "$WITH_TAILSCALE" = yes ] && ! command -v tailscale >/dev/null; then

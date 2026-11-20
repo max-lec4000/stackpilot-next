@@ -43,3 +43,22 @@ test("Sammelupdates nehmen nur aktuell geprüfte, stabile Ziele an und melden de
     { name: "Couchdeck", phase: "started" },
   ]);
 });
+
+test("Seerr-Prüfung nach dem Wechsel wartet, bis Seerr den Schlüssel wieder annimmt", async () => {
+  const engine = { store: { activeLease: () => false }, vault: { get: () => null } };
+  const m = new ContainerMaintenance({ engine }, { retryDelay: 0 });
+  let calls = 0;
+  const s = (answers) => ({
+    wait: async () => {},
+    additional: { seerr: async () => { const a = answers[Math.min(calls++, answers.length - 1)]; if (a instanceof Error) throw a; return a; } },
+  });
+  const http = (code) => Error(`Seerr: Dienstanfrage /api/v1/auth/me fehlgeschlagen (HTTP ${code}).`);
+  await m.verify(s([http(403), http(403), http(503), { id: 1 }]), "Seerr");
+  assert.equal(calls, 4);
+  calls = 0;
+  await assert.rejects(m.verify(s([http(403)]), "Seerr"), /HTTP 403/);
+  assert.equal(calls, 20);
+  calls = 0;
+  await assert.rejects(m.verify(s([Error("Zeitüberschreitung")]), "Seerr"), /Zeitüberschreitung/);
+  assert.equal(calls, 1);
+});

@@ -14,6 +14,7 @@ import { peopleRoutes } from "./domains/people/people.routes.js";
 import { couchdeckRoutes } from "./domains/couchdeck/couchdeck.routes.js";
 import { setupRoutes } from "./domains/system/setup.routes.js";
 import { systemRoutes } from "./domains/system/system.routes.js";
+import { dockerGuardRoutes } from "./domains/system/docker-guard.routes.js";
 
 const h = () => "ok";
 
@@ -146,7 +147,7 @@ test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen",
   const all = new RouteRegistry()
     .add(updateRoutes({})).add(vpnRoutes({})).add(viewerRequestRoutes({})).add(remoteRoutes({}))
     .add(safetyRoutes({})).add(downloadRoutes({})).add(qualityRoutes({})).add(requestRoutes({}))
-    .add(libraryRoutes({})).add(peopleRoutes({})).add(couchdeckRoutes({})).add(setupRoutes({})).add(systemRoutes({}));
+    .add(libraryRoutes({})).add(peopleRoutes({})).add(couchdeckRoutes({})).add(setupRoutes({})).add(systemRoutes({})).add(dockerGuardRoutes({}));
   const list = all.list();
   assert.ok(list.length >= 150, `nur ${list.length} Routen`);
   for (const r of list) if (r.method === "GET") assert.equal(r.guard, "session", r.path);
@@ -161,4 +162,12 @@ test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen",
   ].sort());
   // Schlüsselwechsel verlangt zusätzlich „OK“ (vor dem Passwort, verbraucht keinen Versuch)
   assert.equal(all.find("POST", "/api/credentials/rotate-sonarr").confirm, "Schlüsselwechsel zuerst bestätigen.");
+});
+
+test("Docker-Wächter: Anzeige mit Sitzung, Sperren nur mit OK", () => {
+  const r = new RouteRegistry().add(dockerGuardRoutes({}));
+  assert.deepEqual(Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard])), {
+    "GET /api/docker-guard": "session",
+    "POST /api/docker-guard/enforce": "ok",
+  });
 });

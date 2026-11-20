@@ -26,6 +26,8 @@ import { Viewers } from "./identity/viewers.js";
 import { RemoteJourney } from "./remote-journey.js";
 import { Notifications } from "./notifications.js";
 import { ServiceUpdates } from "./service-updates.js";
+import { DockerGuardStatus, writeGuardRoots } from "./docker-guard-client.js";
+import { dockerGuardRoutes } from "./domains/system/docker-guard.routes.js";
 import { AppUpdates } from "./app-updates.js";
 import { ContainerMaintenance } from "./container-maintenance.js";
 import { JellyfinMaintenance } from "./identity/jellyfin-maintenance.js";
@@ -103,6 +105,9 @@ export function inventoryMiddleware(options = {}) {
   };
   const operations = new Operations(hub, activity);
   const serviceUpdates = new ServiceUpdates(state);
+  const dockerGuard = new DockerGuardStatus(state);
+  // Docker-Wächter: Datenordner der Stacks melden (nur wenn StackPilot über ihn läuft)
+  try { writeGuardRoots(state); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
   const appUpdates = new AppUpdates(installer());
   if (options.background !== false) appUpdates.start();
   const notifications = new Notifications(state, operations, hub);
@@ -215,6 +220,7 @@ export function inventoryMiddleware(options = {}) {
   // Alles andere läuft noch über die Bedingungskette unten.
   const routes = new RouteRegistry()
     .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
+    .add(dockerGuardRoutes({ dockerGuard }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
     .add(viewerRequestRoutes({ viewerRequests }))
     .add(remoteRoutes({

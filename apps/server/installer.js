@@ -18,6 +18,7 @@ import { Services } from "./service-api.js";
 import { probeVpn } from "./vpn.js";
 import { randomUUID } from "node:crypto";
 import { bindAddress } from "./access.js";
+import { writeGuardRoots } from "./docker-guard-client.js";
 export function needsNetworkUpgrade(plan) {
   return plan.networkLayout !== networkLayout;
 }
@@ -803,6 +804,8 @@ export class DeploymentEngine extends RetirementEngine {
       op.status = "running";
       this.store.saveOperation(op);
       await this.validate(plan, true);
+      // Neue Datenordner dem Docker-Wächter melden, bevor Container angelegt werden
+      try { writeGuardRoots(this.store); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
       for (const initial of op.steps) {
         op = this.store.operation(id);
         if (!this.store.owns(this.owner))

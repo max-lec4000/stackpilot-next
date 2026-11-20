@@ -260,6 +260,29 @@ Container-Umzug auf dem Host einsetzen (erst beobachten, dann sperren) – das b
 Sicherheitsgewinn ohne Umzug; (b) StackPilot-Container in 7.7 mit eigenem AppArmor-Profil für
 systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
 
+### Docker-Wächter einsatzfertig (20.11.2026)
+
+- Eigener Dienst `stackpilot-docker-guard` (root, stark abgeschottet: nur Unix-Sockets,
+  schreibgeschütztes System, nur CHOWN/DAC_READ_SEARCH), Socket
+  `/run/stackpilot-docker-guard/docker.sock` für die Gruppe `stackpilot-docker`.
+- `deploy/docker-guard.sh status|observe|enforce|off|apply`; `install.sh` (also auch jedes
+  Update) richtet ihn ein: erstes Mal **beobachten**, danach bleibt der gespeicherte Modus
+  (auch „aus“). Sperren: zusätzlich ohne Gruppe `docker` für den StackPilot-Benutzer.
+- Verschärfen auch aus StackPilot (Root-Hilfe `docker-guard-enforce`, OK), lockern nur mit sudo.
+- Erlaubte Ordner: Zustandsordner fest, dazu die Daten-/Konfigurationsordner aller
+  Einrichtungen, die StackPilot in `docker-guard-roots.json` meldet; der Wächter prüft jeden
+  (keine System- oder Home-Ordner selbst, nicht unter /var, /opt, /etc …, keine Verknüpfung).
+- Anzeige unter System → Updates & Sicherungen → Docker-Wächter (Zähler, Verstöße, Ordner,
+  „Jetzt sperren“).
+- sp-test: Update-Weg über `install.sh` → beobachten (1764 Aufrufe, 0 Verstöße); Sperren
+  über StackPilot (Root-Hilfe), Prozess ohne Gruppe docker, direkter Zugang verweigert,
+  Angriff über den Wächter gesperrt; Abläufe im Sperrmodus (Streamyfin, Schutztest, Seerr
+  zurück und wieder vor) mit 0 Sperrungen; erneutes Update behält „sperren“; „aus“ bleibt
+  nach Update aus; Anzeige im Browser in beiden Modi. 363 Tests.
+- Dabei gefunden und behoben (unabhängig vom Wächter): Seerr-Prüfung nach Wechsel gab
+  sofort auf, während Seerr noch lud (jetzt bis zu 40 s Wiederholung); eine unterbrochene
+  Rückkehr ließ sich nur bei Jellyfin fortsetzen (jetzt für alle Apps).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

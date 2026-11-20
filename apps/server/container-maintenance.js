@@ -35,10 +35,21 @@ export class ContainerMaintenance {
     this.catalog = options.catalog || catalogFile.services;
     this.jellyfin = options.jellyfin;
     this.run = options.run || ((command, args, timeout) => execute(command, args, { timeout }));
+    this.retryDelay = options.retryDelay ?? 2000;
     this.verify = options.verify || (async (s, name) => {
       await s.wait(name);
       if (name === "Seerr") {
-        const actor = await s.additional.seerr("/auth/me");
+        // Seerr antwortet schon, bevor es seine Einstellungen geladen hat; in dieser Zeit lehnt
+        // es den API-Schlüssel kurz mit 401/403 ab. Deshalb eine Weile erneut versuchen.
+        let actor, last;
+        for (let i = 0; i < 20 && !actor; i++) {
+          try { actor = await s.additional.seerr("/auth/me"); } catch (e) {
+            last = e;
+            if (!/HTTP (401|403|5\d\d)/.test(e.message)) throw e;
+            await new Promise((r) => setTimeout(r, this.retryDelay));
+          }
+        }
+        if (!actor && last) throw last;
         if (!Number.isSafeInteger(actor?.id)) throw Error("Seerr-Anmeldung nicht bestätigt.");
       }
     });
@@ -339,7 +350,9 @@ export class ContainerMaintenance {
         }
       }
     }, async () => {
-      if (!rollback || name !== "Jellyfin") return this.hub.context(names);
+      // Eine unterbrochene Rückkehr kann den Container schon auf das alte Image gestellt haben –
+      // dann gegen das tatsächlich laufende der beiden Images prüfen (gilt für alle Apps).
+      if (!rollback) return this.hub.context(names);
       const plan = this.engine.current()?.plan;
       if (!plan?.spec.selected.includes(name)) return this.hub.context(names);
       const status = this.status(plan, name);

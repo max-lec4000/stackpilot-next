@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { routeAllowed, checkCreate, checkExec, checkVolume, checkNetwork, bare, clean } from "./policy.js";
+import { routeAllowed, checkCreate, checkExec, checkVolume, checkNetwork, bare, clean, rootProblem } from "./policy.js";
 
 const roots = ["/var/lib/stackpilot", "/home/u/stackpilot-data", "/home/u/stackpilot-data-appdata"];
 test("Wächter: nur bekannte Aufrufe", () => {
@@ -49,4 +49,21 @@ test("Wächter: keine Umwege über Pfade, Verknüpfungen, Volumes und Netzwerke"
   assert.deepEqual(checkNetwork({ Name: "n", Driver: "bridge" }), []);
   assert.deepEqual(checkNetwork({ Name: "n" }), []);
   assert.deepEqual(checkNetwork({ Name: "n", Driver: "macvlan" }), ["Netzwerk-Treiber macvlan"]);
+});
+
+test("Wächter: gemeldete Datenordner nur außerhalb von System- und Home-Ordnern", () => {
+  const homes = ["/root", "/home/u", "/var/lib/postgresql", "/nonexistent"];
+  const ok = (p) => rootProblem(p, { real: p, homes });
+  for (const p of ["/home/u/stackpilot-data", "/home/u/stackpilot-data-appdata", "/mnt/nas/medien", "/srv/media", "/data/film"])
+    assert.equal(ok(p), null, p);
+  const bad = {
+    "/": "zu weit oben", "/mnt": "zu weit oben", "/home/u": "Home-Ordner", "/home": "zu weit oben",
+    "/var/lib": "Systemordner /var", "/var/lib/docker/volumes": "Systemordner /var", "/etc/nginx": "Systemordner /etc",
+    "/opt/stackpilot/app": "Systemordner /opt", "/usr/local/bin": "Systemordner /usr", "/home/u/.ssh": "versteckter Ordner",
+    "/home/u/x/../.ssh": "nicht bereinigt", "relativ/pfad": "kein absoluter Pfad", "/run/user/1000": "Systemordner /run",
+  };
+  for (const [p, why] of Object.entries(bad)) assert.equal(ok(p), why, p);
+  assert.equal(rootProblem("/mnt/nas/x", { real: "/etc", homes }), "über eine Verknüpfung");
+  assert.equal(rootProblem("/mnt/nas/x", { real: null, homes }), "existiert nicht");
+  assert.equal(rootProblem(42, { real: null, homes }), "kein absoluter Pfad");
 });

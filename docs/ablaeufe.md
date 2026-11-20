@@ -199,6 +199,12 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 - Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
   „OK“ oder „Abbrechen“.
 - Neue Quelle (Indexer): **Qualität & Quellen → Quellen** → Anbieter wählen → testen → speichern.
+- **Untertitel**: **Qualität & Quellen → Untertitel** → Sprachen ankreuzen (z. B. Deutsch,
+  Englisch) → Anbieter wählen (ohne Konto: eingebettete Untertitel, Gestdown für Serien,
+  YIFY für Filme; **OpenSubtitles.com** mit kostenlosem Konto hat die meisten deutschen) →
+  optional „auch für vorhandene ohne Untertitelprofil“ → **Speichern** → **OK**. StackPilot
+  legt in Bazarr ein eigenes Sprachprofil „StackPilot“ an und macht es zum Standard für neue
+  Filme und Serien; andere Profile und Anbieter bleiben. Der Vorzustand wird einmalig gesichert.
 
 ## Neue App ins Projekt aufnehmen (Entwicklung)
 1. Image mit Digest in `packages/catalog/services.json`.

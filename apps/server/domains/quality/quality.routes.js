@@ -1,6 +1,6 @@
 // Qualität & Quellen: gemeinsame Größenregeln (Filmstandard) und Suchquellen (Prowlarr).
 // Quellen-Aktionen (Test, Ein/Aus, Entfernen) prüfen ihre Bestätigung im Fachteil.
-export function qualityRoutes({ sources, sizeLimits }) {
+export function qualityRoutes({ sources, sizeLimits, subtitles }) {
   return [
     { method: "GET", path: "/api/media/size-settings", guard: "session", handler: () => sizeLimits.settings() },
     { method: "POST", path: "/api/media/size-settings", guard: "ok", confirm: "Größenregel mit OK bestätigen.",
@@ -11,5 +11,9 @@ export function qualityRoutes({ sources, sizeLimits }) {
     { method: "POST", path: "/api/sources/save", guard: "ok", confirm: "Geprüfte Quelle mit OK bestätigen.",
       handler: ({ body }) => sources.save(body) },
     { method: "POST", path: "/api/sources/action", guard: "session", handler: ({ body }) => sources.action(body) },
+    // Untertitel (Bazarr, 7.3a)
+    { method: "GET", path: "/api/subtitles", guard: "session", handler: () => subtitles.read() },
+    { method: "POST", path: "/api/subtitles", guard: "ok", confirm: "Untertitel-Einstellungen mit OK bestätigen.",
+      handler: ({ body }) => subtitles.save(body) },
   ];
 }

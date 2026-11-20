@@ -26,10 +26,11 @@ export const sections: Section[] = [
     pages: [{ id: "", title: "Downloads", view: "Downloads" }] },
   { id: "personen", title: "Personen", icon: "remote", description: "Zuschauer einladen, Anmeldung und Profile verwalten.",
     pages: [{ id: "", title: "Zuschauer", view: "Verwaltung", area: "people" }] },
-  { id: "qualitaet", title: "Qualität & Quellen", icon: "profiles", description: "Größenregeln, Profile und Suchquellen.",
+  { id: "qualitaet", title: "Qualität & Quellen", icon: "profiles", description: "Größenregeln, Profile, Suchquellen und Untertitel.",
     pages: [
       { id: "", title: "Medienprofile", view: "Verwaltung", area: "profiles" },
       { id: "quellen", title: "Quellen", view: "Verwaltung", area: "sources" },
+      { id: "untertitel", title: "Untertitel", view: "Verwaltung", area: "subtitles" },
     ] },
   { id: "speicher", title: "Speicher", icon: "backups", description: "Bibliotheksdateien prüfen und gezielt aufräumen.",
     pages: [{ id: "", title: "Aufräumen", view: "Verwaltung", area: "media-files" }] },

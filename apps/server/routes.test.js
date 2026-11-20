@@ -127,6 +127,8 @@ test("Qualität & Quellen: Schutzstufen", () => {
     "POST /api/sources/test": "session",
     "POST /api/sources/save": "ok",
     "POST /api/sources/action": "session",
+    "GET /api/subtitles": "session",
+    "POST /api/subtitles": "ok",
   });
 });
 

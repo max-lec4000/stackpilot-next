@@ -16,6 +16,7 @@ import { ConnectionChecks } from "./ConnectionChecks";
 import { DeploymentCheck } from "./DeploymentCheck";
 import { Workspace } from "./Workspace";
 import { ServerCheck, get, type Inventory, type Storage } from "./ServerCheck";
+import { SubtitleSettings } from "./SubtitleSettings";
 const areas = [
   { id: "media-files", group: "Betrieb", icon: "▤", title: "Medienbestand", description: "Bibliotheksdateien prüfen und gezielt löschen.", color: "sage" },
   {
@@ -178,7 +179,7 @@ export function Administration({
   /** Nur den Inhalt des Bereichs zeigen (neue Navigation, Phase 7.0b) */
   bare?: boolean;
 }) {
-  const extra = ["viewer-requests", "people", "couchdeck"];
+  const extra = ["viewer-requests", "people", "couchdeck", "subtitles"];
   const panel = areas.some((a) => a.id === area) || (bare && extra.includes(area)) ? area : "";
   const [menuOpen, setMenuOpen] = useState(false);
   const [networkUpgrade, setNetworkUpgrade] = useState(false);
@@ -220,6 +221,7 @@ export function Administration({
     if (panel === "profiles") return <SizeSettings />;
     if (panel === "media-files") return <SeriesRemoval />;
     if (panel === "sources") return <SourcesView />;
+    if (panel === "subtitles") return <SubtitleSettings />;
     if (panel === "safety") return <><VpnProfiles /><SafetyCheckView /></>;
     if (panel === "connections") return <ConnectionChecks />;
     if (panel === "diagnosis")

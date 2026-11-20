@@ -376,6 +376,24 @@ Zuschnitt 7.2: **a** Probleme/Ursachen und Zuordnung, **b** Seeding und Zeitplä
   danach abgelehnt, Wächter neu gestartet.
 - Phase 7.2 damit abgeschlossen.
 
+### Fortschritt 7.3a – Untertitel (20.11.2026)
+
+Zuschnitt 7.3: **a** Untertitel (Bazarr), **b** Zustand der Quellen, **c** Überblick Sprache und
+Standardqualität.
+
+- `subtitles.js`: Bazarr über `/system/settings` (Formular): eigenes Sprachprofil
+  „StackPilot“ (andere Profile bleiben), aktive Sprachen = gewählte + die anderer Profile,
+  Standardprofil für neue Serien/Filme, Anbieter (fremde bleiben), optional OpenSubtitles-
+  Konto; optional Profil für vorhandene Titel ohne Profil (`POST /series`, `/movies`).
+  Vorzustand einmalig im Tresor gesichert. OK, Auftragssperre, Rücklesen.
+- Neue Unterseite **Qualität & Quellen → Untertitel** (`SubtitleSettings.tsx`).
+- Befund sp-test: Bazarr 1.6.2 war völlig unkonfiguriert (keine Sprache, kein Profil, kein
+  Anbieter) – hat also nie etwas geladen; „podnapisi“ gibt es in dieser Version nicht mehr.
+- sp-test: 382 Tests; echtes Bazarr per Browser eingerichtet (Deutsch/Englisch, drei
+  Anbieter ohne Konto), Status „Aktiv“, Anbieterstatus „Good“; danach in den Ausgangszustand
+  zurückgesetzt. „Vorhandene zuweisen“ nur im Komponententest (Bazarr kennt in der VM noch
+  keine Titel).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

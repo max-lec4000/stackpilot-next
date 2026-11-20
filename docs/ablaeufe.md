@@ -198,6 +198,11 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   braucht einen zweiten Schlüssel (im Mullvad-Konto neuen Schlüssel erzeugen, bis 5).
 - Updates (StackPilot und Container) brauchen kein Passwort mehr: Zielversion prüfen,
   „OK“ oder „Abbrechen“.
+- **Standardqualität für neue Anfragen**: **Qualität & Quellen → Medienprofile** → je Filme/Serien
+  ein Profil wählen → **Als Standard speichern** → **OK** (gilt auch für Anfragen aus Streamyfin
+  und Couchdeck; bestehende Titel bleiben). Darunter aufklappbar alle Profile mit erlaubten
+  Qualitäten, Upgrades und Sprache. Ist die Größenregel für Filme aktiv, steuert sie den
+  Filmstandard. Interne StackPilot-Profile (Größe, Limits) stehen nicht zur Wahl.
 - Neue Quelle (Indexer): **Qualität & Quellen → Quellen** → Anbieter wählen → testen → speichern.
 - **Zustand der Quellen** (oben unter **Qualität & Quellen → Quellen**): je Quelle „In Ordnung“,
   „Zuletzt Fehler“, „Zeitweise gesperrt bis …“ (Prowlarr pausiert ausfallende Quellen) oder

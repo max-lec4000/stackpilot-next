@@ -10,7 +10,7 @@ export function seerrServiceAdmin(actor) {
 export const qualityPolicyKey = (plan, kind, id) =>
   `quality-policy:${plan.rootId || plan.id}:${kind}:${id}`;
 export const qualityDefaultKey = (plan, service) =>
-  `quality-default:${plan.rootId || plan.id}:${service}`;
+  `quality-default:${plan.rootId || plan.id}:${String(service).toLowerCase()}`;
 export function allowedQualities(items, enabled = true) {
   return (Array.isArray(items) ? items : []).flatMap((v) =>
     Array.isArray(v.items) && v.items.length

@@ -114,7 +114,7 @@ test("Fehlendes oder verändertes Profil fällt nicht auf das ursprüngliche Any
 test("Veränderter Seerr-Standard wird vor einer künftigen Anfrage gemeldet", async () => {
   const f = fixture();
   f.values.delete("quality-policy:r:movie:42");
-  f.values.set("quality-default:r:Radarr", { serverId: 0, profileId: 2 });
+  f.values.set("quality-default:r:radarr", { serverId: 0, profileId: 2 });
   f.server.activeProfileId = 1;
   await assert.rejects(
     () => requestQualityOptions(f.hub, f.s, plan, "movie", 50),

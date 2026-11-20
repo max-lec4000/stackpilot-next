@@ -160,3 +160,11 @@
 .source-health-list b, .source-health-list span { overflow-wrap: anywhere; }
 .source-health .success { color: var(--success); }
 .source-health .error, .source-health .warning { color: var(--warning); }
+
+/* Standardqualität (Phase 7.3c) */
+.quality-defaults { margin-bottom: 1rem; display: grid; gap: 0.6rem; }
+.quality-default { border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; display: grid; gap: 0.4rem; }
+.quality-default h4 { margin: 0; }
+.quality-profile-list { margin: 0.4rem 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
+.quality-profile-list b, .quality-profile-list span { overflow-wrap: anywhere; }
+.quality-defaults .success { color: var(--success); }

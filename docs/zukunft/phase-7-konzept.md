@@ -407,6 +407,22 @@ Standardqualität.
   angehalten → „Alle testen“ → Fehler mit Grund, Prowlarr sperrt sie zeitweise. Danach
   Testquelle und Schein-Indexer entfernt, Abgleich, Warteschlange leer.
 
+### Fortschritt 7.3c – Standardqualität und Sprache (20.11.2026)
+
+- `quality-defaults.js`: Profile von Radarr/Sonarr (erlaubte Qualitäten, Upgrades bis,
+  Sprache) und Seerr-Standard je App; Standard ändern über denselben Weg wie „auch für
+  künftige Anfragen“ (Seerr-Server PUT, zurücklesen, Vorgabe im Tresor). Bei aktiver
+  Größenregel steuert diese den Filmstandard (dann gesperrt). Interne Profile ausgeblendet.
+- **Fehler behoben (älter):** Der Tresor-Schlüssel der Standardqualität enthielt „Radarr“/
+  „Sonarr“; Tresornamen erlauben nur Kleinbuchstaben → „auch für künftige Anfragen“ hat Seerr
+  geändert, die Vorgabe aber nie gemerkt (Warnung). Schlüssel jetzt klein; Tests prüfen die
+  Namensregel.
+- Sprache: nur angezeigt (Profilsprache); Ändern bewusst in Radarr (Expertenzugang), weil es
+  alle Titel des Profils betrifft und Releases ohne passende Tonspur ausschließen kann.
+- sp-test: 388 Tests; echte Profile gelesen; Serien-Standard per Browser 4 → 6 → 4, Seerr
+  bestätigt; Endstand wie vorher.
+- Phase 7.3 damit abgeschlossen.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

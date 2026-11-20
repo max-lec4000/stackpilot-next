@@ -18,6 +18,7 @@ import { Workspace } from "./Workspace";
 import { ServerCheck, get, type Inventory, type Storage } from "./ServerCheck";
 import { SubtitleSettings } from "./SubtitleSettings";
 import { SourceHealth } from "./SourceHealth";
+import { QualityDefaults } from "./QualityDefaults";
 const areas = [
   { id: "media-files", group: "Betrieb", icon: "▤", title: "Medienbestand", description: "Bibliotheksdateien prüfen und gezielt löschen.", color: "sage" },
   {
@@ -219,7 +220,7 @@ export function Administration({
     if (panel === "couchdeck") return <CouchdeckView />;
     if (panel === "music") return <MusicLibrary />;
     if (panel === "remote") return <RemoteAccessView />;
-    if (panel === "profiles") return <SizeSettings />;
+    if (panel === "profiles") return <><QualityDefaults /><SizeSettings /></>;
     if (panel === "media-files") return <SeriesRemoval />;
     if (panel === "sources") return <><SourceHealth /><SourcesView /></>;
     if (panel === "subtitles") return <SubtitleSettings />;

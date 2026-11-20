@@ -128,6 +128,8 @@ test("Qualität & Quellen: Schutzstufen", () => {
     "POST /api/sources/save": "ok",
     "POST /api/sources/action": "session",
     "GET /api/subtitles": "session",
+    "GET /api/quality/defaults": "session",
+    "POST /api/quality/defaults": "ok",
     "GET /api/sources/health": "session",
     "POST /api/sources/test-all": "session",
     "POST /api/sources/sync": "session",

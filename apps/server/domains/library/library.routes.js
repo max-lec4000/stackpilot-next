@@ -25,7 +25,7 @@ async function poster(path) {
   return rawResponse(Buffer.concat(chunks), { "Content-Type": type });
 }
 
-export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview, seriesMonitoring }) {
+export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview, seriesMonitoring, playback, titleIdentify }) {
   const get = (path, handler) => ({ method: "GET", path, guard: "session", handler });
   const post = (path, handler) => ({ method: "POST", path, guard: "session", handler });
   const ok = (path, confirm, handler) => ({ method: "POST", path, guard: "ok", confirm, handler });
@@ -53,6 +53,14 @@ export function libraryRoutes({ hub, installer, importedReplacement, seriesRemov
     get("/api/media/series-monitoring", () => seriesMonitoring.list()),
     post("/api/media/series-monitoring", ({ body }) => seriesMonitoring.change(body)),
     ok("/api/media/series-monitoring/search", "Suche mit OK bestätigen.", ({ body }) => seriesMonitoring.search(body)),
+    // Medien → Wiedergaben (Paket 7.4)
+    get("/api/media/playback", () => playback.read()),
+    ok("/api/media/playback/stop", "Beenden mit OK bestätigen.", ({ body }) => playback.stop(body)),
+    ok("/api/media/playback/limit", "Bitrate-Grenze mit OK bestätigen.", ({ body }) => playback.setLimit(body)),
+    // Titel korrigieren (Jellyfin identifizieren, Paket 7.4)
+    get("/api/media/identify/search", ({ url }) => titleIdentify.search(q(url, "q"))),
+    post("/api/media/identify/candidates", ({ body }) => titleIdentify.candidates(body)),
+    ok("/api/media/identify/apply", "Zuordnung mit OK bestätigen.", ({ body }) => titleIdentify.apply(body)),
 
     post("/api/media/library/refresh", () => hub.library.run(true)),
     // Medien → Bibliotheken (7.4b)

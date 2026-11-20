@@ -14,6 +14,9 @@ import { SubtitleTitles } from "./subtitle-titles.js";
 import { StorageOverview } from "./storage-overview.js";
 import { LibraryOverview } from "./library-overview.js";
 import { SeriesMonitoring } from "./series-monitoring.js";
+import { Playback } from "./playback.js";
+import { TitleIdentify } from "./title-identify.js";
+import { LibraryCare } from "./library-care.js";
 import { StackBackupJob } from "./stack-backup-job.js";
 import { stackBackupRoutes } from "./domains/system/stack-backup.routes.js";
 import { storageRoutes } from "./domains/storage/storage.routes.js";
@@ -245,7 +248,7 @@ export function inventoryMiddleware(options = {}) {
   const routes = new RouteRegistry()
     .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
     .add(dockerGuardRoutes({ dockerGuard }))
-    .add(storageRoutes({ storageOverview: new StorageOverview(hub) }))
+    .add(storageRoutes({ storageOverview: new StorageOverview(hub), libraryCare: new LibraryCare(hub) }))
     .add(stackBackupRoutes({ stackBackup }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
     .add(viewerRequestRoutes({ viewerRequests }))
@@ -258,7 +261,7 @@ export function inventoryMiddleware(options = {}) {
     .add(downloadRoutes({ hub, guard, downloadIssues, downloadSettings }))
     .add(qualityRoutes({ sources, sizeLimits, subtitles: new Subtitles(hub), sourceHealth: operations.sourceHealth, qualityDefaults: new QualityDefaults(hub), qualityProfiles: new QualityProfiles(hub), subtitleTitles: new SubtitleTitles(hub) }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
-    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview: new LibraryOverview(hub), seriesMonitoring: new SeriesMonitoring(hub) }))
+    .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview: new LibraryOverview(hub), seriesMonitoring: new SeriesMonitoring(hub), playback: new Playback(hub), titleIdentify: new TitleIdentify(hub) }))
     .add(peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }))
     .add(couchdeckRoutes({ couchdeck }))
     .add(setupRoutes({ installer, executor }))

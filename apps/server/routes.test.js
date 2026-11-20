@@ -152,17 +152,17 @@ test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlange
     "request/approve", "request/cancel-season", "request/cancel", "film-limit", "quality",
     "season-transfer/replace", "season-transfer/remove", "season-transfer/pause", "episodes/delete-file",
     "series-limits", "replacement/start", "replacement/restore", "series-removal/execute", "movie-removal/execute",
-    "request/decline", "request/batch", "series-monitoring/search",
+    "request/decline", "request/batch", "series-monitoring/search", "playback/stop", "playback/limit", "identify/apply",
   ].map((p) => `POST /api/media/${p}`);
   for (const key of ok) assert.equal(table[key], "ok", key);
   for (const [key, guard] of Object.entries(table)) if (key.startsWith("GET ")) assert.equal(guard, "session", key);
   const sessionPosts = Object.entries(table).filter(([k, g]) => k.startsWith("POST ") && g === "session").map(([k]) => k).sort();
   assert.deepEqual(sessionPosts, [
-    "POST /api/media/libraries/scan", "POST /api/media/library/refresh", "POST /api/media/movie-removal/preview", "POST /api/media/releases",
+    "POST /api/media/identify/candidates", "POST /api/media/libraries/scan", "POST /api/media/library/refresh", "POST /api/media/movie-removal/preview", "POST /api/media/releases",
     "POST /api/media/replacement/preview", "POST /api/media/request", "POST /api/media/request/archive",
     "POST /api/media/research", "POST /api/media/series-monitoring", "POST /api/media/series-removal/preview",
   ]);
-  assert.equal(Object.keys(table).length, 47);
+  assert.equal(Object.keys(table).length, 53);
 });
 
 test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen", () => {
@@ -218,6 +218,8 @@ test("Speicher: Belegung mit Sitzung, Löschen verwaister Downloads nur mit OK",
   const r = new RouteRegistry().add(storageRoutes({}));
   assert.equal(r.find("GET", "/api/storage/overview").guard, "session");
   assert.equal(r.find("POST", "/api/storage/orphans/remove").guard, "ok");
+  for (const p of ["/api/storage/recycle-bin", "/api/storage/recycle-bin/empty", "/api/storage/duplicates/remove"]) assert.equal(r.find("POST", p).guard, "ok", p);
+  for (const p of ["/api/storage/recycle-bin", "/api/storage/duplicates", "/api/storage/retention"]) assert.equal(r.find("GET", p).guard, "session", p);
 });
 
 test("Gesamtsicherung: Lesen/Herunterladen mit Sitzung, Ändern nur mit OK", async () => {

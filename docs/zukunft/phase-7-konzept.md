@@ -528,6 +528,28 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   Testformat entfernt. Untertitel: Suche/Leerlauf und Bazarr-Aufruf geprüft; Ersetzen/Löschen
   nur in Tests (keine Titel in der VM). „Zugang erneuern“ nicht im Browser (keine Quelle in der VM).
 
+### Nachzug 7.4 – Wiedergaben, Titel korrigieren, Papierkorb, Duplikate, Aufbewahrung (20.11.2026)
+
+- `playback.js` + `PlaybackView.tsx` (**Medien → Wiedergaben**): Jellyfin `/Sessions` mit
+  Abspielart und TranscodeReasons (deutsch + Tipp), ohne IP; Beenden (`/Sessions/{id}/Playing/
+  Stop`, OK); `RemoteClientBitrateLimit` in `/System/Configuration` (OK, Rücklesen);
+  Hardwarebeschleunigung aus `/System/Configuration/encoding`.
+- `title-identify.js` + `TitleIdentify.tsx` (Bibliotheken): Suche, `/Items/RemoteSearch/Movie|
+  Series`, Ergebnis serverseitig (Token, 15 min), `/Items/RemoteSearch/Apply/{id}` nach OK,
+  Rücklesen der Kennungen.
+- `library-care.js` + `StorageCare.tsx`: Papierkorb (`/config/mediamanagement` recycleBin
+  `/data/papierkorb/filme|serien`, Ordner wird angelegt, Größe, Leeren nur des eigenen Ordners),
+  doppelte Fassungen (Jellyfin Filme/Folgen; gruppiert nach TMDb/IMDb bzw. Serie+Staffel+Folge;
+  nur vorhandene Dateien; verwaltete aus Radarr `/movie` bzw. Sonarr `/episodefile` bleiben;
+  Löschen mit OK + `/Library/Media/Updated`), Aufbewahrungs-Vorschläge (alle aktiven
+  Jellyfin-Nutzer, LastPlayedDate/Played, DateCreated).
+- Offen aus 7.4: Speicherziel (hängt an Phase 3 NAS).
+- sp-test: 432 Tests. Browser: Testfilm in zwei Fassungen (Zufallsdaten) → Jellyfin erkannt,
+  per „Titel korrigieren“ auf 1990 und zurück; Duplikat erkannt, 720p gelöscht; Papierkorb
+  Radarr ein/aus (in Radarr bestätigt); Bitrate-Grenze 20 Mbit/s und zurück. Laufende
+  Wiedergaben/Transcoding nur in Tests (keine abspielbaren Medien in der VM). Danach
+  Testdateien, Papierkorb-Ordner entfernt, Radarr-Aufbewahrungstage auf 7 zurück.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

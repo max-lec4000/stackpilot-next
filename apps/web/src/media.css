@@ -469,3 +469,17 @@
 .subtitle-title-subs { list-style: none; padding: 0; margin: 0.3rem 0; display: grid; gap: 0.35rem; }
 .subtitle-title-subs > li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; }
 .subtitle-title-subs > li span { overflow-wrap: anywhere; }
+.playback-list { list-style: none; padding: 0; margin: 0.75rem 0; display: grid; gap: 0.6rem; }
+.playback-list > li { display: grid; gap: 0.3rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.playback-list > li > button { justify-self: start; }
+.playback-list progress { width: 100%; height: 6px; }
+.playback-reasons { margin: 0; padding-left: 1.1rem; }
+.title-identify form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.identify-form label { display: flex; gap: 0.3rem; align-items: center; }
+.identify-candidates { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.5rem; }
+.identify-candidates > li { display: grid; gap: 0.3rem; padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; }
+.identify-candidates > li > button { justify-self: start; }
+.identify-candidates p { margin: 0; }
+.storage-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.5rem; }
+.storage-list > li { padding: 0.5rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.recycle-bin .couchdeck-actions { margin-top: 0.4rem; }

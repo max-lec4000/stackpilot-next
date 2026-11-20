@@ -174,6 +174,19 @@ Scanstatus und **Diese Bibliothek einlesen** (neue/geänderte Dateien, Metadaten
 **Alles einlesen und abgleichen** (Jellyfin-Scan, danach Seerr-Abgleich) und der letzte Scan.
 Darunter **Neu hinzugekommen**. Falsch erkannte Titel weiter in Jellyfin „Identifizieren“.
 
+Darunter **Titel korrigieren**: Titel suchen → aufklappen → Kandidaten aus TMDb/IMDb (Name,
+Jahr oder TMDb-Nummer ändern und **Neu suchen**) → **Diesen nehmen …** → **OK**. Jellyfin
+ersetzt Zuordnung, Bilder und Beschreibung; Radarr/Sonarr bleiben unverändert.
+
+## Medien → Wiedergaben
+
+Laufende Wiedergaben mit Person, Gerät, Fortschritt und Abspielart (direkt, nur Ton umgewandelt,
+umgewandelt). Beim Umwandeln steht der Grund in Alltagssprache dabei (z. B. eingebrannte
+Untertitel, HEVC auf altem Gerät, Bitrate über der Grenze) samt Tipp. **Beenden** → **OK**
+stoppt eine Wiedergabe. Unter **Unterwegs** die höchste Bitrate für Geräte außerhalb des
+Heimnetzes (unbegrenzt bis 80 Mbit/s) → **Speichern …** → **OK**; daneben, ob Jellyfin
+Hardwarebeschleunigung nutzt.
+
 ## Medien → Serien
 
 Alle Serien aus Sonarr mit „überwacht“, „beendet“ und fehlenden Folgen; Suchfeld oben. Serie
@@ -190,6 +203,20 @@ belegen per Hardlink keinen zusätzlichen Platz) und App-Daten (mindestens – O
 Container zählt StackPilot nicht mit). **Verwaiste Downloads**: fertige Downloads ohne Link in
 die Bibliothek und ohne offenen Import – **Samt Dateien löschen** → **OK**; StackPilot prüft
 vorher noch einmal. **Speicher → Aufräumen**: Serienbibliothek bereinigen (wie bisher).
+
+### Papierkorb, doppelte Fassungen, lange nicht gesehen
+
+- **Speicher → Belegung → Papierkorb**: je Filme/Serien **Einschalten …** mit 7–90 Tagen →
+  **OK**. Radarr/Sonarr verschieben gelöschte Dateien (auch bei Upgrades) dann nach
+  `<Datenordner>/papierkorb/filme|serien` und löschen sie nach der Frist. Größe wird angezeigt;
+  **Leeren …** → **OK** löscht sofort endgültig. Ein vorher selbst gesetzter Papierkorb-Ordner
+  wird angezeigt und erst beim Einschalten ersetzt.
+- **Speicher → Aufräumen → Doppelte Fassungen**: Titel, die Jellyfin mehrfach findet (gleicher
+  Film in zwei Ordnern, mehrere Dateien zu einem Film oder einer Folge). Die von Radarr/Sonarr
+  verwaltete Datei ist markiert und bleibt; zusätzliche **Löschen …** → **OK**.
+- **Speicher → Aufräumen → Lange nicht gesehen**: Filme, die seit 90 Tagen bis 2 Jahren niemand
+  angesehen hat (und die mindestens so lange da sind), größte zuerst. Nur Vorschläge; gelöscht
+  wird über die Anfrage des Films.
 
 ## Gesamtsicherung (ab 7.5)
 

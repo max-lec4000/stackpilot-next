@@ -5,6 +5,7 @@ import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
 import { ViewerRatings } from "./viewer-ratings.js";
 import { DownloadIssues } from "./download-issues.js";
+import { DownloadSettings } from "./download-settings.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { RouteRegistry, isRawResponse, rawOf } from "./routes.js";
@@ -94,6 +95,7 @@ export function inventoryMiddleware(options = {}) {
   const hub = new MediaHub(installer(), guard);
   const downloadIssues = new DownloadIssues(hub);
   hub.downloadIssues = downloadIssues;
+  const downloadSettings = new DownloadSettings(hub);
   if (options.background !== false) hub.library.start();
   const sources = new Sources(hub);
   const couchdeck = options.couchdeck || new Couchdeck(hub);
@@ -234,7 +236,7 @@ export function inventoryMiddleware(options = {}) {
       developmentUploadStatus, uploadDevelopmentReport, state,
     }))
     .add(safetyRoutes({ safety }))
-    .add(downloadRoutes({ hub, guard, downloadIssues }))
+    .add(downloadRoutes({ hub, guard, downloadIssues, downloadSettings }))
     .add(qualityRoutes({ sources, sizeLimits }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
     .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }))

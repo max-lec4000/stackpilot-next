@@ -169,6 +169,12 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
   **Anderen Treffer suchen** → **OK** (nur mit VPN): Download entfernen, Treffer sperren,
   automatisch Ersatz suchen – Dateien dieses Downloads werden gelöscht, schon Importiertes
   bleibt. Jeder Download in der Liste zeigt außerdem, zu welchem Film bzw. welcher Serie er gehört.
+- **Downloads → Seeding und Geschwindigkeit**: Seedingziel (Verhältnis und/oder Stunden; leer =
+  kein Ziel), danach **anhalten** oder **aus qBittorrent entfernen (Dateien bleiben)**;
+  Download-/Upload-Limit in KiB/s (0 = unbegrenzt); **Zeitplan** zum Drosseln (Von/Bis,
+  täglich/werktags/Wochenende, gedrosselte Werte). **Speichern** → Zusammenfassung → **OK**;
+  StackPilot liest die Werte aus qBittorrent zurück. „Samt Dateien löschen“ gibt es absichtlich
+  nicht – ein noch nicht übernommener Download wäre sonst weg.
 - VPN-Test: **System → VPN & Ausfallsperre → Prüfauftrag starten**.
 - VPN je Dienst: **System → VPN & Ausfallsperre → VPN je Dienst**. Pro Dienst ein
   Auswahlmenü: **qBittorrent** (Gluetun) – Umstellen nach „OK“: neue Dateien, Gluetun/

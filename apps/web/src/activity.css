@@ -112,3 +112,14 @@
 .download-issue-list > li > button { justify-self: start; }
 .download-row-media { margin: 0 0 0.2rem; font-size: var(--font-sm); }
 .download-row-media b { overflow-wrap: anywhere; }
+
+/* Downloads → Seeding und Geschwindigkeit (Phase 7.2b) */
+.download-settings-box { margin: 0 0 1rem; }
+.download-settings { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+.download-settings fieldset { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.6rem 0.9rem; }
+.download-settings fieldset > p { flex-basis: 100%; margin: 0; }
+.download-settings label { display: grid; gap: 0.25rem; }
+.download-settings label.person-check { display: inline-flex; flex-basis: 100%; }
+.download-settings input[type="number"] { width: 8rem; }
+.download-settings .success { color: var(--success); }
+.download-settings > button { justify-self: start; }

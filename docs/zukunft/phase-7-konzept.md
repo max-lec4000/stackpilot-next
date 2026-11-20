@@ -352,6 +352,18 @@ Zuschnitt 7.2: **a** Probleme/Ursachen und Zuordnung, **b** Seeding und Zeitplä
   Geschützt fortsetzen → läuft; Kasten mit nachgestellten Daten inkl. OK-Ablauf. Echtes
   Ersetzen nicht in der VM (würde Downloads starten) – nur Komponententest.
 
+### Fortschritt 7.2b – Seeding und Geschwindigkeit (20.11.2026)
+
+- `download-settings.js`: liest/schreibt nur Seeding- (`max_ratio*`, `max_seeding_time*`,
+  `max_ratio_act` 0/1), Limit- (`dl_limit`, `up_limit`) und Zeitplan-Schlüssel
+  (`scheduler_*`, `schedule_*`, `alt_*_limit`) über `/app/setPreferences`; OK, unter
+  Auftragssperre, Rücklesen aller Schlüssel. Kein „mit Dateien löschen“ (Aktion 3); eine
+  vorhandene 2/3 wird angezeigt und erst beim Speichern ersetzt.
+- Oberfläche `DownloadSettings.tsx` (aufklappbar auf der Downloads-Seite) mit
+  Zusammenfassung in der OK-Leiste.
+- sp-test: 377 Tests; echtes qBittorrent: über den Browser gesetzt (2 / 72 h / entfernen,
+  Upload 5000, werktags 18:00–23:30 gedrosselt), zurückgelesen, Ausgangswerte wiederhergestellt.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

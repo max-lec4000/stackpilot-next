@@ -112,6 +112,8 @@ test("Downloads und Ausfallsperren-Test: Schutzstufen", () => {
     "GET /api/downloads/issues": "session",
     "POST /api/downloads/issues/retry": "session",
     "POST /api/downloads/issues/replace": "ok",
+    "GET /api/downloads/settings": "session",
+    "POST /api/downloads/settings": "ok",
   });
 });
 

@@ -8,6 +8,7 @@ import "./activity.css";
 import { usePreference, oneOf } from "./preferences";
 import { Problem } from "./Problem";
 import { DownloadIssues } from "./DownloadIssues";
+import { DownloadSettings } from "./DownloadSettings";
 type Session = {
   id: string;
   user: string;
@@ -352,6 +353,12 @@ export function DownloadsView() {
           </div>
         )}
         <DownloadIssues vpnConnected={data.vpn.state === "connected"} onChange={refresh} />
+        {data.configured && !data.clientUnavailable && (
+          <details className="download-settings-box">
+            <summary>Seeding und Geschwindigkeit</summary>
+            <DownloadSettings />
+          </details>
+        )}
         {message && <p role={failed ? "alert" : "status"} className={failed ? "error" : "notice"}>{message}</p>}
         {!data.configured ? <EmptyState title="Noch kein Downloadclient eingerichtet" description="Ein vollständig eingerichteter Downloadclient ist Voraussetzung für diese Ansicht." /> : <>
           <p className="downloads-page-count" role="status">{query.trim() ? `${data.total ?? "—"} Treffer · ${visible.length} auf dieser Seite` : `${data.torrents.length} Downloads auf dieser Seite`}</p>

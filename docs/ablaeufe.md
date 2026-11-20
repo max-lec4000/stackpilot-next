@@ -44,12 +44,20 @@ Im Heimnetz geht auch `http://<server>:8096` + Quick Connect, dann aber nur zu H
 zweiter Faktor wird neu eingerichtet. Bereits angemeldete Fernseher und Tablets bleiben angemeldet.
 
 ### Ein Gerät abmelden (verloren, verkauft)
-Jellyfin im Heimnetz als Admin öffnen → **Dashboard → Geräte** → Gerät löschen.
+**Personen → Zuschauer** → auf der Karte **Geräte** aufklappen → **Abmelden** → **OK**. Die App
+muss sich danach neu anmelden (Quick Connect). Sind auf dem Gerät weitere Zuschauer angemeldet,
+nennt die Rückfrage sie – sie werden mit abgemeldet. Geräte von Administratorkonten sind geschützt.
+
+### Altersfreigabe
+**Personen → Zuschauer** → auf der Karte **Altersfreigabe** (z. B. „bis FSK 12“) wählen, bei
+Bedarf **Filme und Serien ohne Altersangabe ausblenden** → **Speichern**. Jellyfin wendet das
+sofort an, auch auf schon angemeldeten Geräten; die Einstellung bleibt bei späteren
+Anmeldungen erhalten. Nur für Zuschauer, die sich schon einmal angemeldet haben.
 
 ### Zuschauer entfernen
 **Entfernen** auf der Karte des Zuschauers → mit **OK** bestätigen: Konto in Authentik
 deaktiviert, Authentik-Sitzungen beendet. Bereits angemeldete Jellyfin-Apps bleiben
-angemeldet – deren Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** löschen.
+angemeldet – deshalb vorher auf derselben Karte unter **Geräte** abmelden.
 
 ## Couchdeck (Bildschirm am Server)
 

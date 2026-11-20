@@ -1,10 +1,14 @@
 // Personen: Zuschauer (Einladen, Zurücksetzen, Entfernen, Passkeys, Anmeldeverbesserung),
 // Zuschauerprofile und die Einrichtung „Zugriff von unterwegs“ mit erstem Zuschauer.
-export function peopleRoutes({ viewers, viewerProfiles, remoteSetup }) {
+export function peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }) {
   return [
     { method: "GET", path: "/api/viewers", guard: "session", handler: () => viewers.list() },
     { method: "GET", path: "/api/viewer-profiles", guard: "session", handler: () => viewerProfiles.list() },
     { method: "POST", path: "/api/viewer-profiles", guard: "session", handler: ({ body }) => viewerProfiles.change(body) },
+    // Altersfreigabe je Zuschauer (Jellyfin-Richtlinie)
+    { method: "GET", path: "/api/viewer-ratings", guard: "session", handler: () => viewerRatings.list() },
+    { method: "POST", path: "/api/viewer-ratings", guard: "ok", confirm: "Altersfreigabe mit OK bestätigen.",
+      handler: ({ body }) => viewerRatings.change(body) },
     // Zwei Aktionen ändern die Anmeldung aller Zuschauer und verlangen das Passwort.
     { method: "POST", path: "/api/viewers/action", guard: "session", handler: async ({ body, manager, remoteAddress }) => {
       if (body.action === "invite") return viewers.invite(body.name, body.displayName);

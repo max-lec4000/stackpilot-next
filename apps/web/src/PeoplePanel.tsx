@@ -15,6 +15,8 @@ type Profiles = {
 };
 type RequestRow = { username: string; editable: boolean; reason?: string | null; needsAccount?: boolean; userId: number | null; permissions: number | null; movieAutoApprove: boolean; tvAutoApprove: boolean };
 type Setup = { status: string };
+type Rating = { username: string; linked: boolean; editable: boolean; reason?: string; maxAge?: number | null; blockUnrated?: boolean };
+type Device = { id: string; name: string; app: string; version: string; lastSeen: string | null; users: string[]; protected: boolean };
 
 const lastSeen = (iso: string | null) => {
   if (!iso) return "noch nie angemeldet";
@@ -32,6 +34,8 @@ export function PeoplePanel() {
     [list, setList] = useState<ViewerList | null>(null),
     [profiles, setProfiles] = useState<Profiles | null>(null),
     [requests, setRequests] = useState<RequestRow[] | null>(null),
+    [ratings, setRatings] = useState<{ levels: number[]; viewers: Rating[] } | null>(null),
+    [devices, setDevices] = useState<Device[] | null>(null),
     [invitation, setInvitation] = useState<Invitation | null>(null),
     [name, setName] = useState(""),
     [confirm, setConfirm] = useState<{ act: "reset" | "remove"; username: string } | null>(null);
@@ -41,14 +45,18 @@ export function PeoplePanel() {
     const s = await get<Setup>("/api/remote-setup").catch(() => null);
     setSetup(s);
     if (s?.status !== "completed") return;
-    const [v, p, r] = await Promise.allSettled([
+    const [v, p, r, a, d] = await Promise.allSettled([
       get<ViewerList>("/api/viewers"),
       get<Profiles>("/api/viewer-profiles"),
       get<{ viewers: RequestRow[] }>("/api/viewer-requests"),
+      get<{ levels: number[]; viewers: Rating[] }>("/api/viewer-ratings"),
+      get<{ devices: Device[] }>("/api/remote-access/devices"),
     ]);
     if (v.status === "fulfilled") setList(v.value); else setError((v.reason as Error).message);
     if (p.status === "fulfilled") setProfiles(p.value);
     if (r.status === "fulfilled") setRequests(r.value.viewers);
+    if (a.status === "fulfilled") setRatings(a.value);
+    if (d.status === "fulfilled") setDevices(d.value.devices);
   }, [setError]);
   useEffect(() => {
     void loadAll();
@@ -126,6 +134,18 @@ export function PeoplePanel() {
         {active.map((v) => (
           <PersonCard key={v.username} viewer={v} list={list!} profiles={profiles}
             request={requests?.find((r) => r.username === v.username) || null}
+            rating={ratings?.viewers.find((r) => r.username === v.username) || null} levels={ratings?.levels || []}
+            devices={devices ? devices.filter((d) => d.users.includes("spv_" + v.username)) : null}
+            onRating={(maxAge, blockUnrated) => run("rating:" + v.username, async () => {
+              const next = await action<Rating>("/api/viewer-ratings", { username: v.username, maxAge, blockUnrated, confirmation: "OK" });
+              setRatings((old) => old && { ...old, viewers: old.viewers.map((r) => (r.username === v.username ? next : r)) });
+              return `Altersfreigabe für „${v.username}“ gespeichert. Gilt sofort, auch auf angemeldeten Geräten.`;
+            })}
+            onRevoke={(device) => run("device:" + device.id, async () => {
+              await action("/api/remote-access/devices/revoke", { id: device.id, confirmation: "OK" });
+              setDevices((await get<{ devices: Device[] }>("/api/remote-access/devices")).devices);
+              return `„${device.name}“ abgemeldet.`;
+            })}
             busy={busy} confirm={confirm?.username === v.username ? confirm.act : null}
             onConfirm={(act) => setConfirm(act ? { act, username: v.username } : null)}
             onAction={(act) => viewerAction(act, v.username, act === "reset" || act === "remove" ? { confirmation: "OK" } : {})}
@@ -163,12 +183,19 @@ export function PeoplePanel() {
   );
 }
 
-function PersonCard({ viewer: v, list, profiles, request, busy, confirm, onConfirm, onAction, onProfile, onRequests }: {
+function PersonCard({ viewer: v, list, profiles, request, rating, levels, devices, busy, confirm, onConfirm, onAction, onProfile, onRequests, onRating, onRevoke }: {
   viewer: Viewer; list: ViewerList; profiles: Profiles | null; request: RequestRow | null; busy: string;
+  rating: Rating | null; levels: number[]; devices: Device[] | null;
+  onRating: (maxAge: number | null, blockUnrated: boolean) => unknown; onRevoke: (device: Device) => unknown;
   confirm: "reset" | "remove" | null; onConfirm: (act: "reset" | "remove" | null) => void;
   onAction: (act: string) => unknown; onProfile: (profileId: string | null) => unknown; onRequests: (row: RequestRow) => unknown;
 }) {
   const [choice, setChoice] = useState<string | null>(null);
+  const [age, setAge] = useState<string | null>(null), [unrated, setUnrated] = useState<boolean | null>(null);
+  const [revoke, setRevoke] = useState<Device | null>(null);
+  const savedAge = rating?.maxAge === null || rating?.maxAge === undefined ? "" : String(rating.maxAge);
+  const ageValue = age ?? savedAge, unratedValue = unrated ?? !!rating?.blockUnrated;
+  const ratingChanged = !!rating?.editable && (ageValue !== savedAge || unratedValue !== !!rating.blockUnrated);
   const pending = profiles?.pending?.username === v.username ? profiles.pending : null;
   const current = (pending ? pending.profileId : v.profileId) ?? "";
   const value = choice ?? current;
@@ -222,7 +249,58 @@ function PersonCard({ viewer: v, list, profiles, request, busy, confirm, onConfi
             </span>
           </label>
         )}
+
+        {rating && (rating.editable ? (
+          <div className="person-field">
+            <label>
+              Altersfreigabe{" "}
+              <select value={ageValue} disabled={!!busy} onChange={(e) => {
+                setAge(e.target.value);
+                if (e.target.value !== "" && savedAge === "" && unrated === null) setUnrated(true);
+              }}>
+                <option value="">Ohne Beschränkung</option>
+                {levels.map((l) => <option key={l} value={String(l)}>bis FSK {l}</option>)}
+              </select>
+            </label>
+            <label className="person-check">
+              <input type="checkbox" checked={unratedValue} disabled={!!busy} onChange={(e) => setUnrated(e.target.checked)} />
+              Filme und Serien ohne Altersangabe ausblenden
+            </label>
+            {ratingChanged && (
+              <button disabled={!!busy} onClick={() => {
+                void Promise.resolve(onRating(ageValue === "" ? null : Number(ageValue), unratedValue)).then(() => { setAge(null); setUnrated(null); });
+              }}>Speichern</button>
+            )}
+          </div>
+        ) : (
+          <p className="muted">Altersfreigabe: {rating.reason}</p>
+        ))}
       </div>
+
+      {devices && (
+        <details className="person-devices">
+          <summary>Geräte ({devices.length})</summary>
+          {!devices.length && <p className="muted">Keine angemeldeten Jellyfin-Geräte.</p>}
+          <ul>
+            {devices.map((d) => (
+              <li key={d.id}>
+                <span><b>{d.name}</b> <span className="muted">{[d.app, d.version].filter(Boolean).join(" ")}{d.lastSeen ? " · " + lastSeen(d.lastSeen) : ""}</span></span>
+                {d.protected ? <span className="muted">geschützt (Administratorkonto)</span>
+                  : revoke?.id !== d.id && <button disabled={!!busy} onClick={() => setRevoke(d)}>Abmelden</button>}
+                {revoke?.id === d.id && (
+                  <ConfirmBar label={`${d.name} abmelden`} busy={busy === "device:" + d.id} busyLabel="Wird abgemeldet …"
+                    onCancel={() => setRevoke(null)} onOk={() => Promise.resolve(onRevoke(d)).then(() => setRevoke(null))}>
+                    <p>
+                      <b>{d.name}</b> abmelden? Die App muss sich danach neu anmelden (z. B. mit Quick Connect).
+                      {d.users.length > 1 && <> Auf diesem Gerät sind auch {d.users.filter((u) => u !== "spv_" + v.username).map((u) => u.replace(/^spv_/, "")).join(", ")} angemeldet – sie werden ebenfalls abgemeldet.</>}
+                    </p>
+                  </ConfirmBar>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <div className="couchdeck-actions person-actions">
         {list.addPasskeyReady && v.mfa && (
@@ -254,8 +332,8 @@ function PersonCard({ viewer: v, list, profiles, request, busy, confirm, onConfi
           onCancel={() => onConfirm(null)} onOk={() => onAction("remove")}>
           <p>
             <b>{v.username}</b> entfernen? Die Person kann sich danach nicht mehr neu anmelden. Bereits angemeldete
-            Jellyfin-Apps (Fernseher, Streamyfin) bleiben angemeldet, bis ihr Gerät abgemeldet wird. Konto und
-            Wiedergabeverlauf in Jellyfin bleiben erhalten.
+            Jellyfin-Apps (Fernseher, Streamyfin) bleiben angemeldet – sie unter „Geräte“ auf dieser Karte abmelden.
+            Konto und Wiedergabeverlauf in Jellyfin bleiben erhalten.
           </p>
         </ConfirmBar>
       )}

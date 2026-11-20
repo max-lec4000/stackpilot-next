@@ -137,3 +137,7 @@
 .person-field { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .person-actions { margin: 0; }
 .people .success { color: var(--success); }
+.person-check { display: inline-flex; align-items: center; gap: 0.4rem; }
+.person-devices ul { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.4rem; }
+.person-devices li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.person-devices li .ui-confirm { flex-basis: 100%; }

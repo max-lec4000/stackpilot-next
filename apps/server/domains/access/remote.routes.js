@@ -63,7 +63,9 @@ export function remoteRoutes(d) {
     post("/api/remote-access/backup/download", "password", async ({ body }) =>
       fileResponse(await identityBackups.bytes(body.id), `stackpilot-identity-${body.id}.spbackup`)),
     post("/api/remote-access/admins/protect", "password", ({ body }) => remoteSecurity.protectAdmins(body)),
-    post("/api/remote-access/devices/revoke", "password", ({ body }) => remoteSecurity.revoke(body)),
+    // Gerät abmelden: mit OK (vorher Passwort). Trifft nur Nicht-Administratoren, die Person
+    // kann sich jederzeit neu anmelden.
+    post("/api/remote-access/devices/revoke", "ok", ({ body }) => remoteSecurity.revoke(body), "Gerät abmelden mit OK bestätigen."),
     post("/api/remote-access/funnel/enable", "password", ({ body }) => publicFunnel.apply(body)),
     post("/api/remote-access/funnel/disable", "password", ({ body }) => publicFunnel.disable(body)),
     post("/api/remote-access/funnel-plan", "session", () => remoteSecurity.funnelPlan()),

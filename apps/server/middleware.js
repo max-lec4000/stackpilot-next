@@ -3,6 +3,7 @@ import { ImportedReplacement } from "./imported-replacement.js";
 import { SeriesRemoval } from "./series-removal.js";
 import { SharedFilmStandard } from "./shared-film-standard.js";
 import { ViewerRequests } from "./viewer-requests.js";
+import { ViewerRatings } from "./viewer-ratings.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
 import { RouteRegistry, isRawResponse, rawOf } from "./routes.js";
@@ -155,6 +156,7 @@ export function inventoryMiddleware(options = {}) {
   const viewers = new Viewers(identity);
   const viewerRequests = new ViewerRequests(hub, ssoConnection, viewers);
   const viewerProfiles = new ViewerProfiles(hub, ssoConnection, viewers);
+  const viewerRatings = new ViewerRatings(hub, ssoConnection, viewers);
   const remoteSetup = new RemoteSetup(hub, {
     identity,
     protection: jellyfinProtection,
@@ -233,7 +235,7 @@ export function inventoryMiddleware(options = {}) {
     .add(qualityRoutes({ sources, sizeLimits }))
     .add(requestRoutes({ hub, records, requestDiagnostics, requestLifecycle, qualitySettings }))
     .add(libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }))
-    .add(peopleRoutes({ viewers, viewerProfiles, remoteSetup }))
+    .add(peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSetup }))
     .add(couchdeckRoutes({ couchdeck }))
     .add(setupRoutes({ installer, executor }))
     .add(systemRoutes({

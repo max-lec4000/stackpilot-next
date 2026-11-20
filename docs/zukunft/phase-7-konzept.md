@@ -316,6 +316,21 @@ systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
   sichtbar. Freigeben gesammelt nur im Komponententest (in der VM würde es echte Downloads
   starten).
 
+### Fortschritt 7.1c – Altersfreigaben und Geräte (20.11.2026)
+
+- Karte je Zuschauer: **Altersfreigabe** (ohne / bis FSK 0, 6, 12, 16, 18) und „Filme und
+  Serien ohne Altersangabe ausblenden“ → Jellyfin-Richtlinie `MaxParentalRating` /
+  `BlockUnratedItems` des verknüpften Kontos (`viewer-ratings.js`, Routen
+  `/api/viewer-ratings`, Ändern mit OK; übrige Richtlinie bleibt, Administratoren und
+  unverknüpfte Zuschauer gesperrt, Ergebnis wird nachgelesen).
+- **Geräte** je Zuschauer (Jellyfin `/Devices`, Zuordnung über `spv_<name>`) mit
+  **Abmelden**; `devices/revoke` braucht jetzt OK statt Passwort (trifft nur
+  Nicht-Administratoren, Neuanmeldung jederzeit möglich).
+- sp-test (Jellyfin 12.4): 371 Tests; Browser setzt „bis FSK 12“ → Richtlinie bestätigt;
+  vollständige OIDC-Anmeldung des Zuschauers → Einstellung bleibt (SSO-Plugin überschreibt
+  sie nicht); Gerät über die Karte abgemeldet; Einstellung zurückgesetzt.
+- 7.1 damit abgeschlossen. Offen: veralteter `ux-smoke.cjs`-Zuschauerteil.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

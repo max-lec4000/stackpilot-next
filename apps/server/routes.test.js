@@ -75,15 +75,16 @@ test("Umgezogene Routen behalten ihre Schutzstufen", () => {
   });
 });
 
-test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort", () => {
+test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort (Gerät abmelden: OK)", () => {
   const r = new RouteRegistry().add(remoteRoutes({}));
   const table = Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard]));
   const password = [
     "private-serve/apply", "streamyfin/activate", "streamyfin/rollback", "streamyfin/prepare",
     "protection/start", "sso/apply", "backup/create", "backup/resume", "backup/test", "backup/download",
-    "admins/protect", "devices/revoke", "funnel/enable", "funnel/disable", "identity/credentials",
+    "admins/protect", "funnel/enable", "funnel/disable", "identity/credentials",
   ].map((p) => `POST /api/remote-access/${p}`);
   for (const key of password) assert.equal(table[key], "password", key);
+  assert.equal(table["POST /api/remote-access/devices/revoke"], "ok");
   for (const key of ["POST /api/remote-access/streamyfin/activate", "POST /api/remote-access/streamyfin/rollback", "POST /api/remote-access/streamyfin/prepare"])
     assert.ok(r.find("POST", key.slice(5)).confirm, key + " braucht zusätzlich OK");
   const session = Object.entries(table).filter(([, g]) => g === "session").map(([k]) => k).sort();
@@ -96,7 +97,7 @@ test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort", 
     "POST /api/admin-tailnet/grant", "POST /api/remote-access/funnel-plan", "POST /api/remote-access/identity/check",
     "POST /api/remote-access/identity/prepare", "POST /api/remote-access/identity/start",
   ]);
-  assert.equal(Object.keys(table).length, password.length + session.length);
+  assert.equal(Object.keys(table).length, password.length + session.length + 1);
 });
 
 test("Downloads und Ausfallsperren-Test: Schutzstufen", () => {
@@ -156,7 +157,7 @@ test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen",
   assert.deepEqual(password, [
     "/api/credentials/reveal",
     ...["bazarr", "jellyfin-couchdeck", "jellyfin-seerr", "jellyfin-streamystats", "lidarr", "prowlarr", "radarr", "seerr", "sonarr"].map((x) => "/api/credentials/rotate-" + x),
-    ...["admins/protect", "backup/create", "backup/download", "backup/resume", "backup/test", "devices/revoke",
+    ...["admins/protect", "backup/create", "backup/download", "backup/resume", "backup/test",
       "funnel/disable", "funnel/enable", "identity/credentials", "private-serve/apply", "protection/start", "sso/apply",
       "streamyfin/activate", "streamyfin/prepare", "streamyfin/rollback"].map((x) => "/api/remote-access/" + x),
     "/api/vault-backup", "/api/vault-backup/restore",
@@ -184,4 +185,10 @@ test("Personen: Entfernen und Neu einladen nur mit OK", async () => {
   }
   await r.run(route, { body: { action: "invite", name: "neu" } });
   assert.deepEqual(calls, [["reset", "eltern"], ["remove", "eltern"], ["invite", "neu"]]);
+});
+
+test("Personen: Altersfreigabe lesen mit Sitzung, ändern nur mit OK", () => {
+  const r = new RouteRegistry().add(peopleRoutes({}));
+  assert.equal(r.find("GET", "/api/viewer-ratings").guard, "session");
+  assert.equal(r.find("POST", "/api/viewer-ratings").guard, "ok");
 });

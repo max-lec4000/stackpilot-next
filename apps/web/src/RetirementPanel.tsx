@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { get, type Inventory } from "./ServerCheck";
+import { useConfirm } from "./ui";
 type Container = {
   id: string;
   name: string;
@@ -76,6 +77,7 @@ export function RetirementPanel({
   const [operations, setOperations] = useState<Operation[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const { ask, dialog } = useConfirm();
   async function refresh() {
     try {
       const data = await get<{ operations: Operation[] }>("/api/operations");
@@ -290,10 +292,11 @@ export function RetirementPanel({
             {["paused", "failed"].includes(op.status) && (
               <button
                 disabled={busy}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await ask(
                       "Auftrag ohne weitere Änderungen beenden? Bereits ausgeführte Schritte bleiben wirksam. Es erfolgt keine Wiederherstellung.",
+                      "Auftrag beenden",
                     )
                   )
                     perform(() =>
@@ -307,6 +310,7 @@ export function RetirementPanel({
                 Ohne weitere Änderungen beenden
               </button>
             )}
+            {dialog}
             {op.status === "completed" && (
               <p>
                 Containerablösung abgeschlossen. Daten/Volumes bleiben erhalten.

@@ -18,7 +18,7 @@ const spCookie = spLogin.headers.get("set-cookie").split(";")[0];
 const { token } = await (await fetch(sp + "/api/session", { headers: { Cookie: spCookie } })).json();
 const api = async (route, body) =>
   (await fetch(sp + route, { method: body ? "POST" : "GET", headers: { Cookie: spCookie, ...(body ? { "Content-Type": "application/json", Origin: sp, "X-StackPilot-Token": token } : {}) }, body: body && JSON.stringify(body) })).json();
-const reset = await api("/api/viewers/action", { action: "reset", name });
+const reset = await api("/api/viewers/action", { action: "reset", name, confirmation: "OK" });
 if (!reset.invitation) throw Error("Zurücksetzen fehlgeschlagen: " + JSON.stringify(reset));
 const host = new URL(reset.invitation.loginUrl).hostname;
 

@@ -283,6 +283,24 @@ systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
   sofort auf, während Seerr noch lud (jetzt bis zu 40 s Wiederholung); eine unterbrochene
   Rückkehr ließ sich nur bei Jellyfin fortsetzen (jetzt für alle Apps).
 
+### Fortschritt 7.1a – Personen (20.11.2026)
+
+- **Personen → Zuschauer** ist eine eigene Seite (`PeoplePanel.tsx`): je Zuschauer eine
+  Karte mit Anmeldestatus (zweiter Faktor, Passkey, letzte Anmeldung), Bibliotheksprofil,
+  Schalter „Anfragen brauchen meine Freigabe“ und den Aktionen. Einladen, Bibliotheksprofile
+  und die Anmelde-Aktualisierung liegen ebenfalls dort. System → Zugriff & Netzwerk zeigt nur
+  noch die Einrichtung und verweist auf Personen.
+- **Neu einladen** und **Entfernen** nur noch mit OK (Leiste in der Oberfläche, Prüfung im
+  Server); vorher wirkten beide sofort. Profil löschen ebenfalls mit OK.
+- Die fünf `window.confirm` (Downloads, Folgen/Staffelpakete, Download-Austausch,
+  Einrichtungs- und Ablöseauftrag beenden) nutzen jetzt `useConfirm()` mit der gemeinsamen
+  Leiste.
+- sp-test: Build, 364 Tests, Browser: Karte, Entfernen-Rückfrage mit Abbrechen, Neu einladen
+  mit OK (neue Einladung), Bibliotheksprofile, Verweis aus Zugriff & Netzwerk.
+- Offen für 7.1c: Geräte je Zuschauer abmelden (Server kann es schon, Oberfläche fehlt).
+  Bekannt: `apps/web/testing/ux-smoke.cjs` passt schon seit dem Freigabe-Schalter nicht mehr
+  zur Oberfläche (Zuschauerteil veraltet).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

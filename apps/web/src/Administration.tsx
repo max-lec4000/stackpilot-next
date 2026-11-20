@@ -1,6 +1,6 @@
 import { VpnProfiles } from "./VpnProfiles";
 import { ViewerRequests } from "./ViewerRequests";
-import { RemoteSetupPanel } from "./RemoteSetupPanel";
+import { PeoplePanel } from "./PeoplePanel";
 import { CouchdeckPanel, useCouchdeck } from "./CouchdeckPanel";
 import { SeriesRemoval } from "./SeriesRemoval";
 import { AuditLog } from "./AuditLog";
@@ -213,7 +213,7 @@ export function Administration({
   }
   function content() {
     if (panel === "viewer-requests") return <ViewerRequests />;
-    if (panel === "people") return <RemoteSetupPanel />;
+    if (panel === "people") return <PeoplePanel />;
     if (panel === "couchdeck") return <CouchdeckView />;
     if (panel === "music") return <MusicLibrary />;
     if (panel === "remote") return <RemoteAccessView />;

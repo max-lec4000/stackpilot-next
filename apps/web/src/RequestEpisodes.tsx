@@ -2,6 +2,7 @@ import { ImportedReplacement } from "./ImportedReplacement";
 import { useEffect, useState } from "react";
 import { action } from "./RetirementPanel";
 import { get } from "./ServerCheck";
+import { useConfirm } from "./ui";
 
 type Episode = {
   id: number;
@@ -22,6 +23,7 @@ type SeriesLimits = {
 };
 
 function SeasonEpisodes({ requestId, season }: { requestId: number; season: number }) {
+  const { ask, dialog } = useConfirm();
   const [cap, setCap] = useState("");
   const [rows, setRows] = useState<Episode[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,9 +67,10 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
   }
 
   async function remove(episode: Episode) {
-    if (!episode.removableFileId || !window.confirm(
+    if (!episode.removableFileId || !(await ask(
       `Datei von Staffel ${season}, Folge ${episode.number} aus der Mediathek entfernen? Sonarr kann sie bei aktiver Überwachung erneut laden.`,
-    )) return;
+      "Folgendatei entfernen",
+    ))) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -98,7 +101,7 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
         : remove
         ? `„${transfer.name}“ aus qBittorrent entfernen? Die Dateien bleiben erhalten. Sonarr kann das Paket erneut finden.`
         : `„${transfer.name}“ pausieren? Bisher geladene Dateien bleiben erhalten.`;
-      if (!window.confirm(question)) return;
+      if (!(await ask(question, "Staffelpaket ändern"))) return;
       await action(`/api/media/season-transfer/${mode}`, {
         requestId, season, review: transfer.review, confirmation: "OK",
       });
@@ -118,6 +121,7 @@ function SeasonEpisodes({ requestId, season }: { requestId: number; season: numb
       {busy && <p role="status">Sonarr wird geprüft …</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {message && <p className="notice" role="status">{message}</p>}
+      {dialog}
       {rows?.length === 0 && <p>Sonarr meldet keine Folgen für diese Staffel.</p>}
       {rows?.some((episode) => episode.canSearch) && (
         <label>

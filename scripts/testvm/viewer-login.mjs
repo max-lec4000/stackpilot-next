@@ -14,7 +14,7 @@ const admin = JSON.parse(await readFile(path.join(os.homedir(), ".stackpilot-tes
 const login = await fetch(sp + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", Origin: sp }, body: JSON.stringify(admin) });
 const cookie = login.headers.get("set-cookie").split(";")[0];
 const { token } = await (await fetch(sp + "/api/session", { headers: { Cookie: cookie } })).json();
-const reset = await (await fetch(sp + "/api/viewers/action", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", Origin: sp, "X-StackPilot-Token": token }, body: JSON.stringify({ action: "reset", name }) })).json();
+const reset = await (await fetch(sp + "/api/viewers/action", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json", Origin: sp, "X-StackPilot-Token": token }, body: JSON.stringify({ action: "reset", name, confirmation: "OK" }) })).json();
 if (!reset.invitation) throw Error("Zurücksetzen fehlgeschlagen: " + JSON.stringify(reset));
 const host = new URL(reset.invitation.loginUrl).hostname;
 console.log("Zuschauer:", reset.viewers.map((v) => `${v.username} mfa=${v.mfa}`).join(", "));

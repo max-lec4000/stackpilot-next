@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
 import { OperationNotices, useOperations } from "./Operations";
-import { EmptyState, SectionHeading, StatusBadge } from "./ui";
+import { EmptyState, SectionHeading, StatusBadge, useConfirm } from "./ui";
 import "./activity.css";
 import { usePreference, oneOf } from "./preferences";
 import { Problem } from "./Problem";
@@ -284,10 +284,11 @@ export function DownloadsView() {
   }, [query]);
   const { data, error, busy: loading, refresh } = useDownloadPage(page, filter, search);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [failed, setFailed] = useState(false);
+  const { ask, dialog } = useConfirm();
   async function control(t: Torrent, operation: "pause" | "resume" | "remove", deleteFiles = false) {
-    if (operation === "remove" && !window.confirm(deleteFiles
+    if (operation === "remove" && !(await ask(deleteFiles
       ? `„${t.name}“ mitsamt dem gesamten Torrentinhalt unwiderruflich löschen? Bibliothekskopien und andere Hardlinks bleiben erhalten. Eine weiterhin überwachte Anfrage kann erneut laden.`
-      : `„${t.name}“ aus qBittorrent entfernen? Die Dateien bleiben erhalten.`)) return;
+      : `„${t.name}“ aus qBittorrent entfernen? Die Dateien bleiben erhalten.`, deleteFiles ? "Download samt Dateien löschen" : "Download entfernen"))) return;
     setBusy(true); setMessage(""); setFailed(false);
     try {
       await action("/api/downloads/action", { hash: t.id, action: operation, deleteFiles, confirmation: operation === "remove" ? "OK" : undefined });
@@ -332,6 +333,7 @@ export function DownloadsView() {
           <small>{data.configured ? `${rate(data.downloadRate)} ↓ · ${rate(data.uploadRate)} ↑` : "Transferdaten nicht bestätigt"}</small>
           {data.configured && <details className="download-client-control"><summary>Downloadclient steuern</summary><p>Fortsetzen prüft das VPN erneut. Manuell pausierte Torrents werden nicht pauschal gestartet.</p><button disabled={busy || data.vpn.state !== "connected"} onClick={() => void resumeClient()}>{busy ? "Wird geprüft …" : "Geschützt fortsetzen"}</button></details>}
         </div>
+        {dialog}
         {message && <p role={failed ? "alert" : "status"} className={failed ? "error" : "notice"}>{message}</p>}
         {!data.configured ? <EmptyState title="Noch kein Downloadclient eingerichtet" description="Ein vollständig eingerichteter Downloadclient ist Voraussetzung für diese Ansicht." /> : <>
           <p className="downloads-page-count" role="status">{query.trim() ? `${data.total ?? "—"} Treffer · ${visible.length} auf dieser Seite` : `${data.torrents.length} Downloads auf dieser Seite`}</p>

@@ -3,6 +3,7 @@ import { formatBytes } from "../../../packages/domain/format.js";
 import { useState } from "react";
 import { get } from "./ServerCheck";
 import { action } from "./RetirementPanel";
+import { useConfirm } from "./ui";
 type Quality = {
   sizeDefaultRate?: number;
   automaticFilmLimit?: number | null;
@@ -38,6 +39,7 @@ export function QualityEditor({
   requestId: number;
   onChange?: () => Promise<void>;
 }) {
+  const { ask, dialog } = useConfirm();
   const [open, setOpen] = useState(false),
     [data, setData] = useState<Quality | null>(null),
     [profile, setProfile] = useState(""),
@@ -86,6 +88,7 @@ export function QualityEditor({
         <div className="diagnosis-content">
           <h4>Qualitätsprofil</h4>
           {data?.kind === "movie" && data.hasFile && <ImportedReplacement requestId={requestId} />}
+          {dialog}
           {error && (
             <p role="alert" className="error">
               {error}
@@ -389,9 +392,10 @@ export function QualityEditor({
                         const preview = await get<{ name: string; review: string }>(
                           "/api/media/replace-download?requestId=" + requestId,
                         );
-                        if (!window.confirm(
+                        if (!(await ask(
                           `„${preview.name}“ stoppen und mit dem gespeicherten Profil neu suchen? Die bisher geladenen Dateien bleiben erhalten. Radarr schließt den bisherigen Treffer von der neuen Suche aus.`,
-                        )) return;
+                          "Download austauschen",
+                        ))) return;
                         const result = await action<{ alreadyRunning?: boolean }>("/api/media/research", {
                           requestId, replaceReview: preview.review, confirmation: "OK",
                         });

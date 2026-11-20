@@ -171,3 +171,16 @@ test("Docker-Wächter: Anzeige mit Sitzung, Sperren nur mit OK", () => {
     "POST /api/docker-guard/enforce": "ok",
   });
 });
+
+test("Personen: Entfernen und Neu einladen nur mit OK", async () => {
+  const calls = [];
+  const viewers = { reset: async (n) => calls.push(["reset", n]), remove: async (n) => calls.push(["remove", n]), invite: async (n) => calls.push(["invite", n]) };
+  const r = new RouteRegistry().add(peopleRoutes({ viewers }));
+  const route = r.find("POST", "/api/viewers/action");
+  for (const act of ["reset", "remove"]) {
+    await assert.rejects(r.run(route, { body: { action: act, name: "eltern" } }), /mit OK bestätigen/);
+    await r.run(route, { body: { action: act, name: "eltern", confirmation: "OK" } });
+  }
+  await r.run(route, { body: { action: "invite", name: "neu" } });
+  assert.deepEqual(calls, [["reset", "eltern"], ["remove", "eltern"], ["invite", "neu"]]);
+});

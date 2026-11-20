@@ -8,6 +8,9 @@ export function peopleRoutes({ viewers, viewerProfiles, remoteSetup }) {
     // Zwei Aktionen ändern die Anmeldung aller Zuschauer und verlangen das Passwort.
     { method: "POST", path: "/api/viewers/action", guard: "session", handler: async ({ body, manager, remoteAddress }) => {
       if (body.action === "invite") return viewers.invite(body.name, body.displayName);
+      // Zurücksetzen und Entfernen beenden Anmeldungen – nur mit ausdrücklichem OK.
+      if (["reset", "remove"].includes(body.action) && body.confirmation !== "OK")
+        throw Object.assign(new Error(body.action === "remove" ? "Entfernen mit OK bestätigen." : "Neu einladen mit OK bestätigen."), { userFacing: true });
       if (body.action === "reset") return viewers.reset(body.name);
       if (body.action === "remove") return viewers.remove(body.name);
       if (["add-passkey", "cancel-passkey"].includes(body.action)) return viewers.passkey(body.action, body.name);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { action } from "./RetirementPanel";
 import { get } from "./ServerCheck";
+import { useConfirm } from "./ui";
 type Plan = {
   id: string;
   host: string;
@@ -69,6 +70,7 @@ export function DeploymentCheck({
   const confirmCard = useRef<HTMLDivElement>(null);
   const [result, setResult] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ask, dialog } = useConfirm();
   const [error, setError] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -365,10 +367,11 @@ export function DeploymentCheck({
               </button>
               <button
                 disabled={busy}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
+                    await ask(
                       "Ohne weitere Änderungen beenden? Bereits angelegte Container und Dateien bleiben erhalten.",
+                      "Auftrag beenden",
                     )
                   )
                     perform(() =>
@@ -381,6 +384,7 @@ export function DeploymentCheck({
               >
                 Ohne weitere Änderungen beenden
               </button>
+              {dialog}
             </>
           )}
           {op.status === "completed" && (

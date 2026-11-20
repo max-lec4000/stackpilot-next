@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 export function Disclosure({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -154,10 +154,13 @@ export function ConfirmBar({
   okLabel?: string;
   error?: string;
 }) {
-  const ok = useRef<HTMLButtonElement>(null);
-  useEffect(() => { ok.current?.focus({ preventScroll: true }); }, []);
+  const ok = useRef<HTMLButtonElement>(null), box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ok.current?.focus({ preventScroll: true });
+    box.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   return (
-    <div className="notice ui-confirm" role="dialog" aria-label={label}>
+    <div ref={box} className="notice ui-confirm" role="dialog" aria-label={label}>
       <div className="ui-confirm-text">{children}</div>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="service-update-actions">
@@ -168,6 +171,26 @@ export function ConfirmBar({
       </div>
     </div>
   );
+}
+
+/**
+ * Ersatz für window.confirm: `if (!(await ask("Wirklich …?"))) return;` und `{dialog}` dort
+ * rendern, wo die Leiste erscheinen soll. Eine neue Frage ersetzt eine offene (zählt als Abbrechen).
+ */
+export function useConfirm() {
+  const [pending, setPending] = useState<{ text: ReactNode; label: string; okLabel?: string; resolve: (ok: boolean) => void } | null>(null);
+  const ask = useCallback((text: ReactNode, label = "Bestätigen", okLabel?: string) =>
+    new Promise<boolean>((resolve) => setPending((old) => {
+      old?.resolve(false);
+      return { text, label, okLabel, resolve };
+    })), []);
+  const close = (ok: boolean) => { pending?.resolve(ok); setPending(null); };
+  const dialog = pending ? (
+    <ConfirmBar label={pending.label} okLabel={pending.okLabel} onOk={() => close(true)} onCancel={() => close(false)}>
+      <p>{pending.text}</p>
+    </ConfirmBar>
+  ) : null;
+  return { ask, dialog };
 }
 
 /**

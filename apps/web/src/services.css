@@ -126,3 +126,14 @@
 .docker-guard .success { color: var(--success); }
 .docker-guard-list { margin: 0.5rem 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: var(--font-sm, 0.9rem); }
 .docker-guard-list code, .docker-guard code { overflow-wrap: anywhere; }
+
+/* Personen (Phase 7.1a) */
+.people-invite { margin: 0.5rem 0 1rem; }
+.people-list { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.75rem; }
+.person-card { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: var(--surface); display: grid; gap: 0.6rem; }
+.person-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.person-head b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.person-rights { display: grid; gap: 0.5rem; }
+.person-field { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.person-actions { margin: 0; }
+.people .success { color: var(--success); }

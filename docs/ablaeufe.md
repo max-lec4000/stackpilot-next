@@ -16,7 +16,8 @@ StackPilot, Stack konfigurieren). Alte Lesezeichen (`#/verwaltung/…`) leiten w
 ## Zuschauer
 
 ### Jemanden einladen
-1. StackPilot → **System → Zugriff & Netzwerk → Zugriff von unterwegs → Zuschauer**.
+1. StackPilot → **Personen → Zuschauer** (je Zuschauer eine Karte; der Fernzugriff selbst
+   wird einmalig unter **System → Zugriff & Netzwerk** eingerichtet).
 2. Benutzernamen eintippen (3–32 Zeichen, Kleinbuchstaben, Ziffern, `-`, `_`) → **Einladen**.
 3. Angezeigt werden einmalig Adresse, Benutzername und Startpasswort → **Kopieren** und der
    Person schicken → **Notiert – ausblenden**. Das Passwort ist danach nirgends mehr gespeichert.
@@ -39,15 +40,16 @@ StackPilot, Stack konfigurieren). Alte Lesezeichen (`#/verwaltung/…`) leiten w
 Im Heimnetz geht auch `http://<server>:8096` + Quick Connect, dann aber nur zu Hause.
 
 ### Jemand hat das Handy mit der Authenticator-App verloren
-**Neu einladen** beim Zuschauer → neues Startpasswort, zweiter Faktor wird neu
-eingerichtet. Bereits angemeldete Fernseher und Tablets bleiben angemeldet.
+**Neu einladen** auf der Karte des Zuschauers → mit **OK** bestätigen → neues Startpasswort,
+zweiter Faktor wird neu eingerichtet. Bereits angemeldete Fernseher und Tablets bleiben angemeldet.
 
 ### Ein Gerät abmelden (verloren, verkauft)
 Jellyfin im Heimnetz als Admin öffnen → **Dashboard → Geräte** → Gerät löschen.
 
 ### Zuschauer entfernen
-**Entfernen** beim Zuschauer: Konto in Authentik deaktiviert, Sitzungen beendet. Die
-angemeldeten Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** löschen.
+**Entfernen** auf der Karte des Zuschauers → mit **OK** bestätigen: Konto in Authentik
+deaktiviert, Authentik-Sitzungen beendet. Bereits angemeldete Jellyfin-Apps bleiben
+angemeldet – deren Geräte zusätzlich in Jellyfin unter **Dashboard → Geräte** löschen.
 
 ## Couchdeck (Bildschirm am Server)
 
@@ -303,9 +305,8 @@ und betroffene Dienste aus zueinander passenden Sicherungen stammen.
 ## Wiederherstellungscodes für Zuschauer
 
 Bei neu eingerichtetem Authentik werden Wiederherstellungscodes automatisch
-angeboten. Für eine bestehende Installation öffne **System → Zugriff &
-Netzwerk → Zuschauer → Wiederherstellungscodes für Zuschauer
-aktivieren** und bestätige mit dem StackPilot-Administratorpasswort.
+angeboten. Für eine bestehende Installation öffne **Personen → Zuschauer → Anmeldung der Zuschauer aktualisieren
+→ Wiederherstellungscodes aktivieren** und bestätige mit dem StackPilot-Administratorpasswort.
 Zuschauer ohne eingerichteten Wiederherstellungsfaktor bekommen nach
 erfolgreicher Anmeldung mit zweitem Faktor acht einmal verwendbare Codes
 angezeigt. Sie sollten die Codes privat und getrennt vom Gerät mit ihrer
@@ -313,8 +314,8 @@ Authenticator-App aufbewahren. Bestehende Codes bleiben gültig.
 
 ## Zuschauer anmelden und eigenes Passwort wählen
 
-In einer bestehenden Installation öffnest du unter **System → Zugriff &
-Netzwerk → Zuschauer** einmalig **Zuschauer-Anmeldung aktualisieren**.
+In einer bestehenden Installation öffnest du unter **Personen → Zuschauer →
+Anmeldung der Zuschauer aktualisieren** einmalig **Zuschauer-Anmeldung aktualisieren**.
 Neue Authentik-Installationen verwenden den Ablauf automatisch.
 
 1. Beim Einladen gibt StackPilot einen Benutzernamen und ein Startpasswort aus.
@@ -333,10 +334,10 @@ zurückgesetzt werden.
 
 ### Bibliotheken pro Zuschauer freigeben
 
-1. Öffne **System → Zugriff & Netzwerk → Zuschauer → Zuschauerprofile**.
+1. Öffne **Personen → Zuschauer → Bibliotheksprofile**.
 2. Erstelle ein Profil mit einem Namen und den erlaubten Jellyfin-Bibliotheken.
    Zur Auswahl stehen die Bibliotheken, die beim Einrichten von SSO freigegeben wurden.
-3. Wähle beim Konto das Profil aus und klicke auf **Profil zuweisen**.
+3. Wähle auf der Karte des Zuschauers unter **Bibliotheken** das Profil aus und klicke auf **Speichern**.
    Mit **Standardfreigabe** erhält das Konto wieder die ursprüngliche Bibliotheksauswahl.
 
 StackPilot übernimmt die Freigabe für das gesamte Zuschauerkonto. Bereits
@@ -374,8 +375,8 @@ nativen Regeln werden gemeldet; eigene Seerr-Profilregeln müssen vor einer
 Standard ausgeschaltet oder auf eine feste Grenze umgestellt wird.
 
 **Meine Anfragen → Details → Anfrage freigeben** genehmigt wartende Seerr-Anfragen.
-Unter **System → Zugriff & Netzwerk → Zuschauer → Freigabe für Anfragen** hat
-jeder Zuschauer einen Schalter: an = neue Film- und Serienanfragen brauchen eine
+Auf der Karte unter **Personen → Zuschauer** (Schalter „Anfragen brauchen meine Freigabe“)
+oder gesammelt unter **Anfragen → Freigabe je Zuschauer** hat jeder Zuschauer einen Schalter: an = neue Film- und Serienanfragen brauchen eine
 Freigabe, aus = sie laufen automatisch (Seerr-Rechte Anfragen + automatische
 Freigabe). Das betrifft neue Anfragen; bereits wartende Anfragen einzeln genehmigen.
 Konten mit Verwaltungsrechten werden hier nicht verändert. Ist ein Schalter

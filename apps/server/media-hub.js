@@ -698,12 +698,30 @@ export class MediaHub {
         uploadRate: 0,
       };
     const { s } = await this.context(["qBittorrent"]);
-    const [rows, transfer] = await Promise.all([
-      s.qbit(
-        `/torrents/info?filter=${filters[filter]}&sort=added_on&reverse=true${query ? "" : `&offset=${(page - 1) * pageSize}&limit=${pageSize + 1}`}`,
-      ),
-      s.qbit("/transfer/info"),
-    ]);
+    let rows, transfer;
+    try {
+      [rows, transfer] = await Promise.all([
+        s.qbit(
+          `/torrents/info?filter=${filters[filter]}&sort=added_on&reverse=true${query ? "" : `&offset=${(page - 1) * pageSize}&limit=${pageSize + 1}`}`,
+        ),
+        s.qbit("/transfer/info"),
+      ]);
+    } catch (e) {
+      // qBittorrent nicht erreichbar – meist von der Ausfallsperre angehalten. Die Seite
+      // zeigt dann die Ursache und „Geschützt fortsetzen“ statt eines allgemeinen Fehlers.
+      if (!/HTTP 599|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|Zeitüberschreitung|timeout/i.test(e.message)) throw e;
+      return {
+        configured: true,
+        clientUnavailable: true,
+        torrents: [],
+        page,
+        hasMore: false,
+        total: query ? 0 : null,
+        vpn: this.guard.status,
+        downloadRate: 0,
+        uploadRate: 0,
+      };
+    }
     if (
       !Array.isArray(rows) ||
       !Number.isFinite(transfer?.dl_info_speed) ||
@@ -717,7 +735,11 @@ export class MediaHub {
       page,
       hasMore: visible.length > pageSize,
       total: query ? matches.length : null,
-      torrents: visible.slice(0, pageSize).map(torrentSummary),
+      torrents: await (async () => {
+        // Zu welchem Film bzw. welcher Serie gehört der Download? (aus den ARR-Warteschlangen)
+        const titles = this.downloadIssues ? await this.downloadIssues.titles(s, current.plan).catch(() => new Map()) : new Map();
+        return visible.slice(0, pageSize).map((t) => ({ ...torrentSummary(t), media: titles.get(String(t.hash || "").toLowerCase()) || null }));
+      })(),
       vpn: this.guard.status,
       downloadRate: transfer.dl_info_speed,
       uploadRate: transfer.up_info_speed,

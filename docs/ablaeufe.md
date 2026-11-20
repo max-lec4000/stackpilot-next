@@ -160,6 +160,15 @@ ablegen oder z. B. `gpg -c stackpilot-tresor-….tar.gz` und das Original lösch
 ## Downloads und VPN
 - Downloads laufen nur, wenn Mullvad und die Ausfallsperre nachgewiesen sind. Fällt das
   VPN aus, hält StackPilot die Torrents an; **Downloads → Geschützt fortsetzen** prüft neu.
+  Hat die Ausfallsperre qBittorrent ganz angehalten, sagt die Downloads-Seite das oben und
+  bietet **Geschützt fortsetzen** direkt an (startet qBittorrent nach erneuter VPN-Prüfung).
+- **Downloads → Braucht Aufmerksamkeit**: hängende oder blockierte Downloads aus Radarr und
+  Sonarr mit Ursache in Alltagssprache (z. B. „Keine Quellen“, „Nur ein Beispielvideo“,
+  „Keine importierbaren Dateien“) und den Original-Meldungen zum Aufklappen.
+  **Import erneut prüfen** lässt Radarr/Sonarr fertige Downloads neu ansehen (harmlos).
+  **Anderen Treffer suchen** → **OK** (nur mit VPN): Download entfernen, Treffer sperren,
+  automatisch Ersatz suchen – Dateien dieses Downloads werden gelöscht, schon Importiertes
+  bleibt. Jeder Download in der Liste zeigt außerdem, zu welchem Film bzw. welcher Serie er gehört.
 - VPN-Test: **System → VPN & Ausfallsperre → Prüfauftrag starten**.
 - VPN je Dienst: **System → VPN & Ausfallsperre → VPN je Dienst**. Pro Dienst ein
   Auswahlmenü: **qBittorrent** (Gluetun) – Umstellen nach „OK“: neue Dateien, Gluetun/

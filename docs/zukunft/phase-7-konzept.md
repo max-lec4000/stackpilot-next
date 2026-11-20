@@ -331,6 +331,27 @@ systemctl; (c) Tailscale und Couchdeck bleiben auf dem Host.
   sie nicht); Gerät über die Karte abgemeldet; Einstellung zurückgesetzt.
 - 7.1 damit abgeschlossen. Offen: veralteter `ux-smoke.cjs`-Zuschauerteil.
 
+### Fortschritt 7.2a – Downloads: Probleme und Ursachen (20.11.2026)
+
+Zuschnitt 7.2: **a** Probleme/Ursachen und Zuordnung, **b** Seeding und Zeitpläne,
+**c** Zuhause „Braucht Aufmerksamkeit“.
+
+- `download-issues.js`: Probleme aus den Warteschlangen von Radarr/Sonarr
+  (`trackedDownloadStatus` warning/error, `importBlocked`, `failed`), Ursache in
+  Alltagssprache (`causeOf`), Meldungen ohne Adressen/Schlüssel. Aktionen: **Import erneut
+  prüfen** (`RefreshMonitoredDownloads`, Sitzung) und **Anderen Treffer suchen**
+  (`DELETE /queue/{id}?removeFromClient&blocklist&skipRedownload=false`, OK + VPN, unter
+  Auftragssperre, Rücklesen der Warteschlange). Routen `/api/downloads/issues`, `…/retry`,
+  `…/replace`.
+- Downloadliste: jeder Download zeigt Film/Serie (Zuordnung über `downloadId`).
+- Behoben: Ist qBittorrent von der Ausfallsperre angehalten, kam auf der Downloads-Seite nur
+  „Prüfung konnte nicht abgeschlossen werden“ und „Geschützt fortsetzen“ war nicht
+  erreichbar. Jetzt: Hinweis mit Ursache und Knopf.
+- sp-test: 375 Tests; echte Radarr/Sonarr: Liste leer, erneut prüfen OK, Ersetzen ohne OK
+  abgelehnt; Browser: angehaltener Client (echt, seit einem Test um 07:58 gestoppt) →
+  Geschützt fortsetzen → läuft; Kasten mit nachgestellten Daten inkl. OK-Ablauf. Echtes
+  Ersetzen nicht in der VM (würde Downloads starten) – nur Komponententest.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

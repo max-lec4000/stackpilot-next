@@ -100,3 +100,15 @@
   .downloads-toolbar label { min-width: 0; flex: 1 1 100%; }
   .downloads-summary { gap: 10px; }
 }
+
+/* Downloads → Braucht Aufmerksamkeit (Phase 7.2a) */
+.download-issues { margin-bottom: 1rem; border-color: var(--warning); }
+.download-issues .success { color: var(--success); }
+.download-issues-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.download-issue-list { list-style: none; padding: 0; margin: 0.5rem 0 0; display: grid; gap: 0.75rem; }
+.download-issue-list > li { display: grid; gap: 0.35rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.download-issue-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.download-issue-title b, .download-issue-release { overflow-wrap: anywhere; }
+.download-issue-list > li > button { justify-self: start; }
+.download-row-media { margin: 0 0 0.2rem; font-size: var(--font-sm); }
+.download-row-media b { overflow-wrap: anywhere; }

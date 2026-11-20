@@ -7,6 +7,7 @@ import { EmptyState, SectionHeading, StatusBadge, useConfirm } from "./ui";
 import "./activity.css";
 import { usePreference, oneOf } from "./preferences";
 import { Problem } from "./Problem";
+import { DownloadIssues } from "./DownloadIssues";
 type Session = {
   id: string;
   user: string;
@@ -27,6 +28,7 @@ type Torrent = {
   etaSeconds: number | null;
   size: number;
   downloaded: number;
+  media?: { title: string; kind: string; problem: boolean } | null;
 };
 type Activity = {
   configured: boolean;
@@ -220,6 +222,7 @@ export function ActivityOverview({
 }
 type DownloadPage = {
   configured: boolean;
+  clientUnavailable?: boolean;
   torrents: Torrent[];
   vpn: Activity["vpn"];
   downloadRate: number;
@@ -331,13 +334,28 @@ export function DownloadsView() {
         <div className="downloads-summary">
           <VpnStatus vpn={data.vpn} />
           <small>{data.configured ? `${rate(data.downloadRate)} ↓ · ${rate(data.uploadRate)} ↑` : "Transferdaten nicht bestätigt"}</small>
-          {data.configured && <details className="download-client-control"><summary>Downloadclient steuern</summary><p>Fortsetzen prüft das VPN erneut. Manuell pausierte Torrents werden nicht pauschal gestartet.</p><button disabled={busy || data.vpn.state !== "connected"} onClick={() => void resumeClient()}>{busy ? "Wird geprüft …" : "Geschützt fortsetzen"}</button></details>}
+          {data.configured && !data.clientUnavailable && <details className="download-client-control"><summary>Downloadclient steuern</summary><p>Fortsetzen prüft das VPN erneut. Manuell pausierte Torrents werden nicht pauschal gestartet.</p><button disabled={busy || data.vpn.state !== "connected"} onClick={() => void resumeClient()}>{busy ? "Wird geprüft …" : "Geschützt fortsetzen"}</button></details>}
         </div>
         {dialog}
+        {data.clientUnavailable && (
+          <div className="notice download-client-stopped" role="status">
+            <p>
+              <b>qBittorrent ist angehalten oder nicht erreichbar.</b> Meist hat ihn die VPN-Ausfallsperre angehalten, weil
+              der Schutz kurz nicht nachgewiesen war – Downloads laufen dann bewusst nicht ungeschützt weiter.
+            </p>
+            {data.vpn.state === "connected"
+              ? <p>Das VPN ist wieder geprüft. „Geschützt fortsetzen“ startet qBittorrent nach einer weiteren VPN-Prüfung und setzt die angehaltenen Downloads fort.</p>
+              : <p>Zuerst muss das VPN wieder verbunden und geprüft sein (System → VPN &amp; Ausfallsperre).</p>}
+            <button className="primary" disabled={busy || data.vpn.state !== "connected"} onClick={() => void resumeClient()}>
+              {busy ? "Wird geprüft …" : "Geschützt fortsetzen"}
+            </button>
+          </div>
+        )}
+        <DownloadIssues vpnConnected={data.vpn.state === "connected"} onChange={refresh} />
         {message && <p role={failed ? "alert" : "status"} className={failed ? "error" : "notice"}>{message}</p>}
         {!data.configured ? <EmptyState title="Noch kein Downloadclient eingerichtet" description="Ein vollständig eingerichteter Downloadclient ist Voraussetzung für diese Ansicht." /> : <>
           <p className="downloads-page-count" role="status">{query.trim() ? `${data.total ?? "—"} Treffer · ${visible.length} auf dieser Seite` : `${data.torrents.length} Downloads auf dieser Seite`}</p>
-          {!visible.length && <EmptyState title={query.trim() ? "Keine passenden Downloads" : filter !== "all" || page > 1 ? "Keine Downloads in dieser Ansicht" : "Die Warteschlange ist leer"} description={query.trim() ? "Passe den Suchbegriff oder Statusfilter an." : "Neue Downloads erscheinen hier automatisch."} action={query.trim() ? <button onClick={() => setQuery("")}>Suche zurücksetzen</button> : undefined} />}
+          {!visible.length && !data.clientUnavailable && <EmptyState title={query.trim() ? "Keine passenden Downloads" : filter !== "all" || page > 1 ? "Keine Downloads in dieser Ansicht" : "Die Warteschlange ist leer"} description={query.trim() ? "Passe den Suchbegriff oder Statusfilter an." : "Neue Downloads erscheinen hier automatisch."} action={query.trim() ? <button onClick={() => setQuery("")}>Suche zurücksetzen</button> : undefined} />}
           <div className="download-list">
             {visible.map((t) => {
               const issue = ["error", "missingFiles"].includes(t.state);
@@ -346,6 +364,7 @@ export function DownloadsView() {
               const paused = stopped(t.state), canPause = pausable(t.state);
               return <article className="download-row" data-download-state={t.state} key={t.id} aria-label={t.name}>
                 <div className="download-row-main">
+                  {t.media && <p className="download-row-media">{t.media.kind === "movie" ? "Film" : "Serie"}: <b>{t.media.title}</b>{t.media.problem && <> · <span className="warning">braucht Aufmerksamkeit (oben)</span></>}</p>}
                   <div className="download-row-title"><h3>{t.name}</h3><StatusBadge tone={issue ? "danger" : paused ? "neutral" : complete ? "success" : "info"}>{transferLabel(t)}</StatusBadge></div>
                   <p className="download-row-metrics">
                     {issue ? <span>{t.size > 0 ? `Dateigröße ${formatBytes(t.size)}` : "Größe nicht gemeldet"} · Dateizustand prüfen</span> : complete ? <span>{t.size > 0 ? formatBytes(t.size) : "Größe nicht gemeldet"} · Download abgeschlossen</span> : <><span>{Math.round(t.progress * 100)} %</span><span>{t.size > 0 ? `${formatBytes(Math.min(t.downloaded, t.size))} / ${formatBytes(t.size)}` : "Größe wird ermittelt"}</span><span>{rate(t.downloadRate)} ↓</span>{t.etaSeconds !== null && t.etaSeconds > 0 && !paused && <span>noch etwa {Math.ceil(t.etaSeconds / 60)} Min.</span>}</>}

@@ -251,6 +251,8 @@ schon vorher bestand, wird nur als Hinweis gemeldet.
 
 - Zurück kommen die Einstellungen und Datenbanken aller Apps. **Nicht** zurück: StackPilot
   selbst (Anmeldungen, Tresor, Zuschauer) und die Streamystats-Statistik.
+- Danach gleicht StackPilot die Schlüssel in Seerr, Bazarr und Prowlarr mit dem Tresor ab
+  (die Sicherung kann ältere enthalten) und nennt das im Ergebnis.
 - Der Stand davor bleibt als `<Datenordner>-appdata-vorher-<Zeit>` liegen (nur der jüngste);
   **Löschen …** gibt den Platz frei.
 - Abbruch mitten im Tausch (Stromausfall o. Ä.): Zuhause meldet es; **Zurückrollen** stellt den
@@ -424,6 +426,13 @@ einspielen** ankreuzen, Tag (jede Nacht oder ein Wochentag) und Stunde wählen �
 (je App mit Rückweg) – nur wenn nichts abgespielt wird und keine Sicherung oder anderer Auftrag
 läuft; sonst innerhalb der Stunde erneut, danach übersprungen. Couchdeck bleibt beim Knopf.
 Fehlgeschlagene Updates erscheinen auf Zuhause.
+
+**Rückkehr und verwaltete Verbindungen:** „Vorherige Version wiederherstellen“ spielt den Stand
+vom letzten Update zurück (die Bestätigung nennt Datum und Alter). Hat die App Schlüssel anderer
+Apps gespeichert (Seerr, Bazarr, Prowlarr; Prowlarr-Quellen in Sonarr/Radarr/Lidarr), gleicht
+StackPilot sie danach automatisch mit dem Tresor ab und testet jede Verbindung – sonst würde
+etwa eine Schlüsselerneuerung seit dem Update verloren gehen. **Verbindungen abgleichen …** → **OK**
+macht dasselbe von Hand; nicht eindeutig verwaltete Verbindungen werden nur gemeldet.
 
 Unter **System → Updates & Sicherungen → Container-Updates und
 Rückkehr** zeigt StackPilot für Sonarr, Radarr, Lidarr, Prowlarr, Bazarr

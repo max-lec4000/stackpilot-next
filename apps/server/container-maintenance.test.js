@@ -62,3 +62,28 @@ test("Seerr-Prüfung nach dem Wechsel wartet, bis Seerr den Schlüssel wieder an
   await assert.rejects(m.verify(s([Error("Zeitüberschreitung")]), "Seerr"), /Zeitüberschreitung/);
   assert.equal(calls, 1);
 });
+
+test("Nach einer Rückkehr: Sitzungen verwerfen, verwaltete Schlüssel abgleichen; Knopf nur mit OK", async () => {
+  const key = "a".repeat(32);
+  const rows = [{ id: 0, name: "StackPilot Sonarr", hostname: "sonarr", port: 8989, useSsl: false, apiKey: "0".repeat(32) }];
+  const s = {
+    plan: { spec: { selected: ["Sonarr", "Seerr"] } }, cookies: { seerr: "alt" },
+    credentials: () => ({ apiKey: key }),
+    additional: { seerr: async (route, o = {}) => {
+      if (s.cookies.seerr) throw Error("HTTP 403"); // alte Sitzung gilt nicht mehr
+      if (o.method === "PUT") { rows[0] = { ...o.body, id: 0 }; return {}; }
+      if (route.endsWith("/test")) return {};
+      return structuredClone(rows);
+    } },
+  };
+  const plan = { id: "p", spec: { selected: ["Sonarr", "Seerr"] }, images: {} };
+  const engine = { current: () => ({ job: { status: "completed" }, plan }), store: { activeLease: () => false }, vault: { get: () => null } };
+  const m = new ContainerMaintenance({ engine, mutate: async (_n, fn) => fn({ s }) });
+  await assert.rejects(m.reconcile({}), /mit OK/);
+  const r = await m.reconcile({ confirmation: "OK" });
+  assert.deepEqual(r.repaired, ["Seerr → Sonarr"]);
+  assert.match(r.message, /Schlüssel abgeglichen: Seerr → Sonarr/);
+  assert.equal(rows[0].apiKey, key);
+  const again = await m.reconcile({ confirmation: "OK" });
+  assert.match(again.message, /Alle 1 verwalteten Verbindungen stimmen/);
+});

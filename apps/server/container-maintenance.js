@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import catalogFile from "../../packages/catalog/services.json" with { type: "json" };
+import { forgetSessions, reconcileKeys, reconcileSummary } from "./key-reconcile.js";
 
 const execute = promisify(execFile);
 const supported = ["Sonarr", "Radarr", "Lidarr", "Prowlarr", "Bazarr", "Seerr", "Jellyfin", "qBittorrent", "Streamystats"];
@@ -70,6 +71,7 @@ export class ContainerMaintenance {
       name, from, to,
       review: reviewOf([plan.id, name, from, to, record?.id, record?.phase]),
       phase: samePlan ? record.phase : null,
+      snapshotAt: samePlan ? record.snapshotAt || null : null,
       update: Boolean(channel === "stable" && eligible && (!samePlan || !inProgress.includes(record.phase)) &&
         from !== to && digestRef.test(from) && digestRef.test(to)),
       rollback: samePlan && (inProgress.includes(record.phase) || record.phase === "updated"),
@@ -291,6 +293,26 @@ export class ContainerMaintenance {
     await rename(files.restore, files.data);
     await this.startAndVerify(s, plan, files, record, record.from);
     this.saveVersion(plan, record, record.from, "rolled-back");
+    // Älterer Datenstand kann alte Schlüssel anderer Apps enthalten → mit dem Tresor abgleichen
+    return this.reconcileAfter(s);
+  }
+  async reconcileAfter(s) {
+    try {
+      forgetSessions(s);
+      return await reconcileKeys(s);
+    } catch (e) {
+      return { checked: 0, repaired: [], problems: [String(e?.message || e).slice(0, 160)] };
+    }
+  }
+  /** Verwaltete Verbindungen von Hand abgleichen (Knopf in der Wartungsübersicht). */
+  async reconcile(body) {
+    if (body.confirmation !== "OK") throw Error("Abgleich mit OK bestätigen.");
+    const current = this.engine.current();
+    if (current?.job.status !== "completed") throw Error("Kein eingerichteter Stack.");
+    return this.hub.mutate(current.plan.spec.selected, async ({ s }) => {
+      const r = await this.reconcileAfter(s);
+      return { ...r, message: reconcileSummary(r) || `Alle ${r.checked} verwalteten Verbindungen stimmen.` };
+    });
   }
   async apply(body, rollback = false) {
     const name = body.name;
@@ -304,8 +326,8 @@ export class ContainerMaintenance {
         throw Error("Die Wartungsvorschau ist nicht mehr aktuell.");
       const previous = this.engine.vault.get(key);
       if (rollback) {
-        await this.restore(s, plan, previous, this.paths(plan, previous));
-        return { phase: "rolled-back" };
+        const reconciled = await this.restore(s, plan, previous, this.paths(plan, previous));
+        return { phase: "rolled-back", reconciled: reconcileSummary(reconciled) };
       }
       if (pendingContainerMaintenance(plan, this.engine.vault))
         throw Error("Zuerst die unterbrochene Container-Wartung abschließen.");
@@ -335,6 +357,7 @@ export class ContainerMaintenance {
       try {
         await this.stop(current, true);
         await this.copyData(name, files.data, files.snapshot);
+        record.snapshotAt = new Date().toISOString();
         record.phase = "changing";
         this.engine.vault.set(key, record);
         await this.startAndVerify(s, plan, files, record, record.to);
@@ -342,8 +365,8 @@ export class ContainerMaintenance {
         return { phase: "updated" };
       } catch {
         try {
-          await this.restore(s, plan, record, files);
-          return { phase: "rolled-back" };
+          const reconciled = await this.restore(s, plan, record, files);
+          return { phase: "rolled-back", reconciled: reconcileSummary(reconciled) };
         } catch {
           if (record.phase === "changing") this.engine.vault.set(key, { ...record, phase: "recovery-required" });
           throw Error("Dienst konnte nicht bestätigt werden. In der Wartungsübersicht Rückkehr erneut ausführen.");

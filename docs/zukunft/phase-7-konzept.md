@@ -571,6 +571,23 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   älteren Datenstand nach einer Schlüsselerneuerung) – Container-Rückkehr von Seerr sollte die
   ARR-Schlüssel danach abgleichen.
 
+### Nachzug – Schlüsselabgleich nach Rückkehr/Wiederherstellung (20.11.2026)
+
+- Ursache (VM): Seerr-Container-Rückkehr am 20.11. spielte den Schnappschuss vom 16.11. zurück
+  und überschrieb die Sonarr-Schlüsselerneuerung vom 19.11.; die Rückkehr prüfte nur
+  `/auth/me`. reatest gelesen: sauber.
+- `key-reconcile.js`: Seerr/Bazarr/Prowlarr → Sonarr/Radarr/Lidarr und Prowlarr-Quellen in den
+  ARR-Apps auf Tresorschlüssel abgleichen, nur eindeutig verwaltete Einträge, maskierte Werte
+  erst testen, jede Verbindung testen; `forgetSessions`.
+- Eingebunden: `ContainerMaintenance.restore()` (Ergebnis `reconciled` in der Antwort),
+  `StackRestoreJob` (vor der Dienstprüfung), Knopf „Verbindungen abgleichen“
+  (`POST /api/container-maintenance/reconcile`, ok). Update merkt `snapshotAt`; Bestätigung der
+  Rückkehr nennt Datum/Alter.
+- sp-test: 447 Tests; falscher Seerr-Schlüssel per Knopf repariert, zweiter Lauf „Alle 7
+  stimmen“; Wiederherstellung der 18:45-Sicherung (mit veraltetem Seerr-Schlüssel) jetzt
+  erfolgreich mit „Schlüssel abgeglichen: Seerr → Sonarr“, ohne Hinweis. Eine echte
+  Container-Rückkehr war mangels bereitstehendem Update in der VM nicht auslösbar (Test deckt sie ab).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

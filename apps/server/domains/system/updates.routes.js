@@ -13,6 +13,9 @@ export function updateRoutes({ serviceUpdates, containerMaintenance, couchdeck, 
     { method: "POST", path: "/api/container-maintenance/batch", guard: "ok",
       confirm: "Anwendungen und Bestätigung fehlen oder sind ungültig.",
       handler: ({ body }) => containerMaintenance.applyBatch(body, couchdeck) },
+    // Verwaltete Verbindungen mit den Tresorschlüsseln abgleichen (nach Rückkehr automatisch)
+    { method: "POST", path: "/api/container-maintenance/reconcile", guard: "ok", confirm: "Abgleich mit OK bestätigen.",
+      handler: ({ body }) => containerMaintenance.reconcile(body) },
     // Wartungsfenster für automatische App-Updates (Paket 7.5)
     { method: "GET", path: "/api/update-window", guard: "session", handler: () => updateWindow.status() },
     { method: "POST", path: "/api/update-window", guard: "ok", confirm: "Wartungsfenster mit OK bestätigen.", handler: ({ body }) => updateWindow.save(body) },

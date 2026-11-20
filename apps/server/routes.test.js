@@ -65,6 +65,7 @@ test("Umgezogene Routen behalten ihre Schutzstufen", () => {
     "POST /api/container-maintenance/update": "ok",
     "POST /api/container-maintenance/rollback": "ok",
     "POST /api/container-maintenance/batch": "ok",
+    "POST /api/container-maintenance/reconcile": "ok",
     "GET /api/update-window": "session",
     "POST /api/update-window": "ok",
     "GET /api/vpn/profiles": "session",

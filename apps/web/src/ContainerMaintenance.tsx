@@ -12,6 +12,13 @@ type Maintenance = {
   update: boolean;
   rollback: boolean;
   note?: string;
+  snapshotAt?: string | null;
+};
+const age = (iso?: string | null) => {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  const date = new Date(iso).toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" });
+  return days >= 1 ? `vom ${date} (vor ${days} ${days === 1 ? "Tag" : "Tagen"})` : `vom ${date}`;
 };
 const version = (ref: string) => ref.split("@sha256:").at(-1)?.slice(0, 12);
 export function ContainerMaintenance() {
@@ -20,6 +27,7 @@ export function ContainerMaintenance() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [reconcile, setReconcile] = useState(false);
   async function reload() {
     setServices((await get<{ services: Maintenance[] }>("/api/container-maintenance")).services);
   }
@@ -46,11 +54,12 @@ export function ContainerMaintenance() {
       setNotice("");
       try {
         const { service, rollback } = selected;
-        const result = await action<{ phase: string }>(`/api/container-maintenance/${rollback ? "rollback" : "update"}`, {
+        const result = await action<{ phase: string; reconciled?: string }>(`/api/container-maintenance/${rollback ? "rollback" : "update"}`, {
           name: service.name, review: service.review, confirmation: "OK",
         });
         setNotice(result.phase === "updated" ? "Neue Version läuft. Dienstprüfung bestanden." :
-          rollback ? "Vorherige Version und Konfiguration sind wieder aktiv." : "Die neue Version wurde nicht bestätigt. Die vorherige Version und Konfiguration sind wieder aktiv.");
+          (rollback ? "Vorherige Version und Konfiguration sind wieder aktiv." : "Die neue Version wurde nicht bestätigt. Die vorherige Version und Konfiguration sind wieder aktiv.") +
+          (result.reconciled ? " " + result.reconciled : ""));
         select(null);
       } catch (error) {
         setError((error as Error).message);
@@ -61,10 +70,26 @@ export function ContainerMaintenance() {
       }
     }}>
       <p>{selected.rollback
-        ? `${selected.service.name} wird auf die gesicherte Version und Konfiguration zurückgesetzt. Neuere Änderungen werden separat auf dem Server abgelegt.`
+        ? `${selected.service.name} wird auf die gesicherte Version und Konfiguration ${age(selected.service.snapshotAt) || "vom letzten Update"} zurückgesetzt. Änderungen seitdem gelten in ${selected.service.name} nicht mehr (sie werden separat auf dem Server abgelegt). Danach gleicht StackPilot die Schlüssel der verbundenen Apps automatisch ab.`
         : `${selected.service.name} auf ${version(selected.service.to)} aktualisieren? Der Dienst wird kurz gestoppt. Wenn die neue Version die Funktionsprüfung nicht besteht, stellt StackPilot die bisherige Version wieder her.`}</p>
     </ConfirmBar>}
     {notice && <p role="status">{notice}</p>}
+    <p className="muted">
+      Stimmen Verbindungen zwischen den Apps nicht mehr (etwa nach einer Rückkehr auf einen älteren Stand), gleicht
+      StackPilot die Schlüssel mit seinem Tresor ab und testet jede Verbindung.
+    </p>
+    {!reconcile ? <button disabled={busy} onClick={() => setReconcile(true)}>Verbindungen abgleichen …</button> : (
+      <ConfirmBar label="Verbindungen abgleichen" busy={busy} busyLabel="Wird abgeglichen …" onCancel={() => setReconcile(false)}
+        onOk={async () => {
+          setBusy(true); setError(""); setNotice("");
+          try {
+            const r = await action<{ message: string }>("/api/container-maintenance/reconcile", { confirmation: "OK" });
+            setNotice(r.message);
+          } catch (error) { setError((error as Error).message); } finally { setBusy(false); setReconcile(false); }
+        }}>
+        <p>Die von StackPilot verwalteten Verbindungen (Seerr, Bazarr, Prowlarr ↔ Sonarr, Radarr, Lidarr) prüfen und abweichende Schlüssel durch die aus dem Tresor ersetzen?</p>
+      </ConfirmBar>
+    )}
     {error && <p role="alert">{error}</p>}
   </div>;
 }

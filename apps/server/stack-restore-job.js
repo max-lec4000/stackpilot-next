@@ -13,6 +13,7 @@ import { verifyStackArchive, restoreStackArchive } from "./stack-archive.js";
 import { stackBackupPlan, freezeStackForBackup } from "./stack-backup.js";
 import { ARCHIVE } from "./stack-backup-job.js";
 import { catalog } from "./catalog.js";
+import { forgetSessions, reconcileKeys, reconcileSummary } from "./key-reconcile.js";
 
 const PASSPHRASE = "stack-backup:passphrase", LAST = "stack-restore:last", JOURNAL = "stack-restore:journal";
 const KEEP_OUT = new Set(["streamystats", ".stackpilot-owner.json", ".stackpilot-container-backups"]);
@@ -208,7 +209,9 @@ export class StackRestoreJob {
       });
 
       this.step("Apps prüfen");
-      let failed = await this.verifyServices(plan);
+      const reconciled = { result: null };
+      let failed = await this.verifyServices(plan, this.verifyAttempts, reconciled);
+      if (reconciled.result) record.reconciled = reconcileSummary(reconciled.result) || null;
       if (failed.length && baseline && failed[0] === baseline) {
         record.warning = `Bestand schon vor der Wiederherstellung und besteht weiter: ${baseline}`;
         failed = [];
@@ -218,7 +221,7 @@ export class StackRestoreJob {
         const j = this.engine.vault.get(JOURNAL);
         await freezeStackForBackup(await this.backupPlan(this.engine), { ...this.freezeOptions(), archive: () => this.swapBack(j) });
         swapped = false;
-        StackRestoreJob.forgetSessions((await this.hub.context(plan.spec.selected).catch(() => ({}))).s);
+        forgetSessions((await this.hub.context(plan.spec.selected).catch(() => ({}))).s);
         this.journal("rolled-back");
         Object.assign(record, { rolledBack: true, error: `Nach dem Zurückspielen nicht bereit: ${failed.join("; ").slice(0, 300).replace(/[.\s]+$/, "")}. Der vorherige Stand ist wiederhergestellt.` });
       } else {
@@ -239,19 +242,21 @@ export class StackRestoreJob {
     }
     return record;
   }
-  static forgetSessions(s) {
-    if (s?.cookies && typeof s.cookies === "object") for (const k of Object.keys(s.cookies)) delete s.cookies[k];
-  }
   /** Alle Dienste erreichbar und mit den gespeicherten Zugängen nutzbar? Liefert Fehlermeldungen. */
-  async verifyServices(plan, attempts = this.verifyAttempts) {
+  async verifyServices(plan, attempts = this.verifyAttempts, reconcile = null) {
     let last = null;
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         const { s } = await this.hub.context(plan.spec.selected);
         // Gemerkte Anmeldungen (z. B. Seerr-Sitzung) gehören zum alten Datenstand – neu anmelden
-        StackRestoreJob.forgetSessions(s);
+        forgetSessions(s);
         for (const name of plan.spec.selected.filter((n) => catalog.services[n]?.port && !["Gluetun", "ApiRelay", "VpnProbe"].includes(n)))
           await s.wait(name);
+        // Nach dem Zurückspielen: Schlüssel anderer Apps in Seerr/Bazarr/Prowlarr mit dem Tresor abgleichen
+        if (reconcile && !reconcile.result) {
+          reconcile.result = await reconcileKeys(s).catch((e) => ({ checked: 0, repaired: [], problems: [String(e?.message || e).slice(0, 160)] }));
+          forgetSessions(s);
+        }
         await s.verify();
         return [];
       } catch (e) {

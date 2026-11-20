@@ -4,7 +4,7 @@ import { action } from "./RetirementPanel";
 import { ConfirmBar, StatusBadge, useAction, useConfirm } from "./ui";
 import { formatBytes } from "../../../packages/domain/format.js";
 
-type Last = { at: string; archive: string; ok: boolean; rolledBack?: boolean; error?: string; warning?: string; apps?: string[]; previous?: string; durationSeconds?: number };
+type Last = { at: string; archive: string; ok: boolean; rolledBack?: boolean; error?: string; warning?: string; reconciled?: string | null; apps?: string[]; previous?: string; durationSeconds?: number };
 type Status = { running: { startedAt: string; step: string; archive: string } | null; last: Last | null; previous: { name: string; createdAt: string }[]; recoveryRequired: boolean };
 type Check = { name: string; createdAt: string | null; entries: number; totalBytes: number; sameStack: boolean; apps: string[]; kept: string[]; skippedCount: number };
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString("de-AT", { dateStyle: "short", timeStyle: "short" }) : "–");
@@ -56,6 +56,7 @@ export function StackRestorePanel() {
             <p>
               Zuletzt {when(data.last.at)}: {data.last.ok
                 ? <><StatusBadge tone="success">zurückgespielt</StatusBadge> <span className="muted">{data.last.archive} · {data.last.apps?.join(", ")}</span>
+                  {data.last.reconciled && <><br /><span className="muted">{data.last.reconciled}</span></>}
                   {data.last.warning && <><br /><span className="warning">Hinweis: {data.last.warning}</span></>}</>
                 : <><StatusBadge tone={data.last.rolledBack ? "warning" : "danger"}>{data.last.rolledBack ? "zurückgekehrt" : "nicht durchgeführt"}</StatusBadge> <span className="muted">{data.last.error}</span></>}
             </p>

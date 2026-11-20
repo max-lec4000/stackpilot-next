@@ -588,6 +588,23 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   erfolgreich mit „Schlüssel abgeglichen: Seerr → Sonarr“, ohne Hinweis. Eine echte
   Container-Rückkehr war mangels bereitstehendem Update in der VM nicht auslösbar (Test deckt sie ab).
 
+### Fortschritt 7.7a – Wächter vor dem Umzug fertig geprüft (20.11.2026)
+
+- Plan 7.7: (a) Wächter fertig prüfen, (b) Container-Modus als Option `install.sh --container`
+  (Laufzeit-Abbild, nur Wächter-Socket, schreibgeschützt, ohne Rechte, AppArmor-Profil nur für
+  D-Bus → systemd1, polkit bleibt Regelstelle; Standard bleibt nativ), (c) Host-Diagnosen und
+  Pfade im Container, (d) Updates/Rückweg, Gesamtabnahme, Doku. Produktion erst nach Wächter im
+  Sperrmodus auf reatest und ausdrücklicher Freigabe.
+- sp-test mit LXD-Schnappschuss `vor-7-7a` (btrfs) gesichert, dann `reset.sh` und
+  `first-install.mjs`: **vollständige Erstinstallation (42/42) im Beobachtungsmodus – 2722
+  Docker-Aufrufe, 0 Verstöße.** Danach Sperrmodus: Gesamtsicherung einrichten und ausführen
+  (alle Apps anhalten/starten, pg_dump per exec) – 822 Aufrufe, 0 gesperrt, Sicherung ok.
+- Schnappschuss zurückgespielt (Testeinrichtung wieder da), Wächter dort ebenfalls im
+  **Sperrmodus**: Ansichten, Schlüsselabgleich – 1100 Aufrufe, 0 gesperrt.
+- Weiter offen (nicht in der VM auslösbar): VPN-Wechsel (nur eine Konfiguration) und
+  App-Updates (keine bereitstehenden). Beide nutzen dieselben Compose-/Container-Aufrufe wie
+  die geprüften Abläufe.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

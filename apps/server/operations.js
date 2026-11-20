@@ -270,6 +270,23 @@ export class Operations {
         } catch {}
       })(),
       (async () => {
+        if (!this.stackBackup) return;
+        try {
+          const b = await this.stackBackup.status();
+          const link = { action: "Sicherung öffnen", target: "manage", href: "#/system/updates" };
+          if (b.resumeRequired)
+            tasks.push({ id: "stack-backup", state: "attention", title: "Gesamtsicherung wurde unterbrochen", reason: "Apps sind womöglich noch angehalten – „Apps wieder starten“.", ...link });
+          else if (!b.configured)
+            tasks.push({ id: "stack-backup", state: "todo", title: "Gesamtsicherung einrichten", reason: "Wöchentliche, verschlüsselte Sicherung aller App-Einstellungen und Datenbanken.", ...link });
+          else if (b.last && !b.last.ok && !b.running)
+            tasks.push({ id: "stack-backup", state: "attention", title: "Letzte Gesamtsicherung fehlgeschlagen", reason: String(b.last.error || "").slice(0, 200), ...link });
+          else if (!b.running && !b.last)
+            tasks.push({ id: "stack-backup", state: "todo", title: "Noch keine Gesamtsicherung", reason: "Die erste läuft am Sonntag um 03:30 – oder jetzt per Knopf.", ...link });
+          else if (!b.running && Date.now() - Date.parse(b.last.at) > 14 * 86400000)
+            tasks.push({ id: "stack-backup", state: "attention", title: "Gesamtsicherung überfällig", reason: "Seit über zwei Wochen keine erfolgreiche Sicherung.", ...link });
+        } catch {}
+      })(),
+      (async () => {
         if (!this.dockerGuard) return;
         try {
           const g = await this.dockerGuard.status();

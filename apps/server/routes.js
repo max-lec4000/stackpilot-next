@@ -14,11 +14,17 @@ export const GUARDS = ["session", "ok", "password"];
 const userFacing = (message) => Object.assign(new Error(message), { userFacing: true });
 
 const RAW = Symbol("Rohantwort");
-export const rawResponse = (bytes, headers) => ({ [RAW]: { bytes, headers } });
+export const rawResponse = (bytes, headers, stream = null) => ({ [RAW]: { bytes, headers, stream } });
 export const fileResponse = (bytes, filename) => rawResponse(bytes, {
   "Content-Type": "application/octet-stream",
   "Content-Disposition": `attachment; filename="${filename}"`,
 });
+/** Große Datei als Datenstrom ausliefern (z. B. Gesamtsicherung), nicht im Speicher. */
+export const streamResponse = (stream, filename, size) => rawResponse(null, {
+  "Content-Type": "application/octet-stream",
+  "Content-Disposition": `attachment; filename="${filename}"`,
+  ...(Number.isSafeInteger(size) ? { "Content-Length": String(size) } : {}),
+}, stream);
 export const isRawResponse = (result) => !!result?.[RAW];
 export const rawOf = (result) => result[RAW];
 

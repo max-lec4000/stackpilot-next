@@ -181,3 +181,14 @@
 .storage-orphans li b { overflow-wrap: anywhere; }
 .storage-orphans li .ui-confirm { flex-basis: 100%; }
 .storage-view .success { color: var(--success); }
+
+/* Gesamtsicherung (Phase 7.5) */
+.stack-backup { display: grid; gap: 0.5rem; }
+.stack-backup-setup { display: grid; gap: 0.4rem; }
+.stack-backup-setup label { display: grid; gap: 0.25rem; }
+.stack-backup-setup input { max-width: 32rem; }
+.stack-backup-setup > button { justify-self: start; }
+.stack-backup-pass { font-size: 1.1rem; letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.stack-backup-list { list-style: none; padding: 0; display: grid; gap: 0.35rem; }
+.stack-backup-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.75rem; }
+.stack-backup .success { color: var(--success); }

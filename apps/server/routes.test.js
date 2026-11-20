@@ -211,3 +211,12 @@ test("Speicher: Belegung mit Sitzung, Löschen verwaister Downloads nur mit OK",
   assert.equal(r.find("GET", "/api/storage/overview").guard, "session");
   assert.equal(r.find("POST", "/api/storage/orphans/remove").guard, "ok");
 });
+
+test("Gesamtsicherung: Lesen/Herunterladen mit Sitzung, Ändern nur mit OK", async () => {
+  const { stackBackupRoutes } = await import("./domains/system/stack-backup.routes.js");
+  const r = new RouteRegistry().add(stackBackupRoutes({}));
+  assert.deepEqual(Object.fromEntries(r.list().map(({ method, path, guard }) => [`${method} ${path}`, guard])), {
+    "GET /api/stack-backup": "session", "GET /api/stack-backup/download": "session",
+    "POST /api/stack-backup/setup": "ok", "POST /api/stack-backup/run": "ok", "POST /api/stack-backup/resume": "ok",
+  });
+});

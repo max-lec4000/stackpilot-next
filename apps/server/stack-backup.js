@@ -43,6 +43,8 @@ export async function stackBackupPlan(engine, { includeData = false } = {}) {
   if (!containers.length) throw Error("Keine zugeordneten Mediencontainer gefunden.");
   return { schemaVersion: 1, planId: plan.id, rootId, includeData, roots, containers, mediaIncluded: includeData, mode: includeData ? "complete-with-media-and-downloads" : "configuration-and-databases", systemDependencies: ["Linux", "Docker", "passende UID/GID und Geräte-/Netzkonfiguration"], createdAt: new Date().toISOString() };
 }
+// Helfer ohne eigene Daten: dürfen schneller und notfalls hart beendet werden (Exit 137).
+const stateless = (container) => /^(vpn-probe|api-relay|gateway|authguard|backchannel)$/.test(container.service || "");
 const order = (container) => /gluetun/.test(container.service || "") ? 0 : /database|postgres/.test(container.service || "") ? 1 : /server|worker/.test(container.service || "") ? 2 : 3;
 export async function freezeStackForBackup(plan, { docker, manager, journal, archive }) {
   const previous = plan.containers.filter((container) => container.running).sort((a, b) => order(a) - order(b));
@@ -60,11 +62,11 @@ export async function freezeStackForBackup(plan, { docker, manager, journal, arc
     record.state = "stopping"; await journal(record);
     for (const container of [...previous].reverse()) {
       await inspect(container);
-      await docker(["stop", "--time", "60", container.id]);
+      await docker(["stop", "--time", stateless(container) ? "10" : "60", container.id]);
     }
     for (const container of plan.containers) {
       const row = await inspect(container);
-      if (row.State.Running || row.State.Restarting || row.State.OOMKilled || (previous.some((item) => item.id === container.id) && row.State.ExitCode === 137))
+      if (row.State.Running || row.State.Restarting || row.State.OOMKilled || (previous.some((item) => item.id === container.id) && row.State.ExitCode === 137 && !stateless(container)))
         throw Error("Geordnetes Ende aller Datenbank-/App-Prozesse ist nicht bestätigt.");
     }
     record.state = "frozen"; await journal(record);

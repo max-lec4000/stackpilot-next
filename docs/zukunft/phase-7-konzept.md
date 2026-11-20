@@ -449,6 +449,27 @@ und getestet, aber ohne Route/Oberfläche – Speicherort und Häufigkeit mit Ma
   vollständiger Abgleich echt durchgelaufen („beendet“).
 - Metadaten korrigieren bleibt Expertenzugang (Jellyfin „Identifizieren“).
 
+### Fortschritt 7.5 – Gesamtsicherung (20.11.2026)
+
+Entscheidungen von Max: Ordner am Server + Download; wöchentlich (So 03:30) + Knopf, 4 behalten;
+StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Automatik).
+
+- `stack-backup-job.js` verbindet die vorhandenen Bausteine: Vorabprüfung (`stackBackupPlan`),
+  `pg_dump` von Streamystats (Roh-Datenbank gehört einem anderen Container-Benutzer), Apps
+  geordnet anhalten (`freezeStackForBackup` mit Journal im Tresor), StackPilot-Zustand per
+  `VACUUM INTO` + Dateikopie, verschlüsseltes Archiv (`createStackArchive` mit Ausschlüssen,
+  Links/Sockets überspringen), Wiederanlauf, Aufbewahrung, vollständige Prüfung
+  (`verifyStackArchive`, neu: Entschlüsseln ohne Schreiben). Notfall-Wiederanlauf, Zeitplan,
+  Download als Datenstrom (`streamResponse`, neu in routes/middleware), Zuhause-Aufgaben.
+- Baustein-Anpassungen: Helfer ohne Daten (vpn-probe, api-relay, Gateways, authguard,
+  backchannel) mit 10 s und erlaubtem Exit 137 (vpn-probe ignoriert SIGTERM → vorher Abbruch);
+  `docker stop/start` mit 180 s Frist (vorher 60 s → Abbruch bei Postgres).
+- `deploy/stack-restore.mjs`: Notfall-Entpacken ohne laufendes StackPilot.
+- sp-test: 400 Tests; echte Sicherung 154 s (Apps ~1,5 min angehalten), 370 MB aus 2,7 GB,
+  geprüft; Download über die API, Wiederherstellung in Testordner (Zustand, Tresor,
+  Streamystats-Export, App-Datenbanken), falsches Passwort abgelehnt; Notfall-Skript getestet.
+- Offen: Wiederherstellung auf den laufenden Server per Knopf (heute begleitet, Doku-Schritte).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

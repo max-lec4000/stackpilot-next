@@ -35,7 +35,10 @@ function frame(value) {
   const length = Buffer.alloc(4); length.writeUInt32BE(json.length);
   return Buffer.concat([length, json]);
 }
-async function catalogRoot(label, root, limit) {
+// options.exclude(label, relative) → true: Eintrag (und bei Ordnern alles darunter) auslassen.
+// options.skipped: Liste – Links und besondere Dateien (Sockets, Pipes) werden dann übersprungen
+// und dort vermerkt, statt die Sicherung abzubrechen.
+async function catalogRoot(label, root, limit, options = {}) {
   const entries = [], handle = await open(root, directoryFlags);
   async function walk(parent, relative) {
     const stream = await opendir(fdPath(parent));
@@ -43,7 +46,11 @@ async function catalogRoot(label, root, limit) {
       if (entries.length >= limit) throw Error("Sicherung enthält zu viele Einträge; kein Teilarchiv erstellt.");
       const name = relative ? relative + "/" + entry.name : entry.name;
       snapshotPath(label + "/" + name);
-      if (entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())) throw Error("Sicherung enthält einen Link oder eine besondere Datei: " + label + "/" + name);
+      if (options.exclude?.(label, name)) continue;
+      if (entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())) {
+        if (options.skipped) { options.skipped.push(label + "/" + name); continue; }
+        throw Error("Sicherung enthält einen Link oder eine besondere Datei: " + label + "/" + name);
+      }
       let child;
       try {
         child = await open(fdPath(parent, entry.name), entry.isDirectory() ? directoryFlags : constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -67,7 +74,7 @@ async function withFile(root, relative, inspect) {
     return await inspect(file);
   } finally { for (const handle of handles.reverse()) await handle.close(); }
 }
-export async function createStackArchive({ roots, output, passphrase, manifest = {}, maxEntries = 200000 }) {
+export async function createStackArchive({ roots, output, passphrase, manifest = {}, maxEntries = 200000, exclude = null, skipSpecial = false }) {
   password(passphrase);
   if (!Array.isArray(roots) || !roots.length || roots.length > 3 || new Set(roots.map((root) => root.label)).size !== roots.length || roots.some((root) => !labels.has(root.label)))
     throw Error("Ungültige Sicherungsauswahl.");
@@ -75,8 +82,8 @@ export async function createStackArchive({ roots, output, passphrase, manifest =
   for (const root of roots) canonical.push({ label: root.label, directory: await realpath(root.directory) });
   const outputParent = await realpath(path.dirname(output)), target = path.join(outputParent, path.basename(output));
   if (canonical.some((root) => target === root.directory || target.startsWith(root.directory + path.sep))) throw Error("Sicherung außerhalb aller gesicherten Verzeichnisse ablegen.");
-  const snapshots = [];
-  for (const root of canonical) snapshots.push(...await catalogRoot(root.label, root.directory, maxEntries - snapshots.length));
+  const snapshots = [], skipped = [], catalogOptions = { exclude, ...(skipSpecial ? { skipped } : {}) };
+  for (const root of canonical) snapshots.push(...await catalogRoot(root.label, root.directory, maxEntries - snapshots.length, catalogOptions));
   const totalBytes = snapshots.reduce((sum, entry) => sum + entry.size, 0);
   if (!Number.isSafeInteger(totalBytes)) throw Error("Sicherungsumfang nicht sicher darstellbar.");
   const capacity = await statfs(outputParent);
@@ -88,7 +95,7 @@ export async function createStackArchive({ roots, output, passphrase, manifest =
   const key = await derive(passphrase, salt, 32, params), cipher = createCipheriv("aes-256-gcm", key, iv);
   cipher.setAAD(preamble);
   let out, complete = false;
-  const details = { ...manifest, formatVersion: 1, createdAt: new Date().toISOString(), roots: canonical, entries: snapshots.length, totalBytes };
+  const details = { ...manifest, formatVersion: 1, createdAt: new Date().toISOString(), roots: canonical, entries: snapshots.length, totalBytes, skipped: skipped.slice(0, 20).map((v) => v.slice(0, 160)), skippedCount: skipped.length };
   async function* payload() {
     yield frame({ type: "manifest", value: details });
     for (const root of canonical) yield frame({ type: "directory", path: root.label });
@@ -119,7 +126,7 @@ export async function createStackArchive({ roots, output, passphrase, manifest =
     }
     // Validate the entire source set again, including newly added or removed files.
     for (const root of canonical) {
-      const after = await catalogRoot(root.label, root.directory, maxEntries);
+      const after = await catalogRoot(root.label, root.directory, maxEntries, { exclude, ...(skipSpecial ? { skipped: [] } : {}) });
       if (JSON.stringify(after) !== JSON.stringify(snapshots.filter((entry) => entry.label === root.label))) throw Error("Quellbestand wurde während der Sicherung geändert.");
     }
     yield frame({ type: "end", entries: snapshots.length, totalBytes });
@@ -139,7 +146,11 @@ export async function createStackArchive({ roots, output, passphrase, manifest =
     if (out && !complete) await rm(target, { force: true });
   }
 }
-export async function restoreStackArchive({ archive, destination, passphrase, maxBytes = 64 * 1024 ** 3, maxEntries = 200000 }) {
+/** Archiv vollständig entschlüsseln und prüfen, ohne etwas zu schreiben. */
+export function verifyStackArchive({ archive, passphrase, maxBytes = 1024 ** 4, maxEntries = 200000 }) {
+  return restoreStackArchive({ archive, destination: null, passphrase, maxBytes, maxEntries, dryRun: true });
+}
+export async function restoreStackArchive({ archive, destination, passphrase, maxBytes = 64 * 1024 ** 3, maxEntries = 200000, dryRun = false }) {
   password(passphrase);
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) throw Error("Ungültiges Wiederherstellungslimit.");
   const source = await open(archive, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -160,9 +171,12 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
     decipher.setAAD(Buffer.concat([first, header]));
     const tag = Buffer.alloc(16); await source.read(tag, 0, 16, st.size - 16); decipher.setAuthTag(tag);
     // This directory must be new. Existing installations are never overwritten.
-    await mkdir(destination, { mode: 0o700 }); created = true;
-    const disk = await statfs(destination);
-    const budget = Math.min(maxBytes, Math.floor(disk.bavail * disk.bsize * 0.9));
+    let budget = maxBytes;
+    if (!dryRun) {
+      await mkdir(destination, { mode: 0o700 }); created = true;
+      const disk = await statfs(destination);
+      budget = Math.min(maxBytes, Math.floor(disk.bavail * disk.bsize * 0.9));
+    }
     await pipeline(
       Readable.from(readRange(source, first.length + size, st.size - 17)),
       decipher, createGunzip(),
@@ -190,7 +204,7 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
             if (await exact(1, true) !== null) throw Error("Unerwartete Daten nach Archivende.");
             return;
           }
-          const relative = snapshotPath(entry.path), target = path.join(destination, relative);
+          const relative = snapshotPath(entry.path), target = dryRun ? null : path.join(destination, relative);
           if (completed.has(relative)) throw Error("Doppelter Archivpfad.");
           const parent = path.posix.dirname(relative);
           if (parent !== "." && !expectedDirectories.has(parent)) throw Error("Archivverzeichnis fehlt.");
@@ -199,22 +213,28 @@ export async function restoreStackArchive({ archive, destination, passphrase, ma
             if (entry.type !== "directory") throw Error("Ungültige Archivwurzel.");
           } else if (++count > maxEntries) throw Error("Zu viele Archiveinträge.");
           if (entry.type === "directory") {
-            await mkdir(target, { mode: 0o700 }); expectedDirectories.add(relative);
+            if (!dryRun) await mkdir(target, { mode: 0o700 });
+            expectedDirectories.add(relative);
           } else if (entry.type === "file") {
             if (!Number.isSafeInteger(entry.size) || entry.size < 0 || totalBytes + entry.size > budget) throw Error("Ungültige Dateigröße.");
             if (!Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o700 || !Number.isFinite(entry.modified) || Math.abs(entry.modified) > 8640000000000000) throw Error("Ungültige Dateimetadaten.");
-            const file = await open(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, entry.mode & 0o100 ? 0o700 : 0o600);
-            try {
+            if (dryRun) {
               let remaining = entry.size;
-              while (remaining) { const chunk = await exact(Math.min(65536, remaining)); await file.writeFile(chunk); remaining -= chunk.length; }
-              await file.utimes(new Date(entry.modified), new Date(entry.modified));
-            } finally { await file.close(); }
+              while (remaining) remaining -= (await exact(Math.min(65536, remaining))).length;
+            } else {
+              const file = await open(target, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, entry.mode & 0o100 ? 0o700 : 0o600);
+              try {
+                let remaining = entry.size;
+                while (remaining) { const chunk = await exact(Math.min(65536, remaining)); await file.writeFile(chunk); remaining -= chunk.length; }
+                await file.utimes(new Date(entry.modified), new Date(entry.modified));
+              } finally { await file.close(); }
+            }
             totalBytes += entry.size;
           } else throw Error("Links und besondere Dateien sind im Wiederherstellungsarchiv nicht erlaubt.");
         }
       },
     );
-    return { state: "verified", destination, manifest, entries: count, totalBytes, productionImport: false };
+    return { state: "verified", destination: dryRun ? null : destination, manifest, entries: count, totalBytes, productionImport: false };
   } catch {
     if (created) await rm(destination, { recursive: true, force: true });
     throw Error("Wiederherstellung nicht bestätigt: Passphrase, Integrität, Format oder Platz prüfen. Keine bestehende Installation wurde überschrieben.");

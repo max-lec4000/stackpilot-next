@@ -11,6 +11,8 @@ import { SourceHealth } from "./source-health.js";
 import { QualityDefaults } from "./quality-defaults.js";
 import { StorageOverview } from "./storage-overview.js";
 import { LibraryOverview } from "./library-overview.js";
+import { StackBackupJob } from "./stack-backup-job.js";
+import { stackBackupRoutes } from "./domains/system/stack-backup.routes.js";
 import { storageRoutes } from "./domains/storage/storage.routes.js";
 import { hostAllowed, isPlainLoopback } from "./access.js";
 import { YouTubeVpnRelay } from "./youtube-vpn.js";
@@ -121,6 +123,9 @@ export function inventoryMiddleware(options = {}) {
   operations.downloadIssues = downloadIssues;
   operations.dockerGuard = dockerGuard;
   operations.sourceHealth = new SourceHealth(hub);
+  const stackBackup = new StackBackupJob(hub);
+  operations.stackBackup = stackBackup;
+  if (options.background !== false && !process.env.NODE_TEST_CONTEXT) stackBackup.start();
   // Docker-Wächter: Datenordner der Stacks melden (nur wenn StackPilot über ihn läuft)
   try { writeGuardRoots(state); } catch (e) { console.error("Docker-Wächter: Datenordner nicht gemeldet:", e.message); }
   const appUpdates = new AppUpdates(installer());
@@ -238,6 +243,7 @@ export function inventoryMiddleware(options = {}) {
     .add(updateRoutes({ serviceUpdates, containerMaintenance, couchdeck }))
     .add(dockerGuardRoutes({ dockerGuard }))
     .add(storageRoutes({ storageOverview: new StorageOverview(hub) }))
+    .add(stackBackupRoutes({ stackBackup }))
     .add(vpnRoutes({ vault: () => installer().vault, youtubeVpn, vpnSwitch, completedPlan }))
     .add(viewerRequestRoutes({ viewerRequests }))
     .add(remoteRoutes({
@@ -397,6 +403,7 @@ export function inventoryMiddleware(options = {}) {
         if (isRawResponse(result)) {
           const raw = rawOf(result);
           for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
+          if (raw.stream) { raw.stream.on("error", () => res.destroy()); return raw.stream.pipe(res); }
           return res.end(raw.bytes);
         }
       } else if (url.pathname === "/api/auth/status" && req.method === "GET") {
@@ -461,6 +468,7 @@ export function inventoryMiddleware(options = {}) {
             const raw = rawOf(result);
             try { audit.finish(auditId, true); } catch {}
             for (const [k, v] of Object.entries(raw.headers)) res.setHeader(k, v);
+            if (raw.stream) { raw.stream.on("error", () => res.destroy()); return raw.stream.pipe(res); }
             return res.end(raw.bytes);
           }
         }

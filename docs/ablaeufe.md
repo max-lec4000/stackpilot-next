@@ -163,6 +163,38 @@ Container zählt StackPilot nicht mit). **Verwaiste Downloads**: fertige Downloa
 die Bibliothek und ohne offenen Import – **Samt Dateien löschen** → **OK**; StackPilot prüft
 vorher noch einmal. **Speicher → Aufräumen**: Serienbibliothek bereinigen (wie bisher).
 
+## Gesamtsicherung (ab 7.5)
+
+**System → Updates & Sicherungen → Gesamtsicherung.** Verschlüsseltes Archiv aller
+App-Einstellungen und Datenbanken und von StackPilot selbst (Zustand, Tresor) – **ohne** Filme,
+Serien, Musik und Downloads.
+
+- **Einrichten:** Ordner am Server wählen (am besten andere Platte bzw. später NAS; Vorschlag
+  `<Datenordner>/../stackpilot-sicherungen`) → **OK**. Beim ersten Mal zeigt StackPilot einmal
+  das **Sicherungspasswort** – außerhalb des Servers aufbewahren (Passwortmanager). Ohne es ist
+  keine Wiederherstellung möglich.
+- **Automatisch** sonntags 03:30, dazu **Jetzt sichern**; die letzten 4 bleiben. Jede Sicherung
+  lässt sich **herunterladen**. Die Apps stehen dabei ca. 1–3 Minuten still und starten selbst
+  wieder. Danach prüft StackPilot das Archiv vollständig.
+- Inhalt: `state/` (StackPilot-Zustand als konsistente Kopie, Tresor-Schlüssel,
+  `stackpilot-datenbank-exporte/streamystats.sql`) und `appdata/` (ohne interne Rollback-Kopien
+  und ohne die Roh-Datenbank von Streamystats – dafür der Export). Links und Sockets werden
+  übersprungen und im Ergebnis genannt.
+- Bricht eine Sicherung ab, während Apps angehalten sind, zeigt die Seite **Apps wieder
+  starten**; Zuhause meldet unterbrochene, fehlgeschlagene oder überfällige Sicherungen.
+
+### Gesamtsicherung wiederherstellen (noch begleitet, kein Knopf)
+1. Archiv entpacken – geht auch ohne laufendes StackPilot, schreibt nur in einen **neuen** Ordner:
+   `/opt/stackpilot/node/bin/node /opt/stackpilot/app/deploy/stack-restore.mjs <archiv.spstack> <neuer-ordner>`
+   (fragt das Sicherungspasswort).
+2. Auf dem (neuen) Server StackPilot mit `install.sh` installieren – gleicher Benutzer, gleiche
+   Daten-/Medienordner.
+3. StackPilot und alle Stack-Container anhalten, dann `state/` nach `/var/lib/stackpilot` und
+   `appdata/` nach `<Datenordner>-appdata` zurückspielen (Besitzer: StackPilot-Benutzer).
+4. StackPilot starten und den Stack wieder hochfahren; den Streamystats-Export einspielen.
+
+Schritte 2–4 sind als Ganzes noch nicht erprobt – im Ernstfall Claude/Codex dazuholen.
+
 ## Sicherungen
 
 ### Authentik

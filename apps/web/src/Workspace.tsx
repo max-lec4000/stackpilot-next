@@ -6,6 +6,7 @@ import { IdentityBackups } from "./IdentityBackups";
 import { Disclosure } from "./ui";
 import { ServiceUpdates } from "./ServiceUpdates";
 import { DockerGuard } from "./DockerGuard";
+import { StackBackupPanel } from "./StackBackupPanel";
 import { ContainerMaintenance } from "./ContainerMaintenance";
 import { VaultBackup } from "./VaultBackup";
 import { type Inventory, type Storage } from "./ServerCheck";
@@ -77,6 +78,9 @@ export function Workspace({
       <>
         <h2>Sicherungen &amp; Updates</h2>
         <ServiceUpdates />
+        <Disclosure title="Gesamtsicherung">
+          <StackBackupPanel />
+        </Disclosure>
         <Disclosure title="Docker-Wächter">
           <DockerGuard />
         </Disclosure>

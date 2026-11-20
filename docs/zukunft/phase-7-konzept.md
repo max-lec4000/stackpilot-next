@@ -605,6 +605,27 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   App-Updates (keine bereitstehenden). Beide nutzen dieselben Compose-/Container-Aufrufe wie
   die geprüften Abläufe.
 
+### Fortschritt 7.7b/c – Container-Modus als Option (21.11.2026)
+
+- `deploy/container/`: `Dockerfile` (Ubuntu 24.04 per Digest, git, openssl, iproute2,
+  util-linux, procps, systemd-Client; Docker-CLI, Compose-Plugin, tailscale vom Host),
+  `apparmor.profile` (docker-default + `signal receive` von runc/crun + D-Bus nur zu
+  `org.freedesktop.systemd1` und zum Bus), `run.sh` (Startargumente: `--network host`,
+  Benutzer/Gruppen `stackpilot-docker`/`couchdeck-link`, `--read-only`, `--cap-drop ALL`,
+  `no-new-privileges`, `--init`, gleiche Pfade wie am Host, `/run/systemd/system` für
+  systemctl, weitere Stack-Ordner aus `docker-guard-roots.json`).
+- `install.sh --container|--native`, Betriebsart in `install.env` (Updates behalten sie);
+  Container-Modus nur mit Wächter im Sperrmodus und AppArmor. Wächter- und tailscaled-
+  Laufzeitordner bleiben bei Neustarts erhalten (`RuntimeDirectoryPreserve`).
+- App: `hostRoot()`/`hostMounts()` – Systemspeicher über `/etc/stackpilot`, Container-
+  Interna aus der Einhängeliste, Hinweis bei den Prüfgrenzen.
+- sp-test (Wächter im Sperrmodus): Umzug per `install.sh --container`; Ansichten, Tailscale,
+  Couchdeck-Status, Update-Status, Schlüsselabgleich ok; `systemctl start stackpilot-root@…`
+  aus dem Container erlaubt, fremde Aufträge/`restart docker` von polkit abgelehnt, logind von
+  AppArmor abgelehnt, kein Docker-Socket, App schreibgeschützt; Wächter-Neustart übersteht der
+  Container; Gesamtsicherung aus dem Container ok (2195 Aufrufe, 0 gesperrt); sauberes Beenden
+  (nach runc-Signalregel); Rückweg `--native` und wieder `--container` ok. 448 Tests.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

@@ -6,6 +6,10 @@
 # Optionen:
 #   --tailscale     Tailscale mitinstallieren (für HTTPS/Funnel; es geht auch ohne)
 #   --user <name>   Benutzer, unter dem StackPilot läuft (Standard: wer sudo aufruft)
+#   --container     StackPilot im Container betreiben (Phase 7.7; nur mit Docker-Wächter im
+#                   Sperrmodus): kein Docker-Socket, schreibgeschützt, ohne Linux-Rechte
+#   --native        zurück zum Betrieb als normaler Systemdienst (Standard)
+#                   Ohne beide Optionen bleibt die bisherige Betriebsart.
 #
 # Was dieses Skript macht:
 #   1. Pakete: Docker mit Compose, curl, polkit (nur was fehlt)
@@ -30,18 +34,34 @@ STATE=/var/lib/stackpilot
 ETC=/etc/stackpilot
 ADMIN="${STACKPILOT_USER:-${SUDO_USER:-}}"
 WITH_TAILSCALE=no
+MODE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --tailscale) WITH_TAILSCALE=yes ;;
     --user) ADMIN="${2:-}"; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    --container) MODE=container ;;
+    --native) MODE=native ;;
+    -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
     *) echo "Unbekannte Option: $1"; exit 1 ;;
   esac
   shift
 done
 
 # ---------- Vorprüfung ----------
+if [ -z "$MODE" ]; then
+  MODE="$( [ -r /etc/stackpilot/install.env ] && sed -n 's/^STACKPILOT_MODE=//p' /etc/stackpilot/install.env | tail -1 )"
+  [ "$MODE" = container ] || MODE=native
+fi
+if [ "$MODE" = container ]; then
+  GUARD_MODE="$( [ -r /etc/stackpilot/docker-guard.json ] && python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("mode",""))' /etc/stackpilot/docker-guard.json 2>/dev/null || true )"
+  if [ "$GUARD_MODE" != enforce ]; then
+    echo "Container-Modus nur mit Docker-Wächter im Sperrmodus. Zuerst nativ installieren, den"
+    echo "Wächter beobachten lassen und dann:  sudo /opt/stackpilot/app/deploy/docker-guard.sh enforce"
+    exit 1
+  fi
+  command -v apparmor_parser >/dev/null || { echo "Container-Modus braucht AppArmor (apparmor_parser)."; exit 1; }
+fi
 if [ -z "$ADMIN" ] || [ "$ADMIN" = root ] || ! id "$ADMIN" >/dev/null 2>&1; then
   echo "StackPilot läuft als normaler Benutzer. Bitte mit sudo aus dessen Konto starten"
   echo "oder --user <name> angeben."
@@ -163,7 +183,7 @@ REPO="${STACKPILOT_REPO:-$(git -C "$SRC" remote get-url origin 2>/dev/null || tr
 REPO="${REPO:-https://github.com/max-lec4000/stackpilot-next.git}"
 case "$REPO" in https://*) ;; *) REPO="https://github.com/max-lec4000/stackpilot-next.git" ;; esac
 BRANCH="${STACKPILOT_BRANCH:-main}"
-printf 'STACKPILOT_USER=%s\nSTACKPILOT_REPO=%s\nSTACKPILOT_BRANCH=%s\n' "$ADMIN" "$REPO" "$BRANCH" > "$ETC/install.env"
+printf 'STACKPILOT_USER=%s\nSTACKPILOT_REPO=%s\nSTACKPILOT_BRANCH=%s\nSTACKPILOT_MODE=%s\n' "$ADMIN" "$REPO" "$BRANCH" "$MODE" > "$ETC/install.env"
 cat > /etc/systemd/system/stackpilot.service <<EOF
 # Verwaltet von StackPilot (install.sh)
 [Unit]
@@ -246,6 +266,58 @@ else
   echo "Nicht installiert – übersprungen. Nachholen mit: sudo bash install.sh --tailscale"
 fi
 
+if [ "$MODE" = container ]; then
+  echo "==> Container-Modus: Laufzeit-Abbild, AppArmor-Profil, Dienst"
+  CTX="$(mktemp -d)"
+  install -d "$CTX/bin" "$CTX/cli-plugins"
+  cp "$PREFIX/app/deploy/container/Dockerfile" "$CTX/"
+  cp "$(command -v docker)" "$CTX/bin/docker"
+  for plugin in /usr/libexec/docker/cli-plugins/docker-compose /usr/lib/docker/cli-plugins/docker-compose; do
+    [ -x "$plugin" ] && { cp "$plugin" "$CTX/cli-plugins/"; break; }
+  done
+  [ -x "$CTX/cli-plugins/docker-compose" ] || { echo "Docker-Compose-Plugin nicht gefunden."; rm -rf "$CTX"; exit 1; }
+  if command -v tailscale >/dev/null; then cp "$(command -v tailscale)" "$CTX/bin/tailscale"; fi
+  docker build -q -t stackpilot-runtime:local "$CTX" >/dev/null
+  rm -rf "$CTX"
+  install -m 644 "$PREFIX/app/deploy/container/apparmor.profile" /etc/apparmor.d/stackpilot-container
+  apparmor_parser -r -W /etc/apparmor.d/stackpilot-container
+  chmod 755 "$PREFIX/app/deploy/container/run.sh"
+  # tailscaled-Laufzeitordner erhalten, damit die Einbindung im Container gültig bleibt
+  if systemctl cat tailscaled.service >/dev/null 2>&1; then
+    install -d -m 755 /etc/systemd/system/tailscaled.service.d
+    printf '# Verwaltet von StackPilot (install.sh, Container-Modus)\n[Service]\nRuntimeDirectoryPreserve=yes\n' \
+      > /etc/systemd/system/tailscaled.service.d/stackpilot.conf
+  fi
+  cat > /etc/systemd/system/stackpilot.service <<UNIT
+# Verwaltet von StackPilot (install.sh) – Container-Modus (Phase 7.7)
+[Unit]
+Description=StackPilot – Medienstack einrichten und verwalten (Container)
+After=network-online.target docker.service stackpilot-docker-guard.service
+Wants=network-online.target stackpilot-docker-guard.service
+Requires=docker.service
+StartLimitIntervalSec=120
+StartLimitBurst=3
+
+[Service]
+Type=simple
+Environment=STACKPILOT_BIND=${STACKPILOT_BIND:-0.0.0.0}
+ExecStartPre=-/usr/bin/docker rm -f stackpilot
+ExecStart=$PREFIX/app/deploy/container/run.sh
+ExecStop=/usr/bin/docker stop -t 240 stackpilot
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=260
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+else
+  # Nativer Dienst: Container-Reste entfernen (Abbild bleibt für einen späteren Wechsel)
+  docker rm -f stackpilot >/dev/null 2>&1 || true
+  rm -f /etc/systemd/system/tailscaled.service.d/stackpilot.conf
+  systemctl daemon-reload
+fi
 systemctl enable stackpilot.service >/dev/null
 systemctl restart stackpilot.service
 sleep 2

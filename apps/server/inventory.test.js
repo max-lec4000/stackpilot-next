@@ -243,3 +243,19 @@ test("Eigene verwaltete Container werden nicht als Altinstallationen zur Ablösu
     ["foreign"],
   );
 });
+
+test("Container-Betrieb: nur eingebundene Host-Ordner zählen als Einhängepunkte", async () => {
+  const { hostMounts } = await import("./inventory.js");
+  const list = [
+    { target: "/", source: "overlay", type: "overlay" },
+    { target: "/proc/acpi", source: "tmpfs", type: "tmpfs" },
+    { target: "/etc/hosts", source: "/dev/sda1[/var/lib/docker/x]", type: "ext4" },
+    { target: "/run/dbus", source: "tmpfs[/dbus]", type: "tmpfs" },
+    { target: "/etc/passwd", source: "/dev/sda1[/etc/passwd]", type: "ext4" },
+    { target: "/usr/sbin/docker-init", source: "/dev/sda1[/usr/bin/docker-init]", type: "ext4" },
+    { target: "/home/ubuntu", source: "/dev/sda1[/home/ubuntu]", type: "ext4" },
+    { target: "/mnt/nas", source: "nas:/media", type: "nfs4" },
+  ];
+  assert.deepEqual(hostMounts(list, true).map((m) => m.target), ["/home/ubuntu", "/mnt/nas"]);
+  assert.equal(hostMounts(list, false).length, 8, "nativ unverändert");
+});

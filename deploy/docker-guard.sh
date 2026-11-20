@@ -63,6 +63,8 @@ ExecStart=$PREFIX/node/bin/node $PREFIX/app/apps/docker-guard/guard.js $CONF
 ExecStartPost=/bin/sh -c 'for i in \$(seq 50); do [ -S $SOCK ] && exit 0; sleep 0.1; done; exit 1'
 RuntimeDirectory=stackpilot-docker-guard
 RuntimeDirectoryMode=0750
+# Ordner bleibt bei Neustarts erhalten – der StackPilot-Container hat ihn eingebunden
+RuntimeDirectoryPreserve=yes
 Restart=always
 RestartSec=2
 UMask=0077

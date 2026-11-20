@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { allArrQueue } from "./request-index.js";
 import { qbitAdapter } from "./adapters/qbittorrent.js";
+import { hostRoot } from "./inventory.js";
 
 const execute = promisify(execFile);
 const text = (v, n = 200) => (typeof v === "string" ? v.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, n) : "");
@@ -58,7 +59,8 @@ export class StorageOverview {
   }
   async disks(plan) {
     const out = [], seen = new Set();
-    for (const [label, dir] of [["Medien und Downloads", plan.spec.path], ["App-Daten", plan.appdata || plan.spec.path + "-appdata"], ["System", "/"]]) {
+    const system = hostRoot();
+    for (const [label, dir] of [["Medien und Downloads", plan.spec.path], ["App-Daten", plan.appdata || plan.spec.path + "-appdata"], ["System", system]]) {
       try {
         const [fs, st] = await Promise.all([this.statfs(dir), this.stat(dir)]);
         if (seen.has(st.dev)) { out.find((d) => d.dev === st.dev).labels.push(label); continue; }

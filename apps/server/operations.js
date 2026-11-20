@@ -1,10 +1,10 @@
 import { stat, statfs } from "node:fs/promises";
-import { inspectPath } from "./inventory.js";
+import { hostRoot, inspectPath } from "./inventory.js";
 import { managedServices } from "./managed.js";
 import { LiveCache } from "./request-index.js";
 import { storageHealth } from "../../packages/domain/storage-health.js";
 async function rootStorage() {
-  const [fs, root] = await Promise.all([statfs("/"), stat("/")]);
+  const [fs, root] = await Promise.all([statfs(hostRoot()), stat(hostRoot())]);
   return {
     device: root.dev, totalBytes: fs.blocks * fs.bsize,
     freeBytes: fs.bavail * fs.bsize, usedBytes: (fs.blocks - fs.bfree) * fs.bsize,

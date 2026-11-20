@@ -128,6 +128,24 @@ Docker-Wächter** (Modus, Zahl der Aufrufe, letzte Verstöße, erlaubte Ordner).
 - Die Zähler beginnen nach jedem Neustart des Wächters neu; Verstöße stehen zusätzlich im
   Journal: `journalctl -u stackpilot-docker-guard`.
 
+### StackPilot im Container (optional, ab 7.7)
+Voraussetzung: Docker-Wächter im **Sperrmodus**. Dann am Server:
+`sudo bash /opt/stackpilot/app/install.sh --container` (bzw. aus einem neuen Quellstand).
+StackPilot läuft danach als Container `stackpilot` statt als normaler Dienst:
+kein Docker-Socket (nur der Wächter), schreibgeschütztes Dateisystem, keine Linux-Rechte,
+`no-new-privileges`, eigenes AppArmor-Profil `stackpilot-container` (Docker-Standard plus nur
+D-Bus zum systemd-Manager). Root-Aufträge (Couchdeck, Updates, Wächter sperren) laufen wie
+bisher über `systemctl` und polkit – polkit entscheidet allein.
+
+- Eingebunden: `/opt/stackpilot` (nur lesen), `/var/lib/stackpilot`, der Heimordner des
+  StackPilot-Kontos, weitere Datenordner des Stacks außerhalb davon (nach Neustart), Couchdeck-
+  Steuerordner, Wächter-, D-Bus- und Tailscale-Socket. Datenordner außerhalb des Heimordners
+  erst nach einem Neustart sichtbar (`sudo systemctl restart stackpilot`).
+- Updates von StackPilot behalten die Betriebsart; das Laufzeit-Abbild
+  `stackpilot-runtime:local` baut `install.sh` aus `deploy/container/Dockerfile`.
+- Zurück zum normalen Dienst: `sudo bash /opt/stackpilot/app/install.sh --native`.
+- Protokoll wie gewohnt: `journalctl -u stackpilot`; Zustand: `sudo docker ps --filter name=stackpilot`.
+
 ### Dienstschlüssel erneuern
 
 Unter **System → Apps & Container → Dienst → Details → API-Schlüssel erneuern** das

@@ -90,6 +90,18 @@ export function flattenMounts(nodes) {
     ...flattenMounts(n.children || []),
   ]);
 }
+// Im Container (Phase 7.7) sieht findmnt die Einhängungen des Containers: dessen Wurzel
+// (overlay) und Docker-Interna gehören nicht zum Server; die eingebundenen Host-Ordner
+// (Heim-, Daten-, Zustandsordner) zeigen dagegen echte Platte und Dateisystem.
+export const inContainer = () => process.env.STACKPILOT_CONTAINER === "1";
+/** Ordner auf der Systemplatte des Servers: im Container ist „/“ die Container-Wurzel,
+ *  /etc/stackpilot dagegen schreibgeschützt vom Host eingebunden. */
+export const hostRoot = () => (inContainer() ? "/etc/stackpilot" : "/");
+export function hostMounts(list, container = inContainer()) {
+  if (!container) return list;
+  return list.filter((m) => m.target !== "/" && !/^\/(proc|sys|dev)(\/|$)/.test(m.target) &&
+    !/^\/(etc|usr)\//.test(m.target) && m.type !== "overlay" && m.type !== "tmpfs");
+}
 export async function inventory(run = command) {
   const [release, docker, compose, containers, mounts, ports, details] =
     await Promise.all([
@@ -125,7 +137,7 @@ export async function inventory(run = command) {
   }
   try {
     if (mounts.ok)
-      mountList = flattenMounts(
+      mountList = hostMounts(flattenMounts(
         JSON.parse(mounts.output).filesystems || [],
       ).filter(
         (m) =>
@@ -145,7 +157,7 @@ export async function inventory(run = command) {
             "bpf",
             "hugetlbfs",
           ].includes(m.type),
-      );
+      ));
     else issues.push(`Mountpunkte: ${mounts.reason}`);
   } catch {
     issues.push("Mountpunkte konnten nicht ausgewertet werden.");
@@ -248,6 +260,7 @@ export async function inventory(run = command) {
       "Keine vollständige Übernahme, ACL-, GPU-Treiber- oder Hardlink-Funktionsprüfung.",
       "Prozesszuordnung ist ohne zusätzliche Rechte möglicherweise unvollständig. Keine automatische Bereinigung.",
       "Docker-Befehle verwenden den aktiven Docker-Kontext; ein entfernter Daemon kann abweichende Speicherpfade haben.",
+      ...(inContainer() ? ["StackPilot läuft im Container: Einhängepunkte und Laufwerke nur, soweit sie in den Container eingebunden sind."] : []),
     ],
   };
   return { ...result, retirement: retirementCandidates(result) };

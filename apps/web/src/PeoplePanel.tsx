@@ -13,9 +13,12 @@ type Profiles = {
   libraries: { id: string; name: string; available: boolean }[];
   pending: { username: string; profileId: string | null } | null;
 };
-type RequestRow = { username: string; editable: boolean; reason?: string | null; needsAccount?: boolean; userId: number | null; permissions: number | null; movieAutoApprove: boolean; tvAutoApprove: boolean };
+type RequestRow = { username: string; editable: boolean; reason?: string | null; needsAccount?: boolean; userId: number | null; permissions: number | null; movieAutoApprove: boolean; tvAutoApprove: boolean;
+  movieQuota?: { limit: number; days: number } | null; tvQuota?: { limit: number; days: number } | null };
 type Setup = { status: string };
-type Rating = { username: string; linked: boolean; editable: boolean; reason?: string; maxAge?: number | null; blockUnrated?: boolean };
+type Rating = { username: string; linked: boolean; editable: boolean; reason?: string; maxAge?: number | null; blockUnrated?: boolean;
+  downloads?: boolean; deletion?: boolean; suspended?: boolean };
+type Quota = { limit: number; days: number } | null;
 type Device = { id: string; name: string; app: string; version: string; lastSeen: string | null; users: string[]; protected: boolean };
 
 const lastSeen = (iso: string | null) => {
@@ -136,10 +139,15 @@ export function PeoplePanel() {
             request={requests?.find((r) => r.username === v.username) || null}
             rating={ratings?.viewers.find((r) => r.username === v.username) || null} levels={ratings?.levels || []}
             devices={devices ? devices.filter((d) => d.users.includes("spv_" + v.username)) : null}
-            onRating={(maxAge, blockUnrated) => run("rating:" + v.username, async () => {
-              const next = await action<Rating>("/api/viewer-ratings", { username: v.username, maxAge, blockUnrated, confirmation: "OK" });
+            onPolicy={(patch, message) => run("rating:" + v.username, async () => {
+              const next = await action<Rating>("/api/viewer-ratings", { username: v.username, ...patch, confirmation: "OK" });
               setRatings((old) => old && { ...old, viewers: old.viewers.map((r) => (r.username === v.username ? next : r)) });
-              return `Altersfreigabe für „${v.username}“ gespeichert. Gilt sofort, auch auf angemeldeten Geräten.`;
+              return message;
+            })}
+            onLimits={(movie, tv) => run("limits:" + v.username, async () => {
+              await action("/api/viewer-requests/limits", { username: v.username, movie, tv, confirmation: "OK" });
+              setRequests((await get<{ viewers: RequestRow[] }>("/api/viewer-requests")).viewers);
+              return `Anfragelimits für „${v.username}“ gespeichert.`;
             })}
             onRevoke={(device) => run("device:" + device.id, async () => {
               await action("/api/remote-access/devices/revoke", { id: device.id, confirmation: "OK" });
@@ -154,10 +162,9 @@ export function PeoplePanel() {
               await loadAll();
               return "Bibliotheken gespeichert. In offenen Jellyfin-Apps bei Bedarf die Bibliotheken neu laden.";
             }).then(async (ok) => { if (!ok) setProfiles(await get<Profiles>("/api/viewer-profiles").catch(() => profiles)); })}
-            onRequests={(row) => run("requests:" + v.username, async () => {
-              const automatic = row.movieAutoApprove || row.tvAutoApprove;
+            onRequests={(row, enabled) => run("requests:" + v.username, async () => {
               await action("/api/viewer-requests", { username: row.username, userId: row.userId,
-                previousPermissions: row.permissions, enabled: !automatic, confirmation: "OK" });
+                previousPermissions: row.permissions, enabled, confirmation: "OK" });
               setRequests((await get<{ viewers: RequestRow[] }>("/api/viewer-requests")).viewers);
               return "";
             })}
@@ -183,13 +190,17 @@ export function PeoplePanel() {
   );
 }
 
-function PersonCard({ viewer: v, list, profiles, request, rating, levels, devices, busy, confirm, onConfirm, onAction, onProfile, onRequests, onRating, onRevoke }: {
+function PersonCard({ viewer: v, list, profiles, request, rating, levels, devices, busy, confirm, onConfirm, onAction, onProfile, onRequests, onPolicy, onLimits, onRevoke }: {
   viewer: Viewer; list: ViewerList; profiles: Profiles | null; request: RequestRow | null; busy: string;
   rating: Rating | null; levels: number[]; devices: Device[] | null;
-  onRating: (maxAge: number | null, blockUnrated: boolean) => unknown; onRevoke: (device: Device) => unknown;
+  onPolicy: (patch: Record<string, unknown>, message: string) => unknown; onRevoke: (device: Device) => unknown;
+  onLimits: (movie: Quota, tv: Quota) => unknown;
   confirm: "reset" | "remove" | null; onConfirm: (act: "reset" | "remove" | null) => void;
-  onAction: (act: string) => unknown; onProfile: (profileId: string | null) => unknown; onRequests: (row: RequestRow) => unknown;
+  onAction: (act: string) => unknown; onProfile: (profileId: string | null) => unknown;
+  onRequests: (row: RequestRow, enabled: { movie: boolean; tv: boolean }) => unknown;
 }) {
+  const [suspend, setSuspend] = useState(false);
+  const [limits, setLimits] = useState<{ movie: Quota; tv: Quota } | null>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const [age, setAge] = useState<string | null>(null), [unrated, setUnrated] = useState<boolean | null>(null);
   const [revoke, setRevoke] = useState<Device | null>(null);
@@ -201,13 +212,51 @@ function PersonCard({ viewer: v, list, profiles, request, rating, levels, device
   const value = choice ?? current;
   const options = (profiles?.profiles || []).filter((p) =>
     p.folders.every((id) => profiles!.libraries.some((l) => l.id === id && l.available)) || p.id === value);
-  const automatic = !!request && (request.movieAutoApprove || request.tvAutoApprove);
-  const mixed = !!request && request.movieAutoApprove !== request.tvAutoApprove;
+  const quotaText = (q?: Quota) => (q ? `${q.limit} in ${q.days} ${q.days === 1 ? "Tag" : "Tagen"}` : "kein Limit");
+  const approval = (kind: "movie" | "tv", label: string) => {
+    if (!request) return null;
+    const auto = kind === "movie" ? request.movieAutoApprove : request.tvAutoApprove;
+    return (
+      <label className={"switch" + (request.editable ? "" : " disabled")}>
+        <input type="checkbox" role="switch" checked={!auto} disabled={!request.editable || !!busy}
+          aria-label={`Freigabe für ${label} von ${v.username}`}
+          onChange={() => void onRequests(request, { movie: kind === "movie" ? !auto : request.movieAutoApprove, tv: kind === "tv" ? !auto : request.tvAutoApprove })} />
+        <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>
+        <span className="switch-text">
+          <b>{label} brauchen meine Freigabe</b>
+          <span>{busy === "requests:" + v.username ? "Wird gespeichert …"
+            : !request.editable ? (request.reason || "Kontozuordnung oder Rechte konnten nicht bestätigt werden.")
+            : auto ? "Nein – laufen sofort los"
+            : request.needsAccount ? "Ja · beim Ausschalten wird das Seerr-Konto angelegt" : "Ja"}</span>
+        </span>
+      </label>
+    );
+  };
+  const limitRow = (kind: "movie" | "tv", label: string) => {
+    if (!limits) return null;
+    const q = limits[kind];
+    const set = (next: Quota) => setLimits({ ...limits, [kind]: next });
+    return (
+      <div className="person-field">
+        <label className="person-check">
+          <input type="checkbox" checked={!!q} disabled={!!busy} onChange={(e) => set(e.target.checked ? { limit: 5, days: 7 } : null)} />
+          {label} begrenzen
+        </label>
+        {q && <>
+          <label>höchstens <input type="number" min={1} max={100} value={q.limit} className="person-number"
+            onChange={(e) => set({ ...q, limit: Number(e.target.value) })} /></label>
+          <label>in <input type="number" min={1} max={365} value={q.days} className="person-number"
+            onChange={(e) => set({ ...q, days: Number(e.target.value) })} /> Tagen</label>
+        </>}
+      </div>
+    );
+  };
   return (
     <li className="person-card" aria-label={`Zuschauer ${v.username}`}>
       <div className="person-head">
         <b>{v.username}</b>
         <StatusBadge tone={v.mfa ? "success" : "warning"}>{v.mfa ? "Zweiter Faktor eingerichtet" : "Einladung offen"}</StatusBadge>
+        {rating?.suspended && <StatusBadge tone="danger">Gesperrt</StatusBadge>}
         {v.hasPasskey && <StatusBadge tone="info">Passkey</StatusBadge>}
         <span className="muted">{lastSeen(v.lastLogin)}</span>
       </div>
@@ -234,20 +283,29 @@ function PersonCard({ viewer: v, list, profiles, request, rating, levels, device
         ) : null}
 
         {request && (
-          <label className={"switch" + (request.editable ? "" : " disabled")}>
-            <input type="checkbox" role="switch" checked={!automatic} disabled={!request.editable || !!busy}
-              aria-label={`Freigabe für Anfragen von ${v.username}`} onChange={() => void onRequests(request)} />
-            <span className="switch-track" aria-hidden="true"><span className="switch-thumb" /></span>
-            <span className="switch-text">
-              <b>Anfragen brauchen meine Freigabe</b>
-              <span>{busy === "requests:" + v.username ? "Wird gespeichert …"
-                : !request.editable ? (request.reason || "Kontozuordnung oder Rechte konnten nicht bestätigt werden.")
-                : automatic ? (mixed ? `Teilweise automatisch (Filme ${request.movieAutoApprove ? "ja" : "nein"}, Serien ${request.tvAutoApprove ? "ja" : "nein"})`
-                  : "Nein – Anfragen laufen sofort los")
-                : request.needsAccount ? "Ja · beim Ausschalten wird das Seerr-Konto angelegt"
-                : "Ja"}</span>
-            </span>
-          </label>
+          <div className="person-approval">
+            {approval("movie", "Filme")}
+            {approval("tv", "Serien")}
+          </div>
+        )}
+        {request?.editable && (
+          <div className="person-limits">
+            {!limits ? (
+              <p className="muted">
+                Anfragelimit: Filme {quotaText(request.movieQuota)} · Serien {quotaText(request.tvQuota)}{" "}
+                <button className="link-button" disabled={!!busy} onClick={() => setLimits({ movie: request.movieQuota ?? null, tv: request.tvQuota ?? null })}>Ändern</button>
+              </p>
+            ) : (
+              <>
+                {limitRow("movie", "Filmanfragen")}
+                {limitRow("tv", "Serienanfragen")}
+                <div className="couchdeck-actions">
+                  <button disabled={!!busy} onClick={() => void Promise.resolve(onLimits(limits.movie, limits.tv)).then(() => setLimits(null))}>Limits speichern</button>
+                  <button disabled={!!busy} onClick={() => setLimits(null)}>Abbrechen</button>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {rating && (rating.editable ? (
@@ -268,13 +326,28 @@ function PersonCard({ viewer: v, list, profiles, request, rating, levels, device
             </label>
             {ratingChanged && (
               <button disabled={!!busy} onClick={() => {
-                void Promise.resolve(onRating(ageValue === "" ? null : Number(ageValue), unratedValue)).then(() => { setAge(null); setUnrated(null); });
+                void Promise.resolve(onPolicy({ maxAge: ageValue === "" ? null : Number(ageValue), blockUnrated: unratedValue },
+                  `Altersfreigabe für „${v.username}“ gespeichert. Gilt sofort, auch auf angemeldeten Geräten.`)).then(() => { setAge(null); setUnrated(null); });
               }}>Speichern</button>
             )}
           </div>
         ) : (
           <p className="muted">Altersfreigabe: {rating.reason}</p>
         ))}
+        {rating?.editable && (
+          <div className="person-field">
+            <label className="person-check">
+              <input type="checkbox" checked={!!rating.downloads} disabled={!!busy}
+                onChange={(e) => void onPolicy({ downloads: e.target.checked }, e.target.checked ? `„${v.username}“ darf Medien für unterwegs herunterladen.` : `Herunterladen für „${v.username}“ ausgeschaltet.`)} />
+              Herunterladen für unterwegs erlauben
+            </label>
+            <label className="person-check">
+              <input type="checkbox" checked={!!rating.deletion} disabled={!!busy}
+                onChange={(e) => void onPolicy({ deletion: e.target.checked }, e.target.checked ? `„${v.username}“ darf Medien löschen.` : `Löschen für „${v.username}“ ausgeschaltet.`)} />
+              Medien löschen erlauben
+            </label>
+          </div>
+        )}
       </div>
 
       {devices && (
@@ -311,6 +384,11 @@ function PersonCard({ viewer: v, list, profiles, request, rating, levels, device
             </button>
           </>
         )}
+        {rating?.editable && !suspend && (
+          rating.suspended
+            ? <button disabled={!!busy} onClick={() => void onPolicy({ suspended: false }, `„${v.username}“ ist wieder freigeschaltet.`)}>Entsperren</button>
+            : <button disabled={!!busy} onClick={() => setSuspend(true)}>Vorübergehend sperren</button>
+        )}
         {!confirm && (
           <>
             <button disabled={!!busy} onClick={() => onConfirm("reset")}>Neu einladen</button>
@@ -318,6 +396,16 @@ function PersonCard({ viewer: v, list, profiles, request, rating, levels, device
           </>
         )}
       </div>
+      {suspend && (
+        <ConfirmBar label={`${v.username} sperren`} busy={busy === "rating:" + v.username} busyLabel="Wird gesperrt …"
+          onCancel={() => setSuspend(false)}
+          onOk={() => Promise.resolve(onPolicy({ suspended: true }, `„${v.username}“ ist gesperrt.`)).then(() => setSuspend(false))}>
+          <p>
+            <b>{v.username}</b> vorübergehend sperren? Jellyfin lässt die Person sofort nicht mehr zu – auch auf schon
+            angemeldeten Geräten, in Streamyfin und Couchdeck. Einstellungen, Verlauf und Anmeldung bleiben; „Entsperren“ hebt es auf.
+          </p>
+        </ConfirmBar>
+      )}
       {confirm === "reset" && (
         <ConfirmBar label={`${v.username} neu einladen`} busy={busy === "reset:" + v.username} busyLabel="Wird zurückgesetzt …"
           onCancel={() => onConfirm(null)} onOk={() => onAction("reset")}>

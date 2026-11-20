@@ -1,7 +1,7 @@
-// Altersfreigabe je Zuschauer (Phase 7.1c): Jellyfin-Richtlinie MaxParentalRating des
-// verknüpften Jellyfin-Kontos. Jellyfin vergleicht die Altersangabe eines Titels (FSK, MPAA …,
-// intern als Alter) mit dieser Grenze. Optional werden Filme und Serien ohne Altersangabe
-// ausgeblendet. Nur normale Zuschauerkonten, nie Administratoren.
+// Jellyfin-Rechte je Zuschauer (Phase 7.1c/7.1): Altersfreigabe (MaxParentalRating; optional
+// Titel ohne Altersangabe ausblenden), Herunterladen für unterwegs (EnableContentDownloading),
+// Medien löschen (EnableContentDeletion) und vorübergehend sperren (IsDisabled – wirkt sofort,
+// auch auf schon angemeldeten Geräten). Nur normale Zuschauerkonten, nie Administratoren.
 import { normalizeJellyfinId as normalize } from "./adapters/seerr.js";
 
 export const AGE_LEVELS = [0, 6, 12, 16, 18];
@@ -33,7 +33,8 @@ export class ViewerRatings {
     if (p.IsAdministrator) return { username, linked: true, editable: false, reason: "Jellyfin-Administratoren werden hier nicht beschränkt." };
     const max = Number.isSafeInteger(p.MaxParentalRating) ? p.MaxParentalRating : null;
     const blocked = Array.isArray(p.BlockUnratedItems) ? p.BlockUnratedItems : [];
-    return { username, linked: true, editable: true, maxAge: max, blockUnrated: UNRATED.every((t) => blocked.includes(t)) };
+    return { username, linked: true, editable: true, maxAge: max, blockUnrated: UNRATED.every((t) => blocked.includes(t)),
+      downloads: p.EnableContentDownloading !== false, deletion: p.EnableContentDeletion === true, suspended: p.IsDisabled === true };
   }
   async list() {
     const { s, plan, links, viewers } = await this.context();
@@ -42,10 +43,15 @@ export class ViewerRatings {
     return { levels: AGE_LEVELS, viewers: rows };
   }
   async change(body) {
-    if (body.confirmation !== "OK") throw Error("Altersfreigabe mit OK bestätigen.");
-    const maxAge = body.maxAge === null ? null : Number(body.maxAge);
-    if (maxAge !== null && !AGE_LEVELS.includes(maxAge)) throw Error("Ungültige Altersstufe.");
-    if (typeof body.blockUnrated !== "boolean") throw Error("Angabe zu Titeln ohne Altersfreigabe fehlt.");
+    if (body.confirmation !== "OK") throw Error("Änderung mit OK bestätigen.");
+    const has = (k) => Object.hasOwn(body, k);
+    const rating = has("maxAge") || has("blockUnrated");
+    const maxAge = !has("maxAge") || body.maxAge === null ? null : Number(body.maxAge);
+    if (has("maxAge") && maxAge !== null && !AGE_LEVELS.includes(maxAge)) throw Error("Ungültige Altersstufe.");
+    if (rating && typeof body.blockUnrated !== "boolean") throw Error("Angabe zu Titeln ohne Altersfreigabe fehlt.");
+    for (const k of ["downloads", "deletion", "suspended"])
+      if (has(k) && typeof body[k] !== "boolean") throw Error("Ungültige Angabe.");
+    if (!rating && !["downloads", "deletion", "suspended"].some(has)) throw Error("Nichts zu ändern.");
     return this.hub.mutate(["Jellyfin"], async () => {
       const { s, plan, links, viewers } = await this.context();
       if (!viewers.some((v) => v.username === body.username)) throw Error("Zuschauer nicht gefunden.");
@@ -55,14 +61,20 @@ export class ViewerRatings {
       const blocked = (user.Policy.BlockUnratedItems || []).filter((t) => !UNRATED.includes(t));
       const policy = {
         ...user.Policy,
-        MaxParentalRating: maxAge,
-        ...("MaxParentalSubRating" in user.Policy ? { MaxParentalSubRating: null } : {}),
-        BlockUnratedItems: body.blockUnrated ? [...blocked, ...UNRATED] : blocked,
+        ...(rating ? {
+          MaxParentalRating: maxAge,
+          ...("MaxParentalSubRating" in user.Policy ? { MaxParentalSubRating: null } : {}),
+          BlockUnratedItems: body.blockUnrated ? [...blocked, ...UNRATED] : blocked,
+        } : {}),
+        ...(has("downloads") ? { EnableContentDownloading: body.downloads } : {}),
+        ...(has("deletion") ? { EnableContentDeletion: body.deletion } : {}),
+        ...(has("suspended") ? { IsDisabled: body.suspended } : {}),
       };
       await this.hub.library.request(s, plan, "/Users/" + normalize(user.Id) + "/Policy", { method: "POST", body: policy });
       const after = ViewerRatings.project(body.username, await this.user(s, plan, links, body.username));
-      if (after.maxAge !== maxAge || after.blockUnrated !== body.blockUnrated)
-        throw Error("Jellyfin hat die Altersfreigabe nicht bestätigt. Erneut laden.");
+      if ((rating && (after.maxAge !== maxAge || after.blockUnrated !== body.blockUnrated)) ||
+          ["downloads", "deletion", "suspended"].some((k) => has(k) && after[k] !== body[k]))
+        throw Error("Jellyfin hat die Änderung nicht bestätigt. Erneut laden.");
       return after;
     });
   }

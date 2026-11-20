@@ -55,6 +55,17 @@ zweiter Faktor wird neu eingerichtet. Bereits angemeldete Fernseher und Tablets 
 muss sich danach neu anmelden (Quick Connect). Sind auf dem Gerät weitere Zuschauer angemeldet,
 nennt die Rückfrage sie – sie werden mit abgemeldet. Geräte von Administratorkonten sind geschützt.
 
+### Freigabe, Limits, Rechte und Sperren (je Zuschauer)
+Auf der Karte unter **Personen → Zuschauer**:
+- **Filme brauchen meine Freigabe** / **Serien brauchen meine Freigabe** – getrennt schaltbar
+  (Seerr-Recht „automatisch freigeben“ je Art).
+- **Anfragelimit** → **Ändern**: z. B. höchstens 5 Filmanfragen in 7 Tagen; ohne Haken kein
+  eigenes Limit. Seerr setzt es durch (auch in Streamyfin und Couchdeck).
+- **Herunterladen für unterwegs erlauben** (Jellyfin-Download in den Apps) und **Medien löschen
+  erlauben** – wirken sofort.
+- **Vorübergehend sperren** → **OK**: Jellyfin lässt die Person sofort nicht mehr zu, auch auf
+  angemeldeten Geräten; nichts geht verloren. **Entsperren** hebt es auf.
+
 ### Altersfreigabe
 **Personen → Zuschauer** → auf der Karte **Altersfreigabe** (z. B. „bis FSK 12“) wählen, bei
 Bedarf **Filme und Serien ohne Altersangabe ausblenden** → **Speichern**. Jellyfin wendet das

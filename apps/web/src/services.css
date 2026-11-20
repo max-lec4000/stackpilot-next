@@ -203,3 +203,8 @@
 .couchdeck-sinks b { overflow-wrap: anywhere; }
 .couchdeck-remote .success { color: var(--success); }
 .couchdeck-remote .person-field label { display: inline-flex; align-items: center; gap: 0.6rem; }
+.person-approval { display: grid; gap: 0.4rem; }
+.person-limits .person-field { gap: 0.4rem 0.8rem; }
+.person-number { width: 4.5rem; }
+.link-button { background: none; border: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.link-button:disabled { opacity: 0.6; cursor: default; }

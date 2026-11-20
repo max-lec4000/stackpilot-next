@@ -69,3 +69,29 @@ test('angelegtes Konto mit Verwaltungsrechten wird nicht verändert',async()=>{
     {list:async()=>({viewers:[{username:'flo',active:true}]})});
   await assert.rejects(service.change({confirmation:'OK',username:'flo',enabled:true,userId:null,previousPermissions:null}),/unerwartete Rechte/);
 });
+
+test('Freigabe getrennt für Filme und Serien',()=>{
+  const before=32|16384;
+  assert.equal(requestPermissions(before,{movie:true,tv:false}),before|256);
+  assert.equal(requestPermissions(before|128,{movie:false,tv:true}),before|512);
+  assert.equal(requestPermissions(before|256,{movie:true,tv:true}),before|128);
+  assert.equal(requestPermissions(before|128,{movie:false,tv:false}),before);
+});
+test('Anfragelimits: prüfen, setzen, zurücklesen, nur bearbeitbare Konten',async()=>{
+  const main={username:'spv_familie',locale:'de',movieQuotaLimit:null,movieQuotaDays:null,tvQuotaLimit:null,tvQuotaDays:null};
+  const posts=[];
+  const s={additional:{seerr:async(route,options)=>{
+    assert.equal(route,'/user/3/settings/main');
+    if(options?.method==='POST'){posts.push(options.body);Object.assign(main,options.body);return null;}
+    return structuredClone(main);
+  }}};
+  const service=new ViewerRequests({mutate:async(_,f)=>f()});
+  service.context=async()=>({s,rows:[{username:'familie',user:{id:3},editable:true},{username:'chef',user:{id:1},editable:false,reason:'Verwaltungsrechte'}]});
+  await assert.rejects(service.limits({username:'familie',movie:{limit:5,days:7}}),/mit OK/);
+  await assert.rejects(service.limits({username:'familie',movie:{limit:0,days:7},confirmation:'OK'}),/1–100/);
+  await assert.rejects(service.limits({username:'chef',movie:{limit:5,days:7},confirmation:'OK'}),/Verwaltungsrechte/);
+  const r=await service.limits({username:'familie',movie:{limit:5,days:7},tv:null,confirmation:'OK'});
+  assert.deepEqual(r.movieQuota,{limit:5,days:7});assert.equal(r.tvQuota,null);
+  assert.equal(posts[0].locale,'de','übrige Kontoeinstellungen bleiben');
+  assert.deepEqual([main.movieQuotaLimit,main.movieQuotaDays,main.tvQuotaLimit,main.tvQuotaDays],[5,7,null,null]);
+});

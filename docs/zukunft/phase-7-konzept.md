@@ -484,6 +484,17 @@ StackPilot erzeugt das Sicherungspasswort (einmal angezeigt, im Tresor für Auto
   **keine Tonausgabe**): Testton, Wechsel, Lautstärke, Prüfen, Neustart. Echter Ton am
   Fernseher/WiiM: persönliche Abnahme.
 
+### Nachzug 7.1 – getrennte Freigabe, Limits, Rechte, Sperren (20.11.2026)
+
+- `viewer-requests.js`: Freigabe getrennt (`enabled: {movie, tv}` → Seerr 256/512 bzw. 128),
+  Anfragelimits (`limits()`, Seerr `/user/{id}/settings/main` mit Rücklesen,
+  `SeerrAdapter.setQuotas`), Route `/api/viewer-requests/limits` (ok).
+- `viewer-ratings.js` → Jellyfin-Rechte je Zuschauer: zusätzlich `EnableContentDownloading`,
+  `EnableContentDeletion`, `IsDisabled` (Sperren); nur übergebene Felder werden geändert.
+- Karte: zwei Freigabe-Schalter, Limits, Rechte, „Vorübergehend sperren“/„Entsperren“.
+- sp-test: 410 Tests; Browser gegen echte Seerr-/Jellyfin-Konten des Test-Zuschauers, danach
+  Ausgangszustand.
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

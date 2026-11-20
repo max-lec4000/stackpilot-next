@@ -50,6 +50,19 @@ export class SeerrAdapter {
     return this.usersForJellyfin(jellyfinId);
   }
 
+  /** Anfragelimits eines Kontos setzen (Seerr: Kontoeinstellungen „main“) und zurücklesen. */
+  async setQuotas(userId, quotas) {
+    const route = `/user/${id(userId)}/settings/main`;
+    const current = await this.call(route);
+    if (!current || typeof current !== "object") throw userFacing("Seerr-Kontoeinstellungen nicht lesbar.");
+    return writeAndConfirm({
+      write: () => this.call(route, { method: "POST", body: { ...current, ...quotas } }),
+      read: () => this.call(route),
+      check: (saved) => ["movieQuotaLimit", "movieQuotaDays", "tvQuotaLimit", "tvQuotaDays"].every((k) => (saved?.[k] ?? null) === (quotas[k] ?? null)),
+      message: "Seerr hat das Anfragelimit nicht bestätigt. Erneut prüfen.",
+    });
+  }
+
   /** Rechte setzen und bestätigen lassen (gleiches Konto, gleiche Jellyfin-Verknüpfung). */
   setPermissions(user, permissions) {
     return writeAndConfirm({

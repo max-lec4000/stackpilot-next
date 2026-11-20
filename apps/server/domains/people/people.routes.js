@@ -7,7 +7,7 @@ export function peopleRoutes({ viewers, viewerProfiles, viewerRatings, remoteSet
     { method: "POST", path: "/api/viewer-profiles", guard: "session", handler: ({ body }) => viewerProfiles.change(body) },
     // Altersfreigabe je Zuschauer (Jellyfin-Richtlinie)
     { method: "GET", path: "/api/viewer-ratings", guard: "session", handler: () => viewerRatings.list() },
-    { method: "POST", path: "/api/viewer-ratings", guard: "ok", confirm: "Altersfreigabe mit OK bestätigen.",
+    { method: "POST", path: "/api/viewer-ratings", guard: "ok", confirm: "Änderung mit OK bestätigen.",
       handler: ({ body }) => viewerRatings.change(body) },
     // Zwei Aktionen ändern die Anmeldung aller Zuschauer und verlangen das Passwort.
     { method: "POST", path: "/api/viewers/action", guard: "session", handler: async ({ body, manager, remoteAddress }) => {

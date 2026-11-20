@@ -72,6 +72,7 @@ test("Umgezogene Routen behalten ihre Schutzstufen", () => {
     "POST /api/vpn/profiles/qbittorrent": "ok",
     "GET /api/viewer-requests": "session",
     "POST /api/viewer-requests": "ok",
+    "POST /api/viewer-requests/limits": "ok",
   });
 });
 

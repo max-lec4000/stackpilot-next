@@ -438,6 +438,17 @@ und getestet, aber ohne Route/Oberfläche – Speicherort und Häufigkeit mit Ma
 - sp-test: 392 Tests; echte Belegung; verwaister Download und Löschablauf mit nachgestellten
   Daten (keine Downloads in der VM).
 
+### Fortschritt 7.4b – Medien: Bibliotheken (20.11.2026)
+
+- `library-overview.js`: Jellyfin `/Library/VirtualFolders`, Anzahl je Typ
+  (`/Items?ParentId=…&IncludeItemTypes=…&Limit=0`), Scan-Aufgabe `RefreshLibrary`, Neuzugänge
+  (`SortBy=DateCreated`), einzelne Bibliothek einlesen (`/Items/{id}/Refresh`, ohne Metadaten zu
+  ersetzen). Vollständiger Abgleich weiter über `hub.library.run()`.
+- Neue Unterseite **Medien → Bibliotheken** (`LibrariesView.tsx`).
+- sp-test (Jellyfin 12.4): 394 Tests; Browser: Karten, Einzelscan echt angestoßen,
+  vollständiger Abgleich echt durchgelaufen („beendet“).
+- Metadaten korrigieren bleibt Expertenzugang (Jellyfin „Identifizieren“).
+
 ## 5. Container-Architektur (früh festlegen, 7.7)
 
 | Teil | Möglichkeit | Einschätzung |

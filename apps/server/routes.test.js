@@ -150,11 +150,11 @@ test("Anfragen und Medien: Löschen, Abbrechen, Freigeben und Austausch verlange
   for (const [key, guard] of Object.entries(table)) if (key.startsWith("GET ")) assert.equal(guard, "session", key);
   const sessionPosts = Object.entries(table).filter(([k, g]) => k.startsWith("POST ") && g === "session").map(([k]) => k).sort();
   assert.deepEqual(sessionPosts, [
-    "POST /api/media/library/refresh", "POST /api/media/movie-removal/preview", "POST /api/media/releases",
+    "POST /api/media/libraries/scan", "POST /api/media/library/refresh", "POST /api/media/movie-removal/preview", "POST /api/media/releases",
     "POST /api/media/replacement/preview", "POST /api/media/request", "POST /api/media/request/archive",
     "POST /api/media/research", "POST /api/media/series-removal/preview",
   ]);
-  assert.equal(Object.keys(table).length, 42);
+  assert.equal(Object.keys(table).length, 44);
 });
 
 test("Gesamtes Verzeichnis: keine Doppelungen, feste Liste der Passwort-Routen", () => {

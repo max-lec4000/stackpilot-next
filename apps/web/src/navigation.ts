@@ -15,6 +15,7 @@ export const sections: Section[] = [
   { id: "medien", title: "Medien", icon: "discover", description: "Finden, ansehen und hören.",
     pages: [
       { id: "entdecken", title: "Entdecken", view: "Medien entdecken" },
+      { id: "bibliotheken", title: "Bibliotheken", view: "Verwaltung", area: "libraries" },
       { id: "musik", title: "Musik", view: "Verwaltung", area: "music" },
     ] },
   { id: "anfragen", title: "Anfragen", icon: "requests", description: "Vom Wunsch bis zur Wiedergabe.",

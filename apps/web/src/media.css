@@ -436,3 +436,15 @@
 .pending-title { overflow-wrap: anywhere; }
 .pending-reason { display: grid; gap: 0.3rem; margin-top: 0.5rem; }
 .pending-reason input { width: 100%; max-width: 32rem; }
+
+/* Medien → Bibliotheken (Phase 7.4b) */
+.library-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.library-card { border: 1px solid var(--border); border-radius: 12px; padding: 0.7rem 0.9rem; background: var(--surface); display: grid; gap: 0.35rem; }
+.library-card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.library-card h3 { margin: 0; font-size: 1.05rem; }
+.library-counts { margin: 0; font-weight: 600; }
+.library-paths { margin: 0; overflow-wrap: anywhere; font-size: var(--font-sm); }
+.library-card button { justify-self: start; }
+.library-latest { padding-left: 1.1rem; display: grid; gap: 0.3rem; }
+.library-latest b { overflow-wrap: anywhere; }
+.libraries-view .success { color: var(--success); }

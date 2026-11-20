@@ -147,6 +147,13 @@ Vom eigenen Rechner: `ssh -N -L 19000:127.0.0.1:19000 <benutzer>@<server>`, dann
 `http://127.0.0.1:19000`. Zugang zeigt StackPilot unter **Externer Zugriff →
 Authentik-Verwaltung**.
 
+## Medien → Bibliotheken
+
+Jede Jellyfin-Bibliothek mit Ordner und Anzahl (Filme; Serien und Folgen; Alben und Titel),
+Scanstatus und **Diese Bibliothek einlesen** (neue/geänderte Dateien, Metadaten bleiben). Oben
+**Alles einlesen und abgleichen** (Jellyfin-Scan, danach Seerr-Abgleich) und der letzte Scan.
+Darunter **Neu hinzugekommen**. Falsch erkannte Titel weiter in Jellyfin „Identifizieren“.
+
 ## Speicher
 
 **Speicher → Belegung**: je Laufwerk belegt/frei (gemeinsame Laufwerke einmal), dazu wofür:

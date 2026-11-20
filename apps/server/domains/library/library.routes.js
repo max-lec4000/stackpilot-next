@@ -25,7 +25,7 @@ async function poster(path) {
   return rawResponse(Buffer.concat(chunks), { "Content-Type": type });
 }
 
-export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval }) {
+export function libraryRoutes({ hub, installer, importedReplacement, seriesRemoval, movieRemoval, libraryOverview }) {
   const get = (path, handler) => ({ method: "GET", path, guard: "session", handler });
   const post = (path, handler) => ({ method: "POST", path, guard: "session", handler });
   const ok = (path, confirm, handler) => ({ method: "POST", path, guard: "ok", confirm, handler });
@@ -48,8 +48,11 @@ export function libraryRoutes({ hub, installer, importedReplacement, seriesRemov
     })),
     get("/api/media/replacements", () => importedReplacement.jobs()),
     get("/api/media/series-inventory", () => seriesRemoval.list()),
+    get("/api/media/libraries", () => libraryOverview.read()),
 
     post("/api/media/library/refresh", () => hub.library.run(true)),
+    // Medien → Bibliotheken (7.4b)
+    post("/api/media/libraries/scan", ({ body }) => libraryOverview.scan(body)),
     post("/api/media/replacement/preview", ({ body }) => importedReplacement.preview(body)),
     ok("/api/media/replacement/start", "Austausch bestätigen.", ({ body }) => importedReplacement.start(body)),
     ok("/api/media/replacement/restore", "Wiederherstellung bestätigen.", ({ body }) => importedReplacement.restore(body)),

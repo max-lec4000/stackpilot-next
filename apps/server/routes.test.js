@@ -89,6 +89,8 @@ test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort (G
   ].map((p) => `POST /api/remote-access/${p}`);
   for (const key of password) assert.equal(table[key], "password", key);
   assert.equal(table["POST /api/remote-access/devices/revoke"], "ok");
+  // Schalter „Public access“: erst nach vollständiger Freigabe, dann mit OK (Voraussetzungen prüft der Fachteil)
+  assert.equal(table["POST /api/remote-access/public"], "ok");
   for (const key of ["POST /api/remote-access/streamyfin/activate", "POST /api/remote-access/streamyfin/rollback", "POST /api/remote-access/streamyfin/prepare"])
     assert.ok(r.find("POST", key.slice(5)).confirm, key + " braucht zusätzlich OK");
   const session = Object.entries(table).filter(([, g]) => g === "session").map(([k]) => k).sort();
@@ -96,12 +98,12 @@ test("Zugriff & Netzwerk: alles, was Zugang verändert, verlangt das Passwort (G
     "GET /api/admin-tailnet", "GET /api/remote-access", "GET /api/remote-access/admins", "GET /api/remote-access/backups",
     "GET /api/remote-access/connection", "GET /api/remote-access/devices", "GET /api/remote-access/funnel",
     "GET /api/remote-access/identity", "GET /api/remote-access/journey", "GET /api/remote-access/private-serve",
-    "GET /api/remote-access/protection", "GET /api/remote-access/protection/preview", "GET /api/remote-access/sso",
+    "GET /api/remote-access/protection", "GET /api/remote-access/protection/preview", "GET /api/remote-access/public", "GET /api/remote-access/sso",
     "GET /api/remote-access/streamyfin",
     "POST /api/admin-tailnet/grant", "POST /api/remote-access/funnel-plan", "POST /api/remote-access/identity/check",
     "POST /api/remote-access/identity/prepare", "POST /api/remote-access/identity/start",
   ]);
-  assert.equal(Object.keys(table).length, password.length + session.length + 1);
+  assert.equal(Object.keys(table).length, password.length + session.length + 2);
 });
 
 test("Downloads und Ausfallsperren-Test: Schutzstufen", () => {

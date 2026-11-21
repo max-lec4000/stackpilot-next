@@ -1,5 +1,6 @@
 import { ThemeToggle } from "./ThemeToggle";
 import { NotificationInbox } from "./Notifications";
+import { PublicAccessToggle } from "./PublicAccessToggle";
 import { useEffect, useState, type ReactNode } from "react";
 export function AuthGate({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<{
@@ -65,6 +66,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <>
         <div className="account-bar">
           <ThemeToggle />
+          <PublicAccessToggle />
           <NotificationInbox />
           <span>Angemeldet als {status.username}</span>
           <button

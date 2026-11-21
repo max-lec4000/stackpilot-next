@@ -68,6 +68,9 @@ export function remoteRoutes(d) {
     post("/api/remote-access/devices/revoke", "ok", ({ body }) => remoteSecurity.revoke(body), "Gerät abmelden mit OK bestätigen."),
     post("/api/remote-access/funnel/enable", "password", ({ body }) => publicFunnel.apply(body)),
     post("/api/remote-access/funnel/disable", "password", ({ body }) => publicFunnel.disable(body)),
+    // Schalter „Public access“ (erst nach einer vollständigen Freigabe): An/Aus mit OK
+    get("/api/remote-access/public", () => publicFunnel.quickStatus()),
+    post("/api/remote-access/public", "ok", ({ body }) => publicFunnel.quickToggle(body)),
     post("/api/remote-access/funnel-plan", "session", () => remoteSecurity.funnelPlan()),
     post("/api/remote-access/identity/prepare", "session", () => identity.prepare()),
     post("/api/remote-access/identity/check", "session", () => identity.inspectSecurity()),

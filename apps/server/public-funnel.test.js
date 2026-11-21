@@ -142,3 +142,33 @@ test("Streamyfin öffentlich nur mit sicherer Seerr-Version und eigener Bestäti
   await f.service.disable({ confirmation: "OK" });
   assert.equal((await f.service.preview()).active, false);
 });
+
+test("Schalter „Public access“: erst nach vollständiger Freigabe sichtbar, aus/an mit erneuter Prüfung", async () => {
+  const f = fixture();
+  assert.deepEqual(await f.service.quickStatus(), { available: false }, "vor der ersten Freigabe unsichtbar");
+  await assert.rejects(f.service.quickToggle({ enabled: true, confirmation: "OK" }), /einmal öffentlich freigeben/);
+  await f.service.apply(await f.body());
+  assert.deepEqual(await f.service.quickStatus(), { available: true, public: true, message: null });
+  await assert.rejects(f.service.quickToggle({ enabled: false }), /mit OK/i);
+  // Aus: sofort privat, die Einrichtung bleibt gemerkt
+  assert.equal((await f.service.quickToggle({ enabled: false, confirmation: "OK" })).ok, true);
+  assert.deepEqual(await f.service.quickStatus(), { available: true, public: false, message: null });
+  // An: Voraussetzungen werden erneut geprüft
+  f.state.mfa = false;
+  await assert.rejects(f.service.quickToggle({ enabled: true, confirmation: "OK" }), /zuerst beheben: MFA-Regeln/);
+  assert.equal((await f.service.quickStatus()).public, false, "bleibt privat");
+  f.state.mfa = true;
+  const on = await f.service.quickToggle({ enabled: true, confirmation: "OK" });
+  assert.match(on.message, /Public access ist an/);
+  assert.equal((await f.service.quickStatus()).public, true);
+  assert.ok(f.state.calls.every((c) => !c.includes("reset") && !c.includes("sudo")));
+});
+
+test("Schalter: neu hinzugekommenes Streamyfin braucht die einmalige Bestätigung im vollständigen Ablauf", async () => {
+  const f = fixture();
+  await f.service.apply(await f.body());
+  await f.service.quickToggle({ enabled: false, confirmation: "OK" });
+  f.state.streamyfin = true;
+  await assert.rejects(f.service.quickToggle({ enabled: true, confirmation: "OK" }), /Streamyfin ist seit der Einrichtung dazugekommen/);
+  assert.equal((await f.service.quickStatus()).public, false);
+});

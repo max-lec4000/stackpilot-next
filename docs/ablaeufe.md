@@ -179,6 +179,13 @@ Couchdeck startet nach seiner eigenen Token-Erneuerung neu.
 - Öffentlich (ohne Tailscale): **Öffentlich über das Internet (Funnel)** – braucht das
   Funnel-Recht in der Tailscale-Policy, gesicherte Authentik-Verwaltung und eine geprüfte
   Sicherung. Abschalten geht dort jederzeit („privat behalten“).
+- **Schalter „Public access“** (Kopfleiste, neben „Hinweise“): erscheint, sobald Funnel dort
+  einmal vollständig geprüft und freigegeben wurde. **Aus** schaltet sofort auf privat zurück.
+  **An** fragt „Bist du dir sicher?“ (Ja/Nein) und schaltet dieselbe geprüfte Freigabe wieder
+  ein – StackPilot prüft vorher alle Voraussetzungen erneut (MFA, Schutz, SSO, Sicherung);
+  fehlt etwas oder hat sich die Freigabe geändert (z. B. Streamyfin neu), bleibt es aus und
+  der Grund steht unter dem Schalter. Kontrolle am Server: `tailscale funnel status`
+  („tailnet only“ = aus).
 
 ### Authentik-Verwaltung (akadmin)
 Vom eigenen Rechner: `ssh -N -L 19000:127.0.0.1:19000 <benutzer>@<server>`, dann

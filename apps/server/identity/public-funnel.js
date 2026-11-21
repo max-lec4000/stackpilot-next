@@ -122,33 +122,71 @@ export class PublicFunnel {
         throw setupError("Voraussetzungen oder Konfiguration geändert. Freigabe erneut prüfen.");
       if (c.streamyfin && body.streamyfinPublic !== true)
         throw setupError("Bestätigen, dass mit Jellyfin auch der begrenzte Seerr-Teil für Streamyfin öffentlich wird.");
-      const key = this.key(c.plan);
-      this.hub.engine.vault.set(key, { planId: c.plan.id, rootId: c.plan.rootId || c.plan.id, desired: c.desired, status: "applying",
-        at: new Date().toISOString(), acceptance: Object.fromEntries(acceptanceKeys.map((key) => [key, true])) });
-      let last = c.current;
-      try {
-        // Login first: never deliberately publish Jellyfin without its identity endpoint.
-        for (const port of [8443, 443]) {
-          const now = await this.config();
-          if (digest(now) !== digest(last)) throw setupError("Tailscale wurde parallel geändert. Keine weiteren Freigaben.");
-          const host = c.record.input.hostname + ":" + port;
-          if (now.AllowFunnel?.[host] !== true)
-            await this.command(["funnel", "--bg", "--yes", "--https=" + port, c.desired[host]]);
-          last = await this.config();
-          this.validate(last, c.desired);
-          if (last.AllowFunnel?.[host] !== true) throw setupError("Öffentliche Route nicht bestätigt.");
-        }
-        this.hub.engine.vault.set(key, { planId: c.plan.id, rootId: c.plan.rootId || c.plan.id, desired: c.desired, status: "active",
-          at: new Date().toISOString(), acceptance: Object.fromEntries(acceptanceKeys.map((key) => [key, true])) });
-        return { ok: true, externallyVerified: false,
-          message: "Beide Funnel-Freigaben sind lokal bestätigt. Jetzt ohne Tailscale über Mobilfunk anmelden und Wiedergabe prüfen." };
-      } catch {
-        // Fail closed for these two owned routes, without resetting other Serve settings.
-        const recovery = await this.withdraw(c.plan, c.desired);
-        throw setupError(recovery.ok
-          ? "Aktivierung nicht abgeschlossen. Beide verwalteten Routen wurden auf privaten Zugriff zurückgestellt."
-          : "Aktivierung fehlgeschlagen; Abschaltung nicht vollständig bestätigt. Öffentlichen Status sofort lokal prüfen.");
+      return this.publish(c, { acceptance: Object.fromEntries(acceptanceKeys.map((key) => [key, true])), streamyfinPublic: !!c.streamyfin },
+        "Beide Funnel-Freigaben sind lokal bestätigt. Jetzt ohne Tailscale über Mobilfunk anmelden und Wiedergabe prüfen.");
+    });
+  }
+  /** Die beiden eigenen Routen öffentlich schalten (geprüfter Kontext `c`). */
+  async publish(c, extra, message) {
+    const key = this.key(c.plan);
+    const base = { planId: c.plan.id, rootId: c.plan.rootId || c.plan.id, desired: c.desired, ...extra };
+    this.hub.engine.vault.set(key, { ...base, status: "applying", at: new Date().toISOString() });
+    let last = c.current;
+    try {
+      // Login first: never deliberately publish Jellyfin without its identity endpoint.
+      for (const port of [8443, 443]) {
+        const now = await this.config();
+        if (digest(now) !== digest(last)) throw setupError("Tailscale wurde parallel geändert. Keine weiteren Freigaben.");
+        const host = c.record.input.hostname + ":" + port;
+        if (now.AllowFunnel?.[host] !== true)
+          await this.command(["funnel", "--bg", "--yes", "--https=" + port, c.desired[host]]);
+        last = await this.config();
+        this.validate(last, c.desired);
+        if (last.AllowFunnel?.[host] !== true) throw setupError("Öffentliche Route nicht bestätigt.");
       }
+      // activatedOnce: ab jetzt gibt es den einfachen Schalter „Public access“ in der Kopfleiste
+      this.hub.engine.vault.set(key, { ...base, status: "active", activatedOnce: true, at: new Date().toISOString() });
+      return { ok: true, externallyVerified: false, message };
+    } catch {
+      // Fail closed for these two owned routes, without resetting other Serve settings.
+      const recovery = await this.withdraw(c.plan, c.desired);
+      throw setupError(recovery.ok
+        ? "Aktivierung nicht abgeschlossen. Beide verwalteten Routen wurden auf privaten Zugriff zurückgestellt."
+        : "Aktivierung fehlgeschlagen; Abschaltung nicht vollständig bestätigt. Öffentlichen Status sofort lokal prüfen.");
+    }
+  }
+  /** Schalter „Public access“: nur sichtbar, wenn schon einmal über den vollständigen Ablauf freigegeben. */
+  async quickStatus() {
+    const plan = this.hub.engine.current()?.plan;
+    const saved = plan?.id ? this.hub.engine.vault.get(this.key(plan)) : null;
+    if (!saved?.activatedOnce || !saved.desired || saved.rootId !== (plan.rootId || plan.id)) return { available: false };
+    let current;
+    try { current = await this.config(); } catch { return { available: true, public: null, message: "Tailscale-Status nicht lesbar." }; }
+    const on = Object.keys(saved.desired).filter((host) => current.AllowFunnel?.[host] === true).length;
+    const total = Object.keys(saved.desired).length;
+    return { available: true, public: on === total ? true : on === 0 ? false : null,
+      message: on && on < total ? "Nur teilweise öffentlich – ausschalten oder unter System → Zugriff & Netzwerk prüfen." : null };
+  }
+  /**
+   * Einfacher Schalter. Aus: sofort zurück auf privat. An: dieselbe, beim ersten Mal geprüfte
+   * und bestätigte Freigabe – alle Sicherheitsvoraussetzungen werden vorher erneut geprüft.
+   */
+  async quickToggle(body) {
+    if (body.confirmation !== "OK" || typeof body.enabled !== "boolean") throw setupError("Mit OK bestätigen.");
+    const plan = this.hub.engine.current()?.plan;
+    const saved = plan?.id ? this.hub.engine.vault.get(this.key(plan)) : null;
+    if (!saved?.activatedOnce || saved.rootId !== (plan.rootId || plan.id))
+      throw setupError("Zuerst unter System → Zugriff & Netzwerk prüfen und einmal öffentlich freigeben.");
+    if (!body.enabled) return this.disable({ confirmation: "OK" });
+    return this.hub.mutate(["Jellyfin"], async () => {
+      const c = await this.context(true);
+      if (c.blockers.length) throw setupError("Nicht freigegeben – zuerst beheben: " + c.blockers.join("; "));
+      if (digest(c.desired) !== digest(saved.desired))
+        throw setupError("Die Freigabe hat sich seit der Einrichtung geändert. Unter System → Zugriff & Netzwerk neu prüfen und freigeben.");
+      if (c.streamyfin && saved.streamyfinPublic !== true)
+        throw setupError("Streamyfin ist seit der Einrichtung dazugekommen. Einmal unter System → Zugriff & Netzwerk bestätigen.");
+      return this.publish(c, { acceptance: saved.acceptance, streamyfinPublic: !!c.streamyfin },
+        "Public access ist an: Jellyfin und die Anmeldung sind öffentlich erreichbar.");
     });
   }
   async withdraw(plan, desired) {
@@ -166,8 +204,9 @@ export class PublicFunnel {
         if (final.AllowFunnel?.[host] === true || final.Web?.[host]?.Handlers?.["/"]?.Proxy !== target) ok = false;
       } catch { ok = false; }
     }
-    this.hub.engine.vault.set(this.key(plan), { planId: plan.id, rootId: plan.rootId || plan.id, desired, status: ok ? "private" : "withdrawal-required",
-      at: new Date().toISOString() });
+    const previous = this.hub.engine.vault.get(this.key(plan)) || {};
+    this.hub.engine.vault.set(this.key(plan), { ...previous, planId: plan.id, rootId: plan.rootId || plan.id, desired,
+      status: ok ? "private" : "withdrawal-required", at: new Date().toISOString() });
     return { ok, message: ok
       ? "Öffentlicher Zugriff abgeschaltet. Private HTTPS-Routen und lokale Dienste bleiben erhalten."
       : "Abschaltung nicht vollständig bestätigt. Tailscale-Status lokal prüfen; fremde Routen wurden nicht überschrieben." };

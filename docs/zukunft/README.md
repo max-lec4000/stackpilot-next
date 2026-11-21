@@ -80,6 +80,12 @@ Ursprünglicher Umfang:
   Rückweg bereithalten.
 
 ### Phase 3 · Medienspeicher aufs NAS umziehen
+- **Vorgabe von Max (21.11.2026): Musik gleich mit einrichten.** Beim NAS-Umzug den
+  Musikspeicher von Anfang an auf dem NAS anlegen, damit auf reatest danach alles für Musik
+  (Apps, Bibliothek, Import) eingerichtet werden kann und neue Musik direkt auf dem NAS landet.
+  Vor der Umsetzung klären: NAS und Freigabe (NFS/SMB), Pfade für Filme/Serien/Musik,
+  ob Downloads lokal bleiben, welche Musik-Apps (Lidarr ist im Stack; Wiedergabe über
+  Jellyfin oder zusätzlich ein eigener Musikserver).
 
 - **Speicherort auswählen und wechseln.** Lokale Pfade und auf reatest
   eingebundene NAS-Freigaben als Medienziel unterstützen. Zuerst Filme,
